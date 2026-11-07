@@ -440,11 +440,11 @@ dialog.recherche .resultats { max-height: 60vh; overflow: auto; display: block; 
 /* ================= Adoucissement ================= */
 /* Coins arrondis, bordures plus discrètes, cartes séparées plutôt qu'un quadrillage. */
 :root {
-  --r: 8px;            /* boutons, champs, pastilles carrées */
-  --r-carte: 14px;     /* blocs, cartes, panneaux */
-  --trait: rgba(143, 168, 184, .14);   /* bordure douce */
-  --trait-fort: rgba(143, 168, 184, .24);
-  --ombre: 0 1px 2px rgba(0, 0, 0, .25), 0 8px 24px rgba(0, 0, 0, .18);
+  --r: 4px;            /* boutons, champs, pastilles */
+  --r-carte: 8px;      /* blocs, cartes, panneaux */
+  --trait: rgba(143, 168, 184, .20);   /* bordure douce */
+  --trait-fort: rgba(143, 168, 184, .32);
+  --ombre: 0 1px 2px rgba(0, 0, 0, .2), 0 4px 12px rgba(0, 0, 0, .12);
 }
 .bandeau { border-bottom-width: 2px; }
 
@@ -460,30 +460,30 @@ dialog.recherche .resultats { max-height: 60vh; overflow: auto; display: block; 
 .charge, .plus-tard, .jour-evt + .jour-evt, .plus-tard .jour-evt, dialog .tete-d, dialog .pied, fieldset { border-color: var(--trait); }
 
 /* Compteurs : tuiles séparées */
-.compteurs { border: 0; gap: 10px; }
+.compteurs { border: 0; gap: 6px; }
 .compteur, .compteur:nth-child(n) {
   border: 1px solid var(--trait); border-radius: var(--r-carte); box-shadow: var(--ombre); transition: background .15s, border-color .15s;
 }
 .compteur:hover { border-color: var(--trait-fort); }
 
 /* Barre de charge */
-.charge-barre { border: 0; border-radius: 99px; overflow: hidden; height: 8px; background: rgba(8, 24, 34, .8); }
-.charge-barre i { border-radius: 99px; }
+.charge-barre { border: 0; border-radius: 3px; overflow: hidden; height: 8px; background: rgba(8, 24, 34, .8); }
+.charge-barre i { border-radius: 2px; }
 .charge-barre b { border-radius: 2px; top: 0; bottom: 0; }
 
 /* Contrôles */
 input, select, textarea, .btn, .btn-recherche { border-color: var(--trait-fort); }
 .btn, .btn-recherche, input, select, textarea { transition: border-color .15s, background .15s; }
-.pastille, a.lien-jira, .types-rapides label { border-radius: 99px; padding-left: 9px; padding-right: 9px; }
+.pastille, a.lien-jira, .types-rapides label { border-radius: var(--r); }
 .pastille { border-color: var(--trait-fort); }
-.coche { border-radius: 6px; }
+.coche { border-radius: 3px; }
 .onglets { border: 1px solid var(--trait-fort); border-radius: var(--r); overflow: hidden; }
 .onglets button { border-right-color: var(--trait); }
-.fab { border-radius: 18px; }
-#toast { border-radius: 99px; }
+.fab { border-radius: 10px; }
+#toast { border-radius: 6px; }
 .btn-recherche kbd { border-radius: 4px; }
 .lt-jalon { border-radius: 50%; }
-.lt-axe { border-radius: 99px; }
+.lt-axe { border-radius: 3px; }
 .puce-evt { border-radius: 50%; }
 
 /* Panneau */
@@ -494,9 +494,9 @@ dialog { border: 1px solid var(--trait); border-radius: var(--r-carte); box-shad
 .nav button { border-radius: var(--r); border-left: 0; }
 .nav button[aria-current="page"] { box-shadow: inset 3px 0 0 var(--orange); }
 @media (max-width: 760px) {
-  .compteurs { gap: 8px; }
+  .compteurs { gap: 6px; }
   .nav { border-top-color: var(--trait); padding-left: 6px; padding-right: 6px; gap: 4px; }
-  .nav button { border-top: 0; margin: 6px 0; border-radius: 12px; }
+  .nav button { border-top: 0; margin: 6px 0; border-radius: 6px; }
   .nav button[aria-current="page"] { box-shadow: none; background: color-mix(in srgb, var(--orange) 16%, transparent); color: var(--orange-pale); }
-  dialog { border-radius: 18px 18px 0 0; border: 0; }
+  dialog { border-radius: 10px 10px 0 0; border: 0; }
 }
