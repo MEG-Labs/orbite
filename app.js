@@ -1,6 +1,7 @@
 import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/+esm';
 import { SUPABASE_URL, SUPABASE_KEY, FUSEAU } from './config.js';
 import { installerModules } from './modules.js';
+import { installerExtras } from './extras.js';
 
 const sb = createClient(SUPABASE_URL, SUPABASE_KEY, { auth: { persistSession: true, autoRefreshToken: true } });
 
@@ -14,14 +15,15 @@ const CONTEXTES = ['Maison', 'Bureau', 'Téléphone', 'Ordinateur', 'Courses', '
 
 const S = { session: null, actions: [], projets: [], domaines: [], personnes: [], vue: 'accueil', filtres: {}, agendaPasses: false,
   vehicules: [], entretiens: [], interventions: [], intEnt: [], livres: [], achats: [], abonnements: [], trajets: [], routines: [], notes: [],
-  unites: [], postes: [], titulaires: [], participations: [] };
-let M; // modules, installés après la définition des fonctions communes
+  unites: [], postes: [], titulaires: [], participations: [], reglages: [], push: [], file: [], horsLigne: null };
+let M, X; // modules, installés après la définition des fonctions communes
 
 const MODULES = [
   { k: 'accueil', l: 'Accueil', g: 'Pilotage', principal: true },
   { k: 'agenda', l: 'Agenda', g: 'Pilotage', principal: true },
   { k: 'projets', l: 'Projets', g: 'Pilotage', principal: true },
   { k: 'actions', l: 'Actions', g: 'Pilotage', principal: true },
+  { k: 'delegations', l: 'Délégations', g: 'Pilotage' },
   { k: 'revue', l: 'Revue hebdo', g: 'Pilotage' },
   { k: 'transports', l: 'Transports', g: 'Vie' },
   { k: 'vehicules', l: 'Véhicules', g: 'Vie' },
@@ -32,6 +34,7 @@ const MODULES = [
   { k: 'carnet', l: 'Carnet', g: 'Repères' },
   { k: 'organigramme', l: 'Organigramme', g: 'Repères' },
   { k: 'reperes', l: 'Personnes et domaines', g: 'Repères' },
+  { k: 'reglages', l: 'Réglages', g: 'Repères' },
 ];
 
 /* ================= Utilitaires ================= */
@@ -96,6 +99,8 @@ const ICONES = {
   routines: '<path d="M12 21c-5-3-8-6-8-10a4 4 0 0 1 8-1 4 4 0 0 1 8 1c0 4-3 7-8 10z" fill="none" stroke="currentColor" stroke-width="2"/>',
   carnet: '<path d="M6 3h11v18H6zM9 7h5M9 11h5M3 6h3M3 10h3M3 14h3" fill="none" stroke="currentColor" stroke-width="2"/>',
   organigramme: '<rect x="9" y="3" width="6" height="5" fill="none" stroke="currentColor" stroke-width="2"/><rect x="3" y="16" width="6" height="5" fill="none" stroke="currentColor" stroke-width="2"/><rect x="15" y="16" width="6" height="5" fill="none" stroke="currentColor" stroke-width="2"/><path d="M12 8v4M6 16v-4h12v4" fill="none" stroke="currentColor" stroke-width="2"/>',
+  delegations: '<circle cx="8" cy="8" r="3" fill="none" stroke="currentColor" stroke-width="2"/><path d="M3 19c0-3 2.2-5 5-5s5 2 5 5M14 9h7M18 6l3 3-3 3" fill="none" stroke="currentColor" stroke-width="2"/>',
+  reglages: '<circle cx="12" cy="12" r="3" fill="none" stroke="currentColor" stroke-width="2"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M4.9 19.1 7 17M17 7l2.1-2.1" stroke="currentColor" stroke-width="2"/>',
   moins: '<circle cx="5" cy="12" r="2" fill="currentColor"/><circle cx="12" cy="12" r="2" fill="currentColor"/><circle cx="19" cy="12" r="2" fill="currentColor"/>',
 };
 const ico = n => `<svg viewBox="0 0 24 24" aria-hidden="true">${ICONES[n]}</svg>`;
@@ -122,12 +127,25 @@ async function charger() {
     postes: sb.from('postes').select('*'),
     titulaires: sb.from('postes_titulaires').select('*'),
     participations: sb.from('participations').select('*'),
+    reglages: sb.from('reglages').select('*'),
+    push: sb.from('push_abonnements').select('id,appareil,cree_le'),
   };
   const cles = Object.keys(tables);
-  const res = await Promise.all(Object.values(tables));
-  const err = res.find(r => r.error)?.error;
-  if (err) throw err;
+  let res;
+  try {
+    res = await Promise.all(Object.values(tables));
+    const err = res.find(r => r.error)?.error;
+    if (err) throw err;
+  } catch (e) {
+    // Hors ligne : on retombe sur la dernière copie locale.
+    const reseau = !navigator.onLine || /fetch|network|load failed/i.test(e.message || '');
+    let copie = null; try { copie = JSON.parse(localStorage.getItem('orbite-cache') || 'null'); } catch { }
+    if (reseau && copie) { Object.assign(S, copie.donnees); S.horsLigne = copie.le; return; }
+    throw e;
+  }
   cles.forEach((k, i) => { S[k] = res[i].data; });
+  S.horsLigne = null;
+  try { localStorage.setItem('orbite-cache', JSON.stringify({ le: new Date().toISOString(), donnees: Object.fromEntries(cles.map(k => [k, S[k]])) })); } catch { }
 }
 async function rafraichir() { await charger(); rendre(); }
 
@@ -159,15 +177,15 @@ function rendre() {
         ${navHtml}
         <div class="compte">${esc(S.session.user.email)}<br><button class="btn discret" id="deco" style="padding:4px 0">Se déconnecter</button></div>
       </nav>
-      <main id="vue"></main>
+      <main id="vue">${S.horsLigne ? `<div class="bandeau-horsligne">Hors ligne · données du ${esc(fmtJour.format(new Date(S.horsLigne)))} à ${esc(fmtHeure.format(new Date(S.horsLigne)))}. Tes captures seront envoyées au retour du réseau.</div>` : ''}</main>
     </div>
     <button class="fab" id="fab" aria-label="Capture rapide" title="Capture rapide (N)">${ico('plus')}</button>`;
-  app.querySelectorAll('[data-vue]').forEach(b => b.onclick = () => { S.vue = b.dataset.vue; S.filtres = {}; rendre(); window.scrollTo(0, 0); });
+  app.querySelectorAll('[data-vue]').forEach(b => b.onclick = () => { S.vue = b.dataset.vue; S.filtres = {}; history.replaceState(null, '', S.vue === 'accueil' ? location.pathname : '#' + S.vue); rendre(); window.scrollTo(0, 0); });
   $('#fab').onclick = () => ouvrirCapture();
   $('#deco').onclick = async () => { await sb.auth.signOut(); };
   horloge();
-  const v = $('#vue');
-  ({ accueil: vueAccueil, agenda: vueAgenda, projets: vueProjets, projet: vueProjet, actions: vueActions, reperes: vueReperes, ...M.vues }[S.vue] || vueAccueil)(v);
+  const v = document.createElement('div'); $('#vue').appendChild(v);
+  ({ accueil: vueAccueil, agenda: vueAgenda, projets: vueProjets, projet: vueProjet, actions: vueActions, reperes: vueReperes, ...M.vues, ...X.vues }[S.vue] || vueAccueil)(v);
   brancherLignes(v);
 }
 
@@ -192,6 +210,11 @@ function ligne(a, { montrerProjet = true } = {}) {
   const deleg = parId(S.personnes, a.delegue_a_id); if (deleg) meta.push(`<span>Délégué à ${esc(deleg.nom)}</span>`);
   const att = parId(S.personnes, a.en_attente_de_id); if (att) meta.push(`<span>Attend ${esc(att.nom)}</span>`);
   if (a.motif_blocage) meta.push(`<span>${esc(a.motif_blocage)}</span>`);
+  if (a.reference_externe && /^[A-Z][A-Z0-9]+-\d+$/.test(a.reference_externe.trim())) {
+    const dom = S.reglages.find(r => r.cle === 'jira_domaine')?.valeur || 'canac.atlassian.net';
+    meta.push(`<a class="lien-jira" href="https://${esc(dom)}/browse/${esc(a.reference_externe.trim())}" target="_blank" rel="noopener">${esc(a.reference_externe.trim())}${a.statut_jira ? ' · ' + esc(a.statut_jira) : ''}</a>`);
+  }
+  if (a.uid_externe) meta.push('<span>Outlook</span>');
   const m = manquants(a);
   return `<li class="ligne ${ferme ? 'ferme' : ''}" data-id="${a.id}">
     ${evt ? '<span class="puce-evt" aria-hidden="true"></span>' : `<button class="coche ${a.statut === 'Terminé' ? 'fait' : ''}" data-coche="${a.id}" aria-label="${a.statut === 'Terminé' ? 'Rouvrir' : 'Marquer terminé'} : ${esc(a.titre)}"></button>`}
@@ -216,6 +239,7 @@ function brancherLignes(racine) {
     }
   });
   racine.querySelectorAll('.ligne[data-id]').forEach(l => l.onclick = () => ouvrirAction(parId(S.actions, l.dataset.id)));
+  racine.querySelectorAll('a.lien-jira').forEach(a => a.onclick = e => e.stopPropagation());
   racine.querySelectorAll('[data-projet]').forEach(el => {
     const go = () => { S.vue = 'projet'; S.projetId = el.dataset.projet; rendre(); window.scrollTo(0, 0); };
     el.onclick = go; el.onkeydown = e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); go(); } };
@@ -253,6 +277,7 @@ function vueAccueil(v) {
       <div style="display:flex;gap:8px"><button class="btn discret" id="voirPasses">Voir</button><button class="btn" id="fermerPasses">Marquer terminés</button></div></header></div>` : ''}
     <div class="grille">
       <div class="colonne">
+        ${X.blocPlan()}
         <section class="bloc"><header><h2>En cours <span class="nb">${enCours.length}</span></h2></header>
           ${liste(enCours, 'Rien en cours. Passe une tâche du backlog à « En cours » pour la retrouver ici.')}</section>
         <section class="bloc"><header><h2>Backlog et engagements <span class="nb">${backlog.length}</span></h2></header>
@@ -269,6 +294,7 @@ function vueAccueil(v) {
       </div>
     </div>`;
   v.querySelectorAll('[data-aller]').forEach(b => b.onclick = () => { S.vue = b.dataset.aller; rendre(); });
+  const cp = v.querySelector('#choisirPlan'); if (cp) cp.onclick = () => X.choisirPlan();
   v.querySelectorAll('[data-cible]').forEach(b => b.onclick = () => {
     const c = b.dataset.cible;
     if (c === 'projets') { S.vue = 'projets'; return rendre(); }
@@ -494,16 +520,19 @@ function ouvrirCapture() {
   </form>`, async fd => {
     const projet = parId(S.projets, fd.get('projet_id'));
     if (fd.get('type') === 'Achat' || fd.get('type') === 'Note') {
-      const r = fd.get('type') === 'Achat'
-        ? await sb.from('achats').insert({ item: fd.get('titre').trim(), statut: 'À compléter', projet_id: projet?.id || null })
-        : await sb.from('notes').insert({ titre: fd.get('titre').trim(), type: 'Note', projet_id: projet?.id || null, domaine_id: projet?.domaine_id || null });
-      if (r.error) { toast('Échec : ' + r.error.message); return false; }
+      const [table, l] = fd.get('type') === 'Achat'
+        ? ['achats', { item: fd.get('titre').trim(), statut: 'À compléter', projet_id: projet?.id || null }]
+        : ['notes', { titre: fd.get('titre').trim(), type: 'Note', projet_id: projet?.id || null, domaine_id: projet?.domaine_id || null }];
+      if (!navigator.onLine) { X.mettreEnFile(table, l); return; }
+      const r = await sb.from(table).insert(l);
+      if (r.error) { if (/fetch|network/i.test(r.error.message)) { X.mettreEnFile(table, l); return; } toast('Échec : ' + r.error.message); return false; }
       toast(fd.get('type') === 'Achat' ? 'Ajouté aux achats' : 'Note créée'); return rafraichir();
     }
     const ligne = { titre: fd.get('titre').trim(), type: fd.get('type'), statut: fd.get('type') === 'Événement' ? 'À faire' : 'À traiter',
       planifie_debut: depuisLocal(fd.get('quand')), projet_id: projet?.id || null, domaine_id: projet?.domaine_id || null };
+    if (!navigator.onLine) { X.mettreEnFile('actions', ligne); return; }
     const { error } = await sb.from('actions').insert(ligne);
-    if (error) { toast('Échec : ' + error.message); return false; }
+    if (error) { if (/fetch|network/i.test(error.message)) { X.mettreEnFile('actions', ligne); return; } toast('Échec : ' + error.message); return false; }
     toast('Capturé'); rafraichir();
   });
 }
@@ -715,14 +744,18 @@ function rendreConnexion(app, message = '') {
 async function demarrer(session) {
   if (!session) { S.session = null; return rendre(); }
   const { data: ok, error } = await sb.rpc('reclamer_orbite');
-  if (error || !ok) { await sb.auth.signOut(); S.session = null; return rendreConnexion($('#app'), 'Ce compte n’a pas accès à ORBITE.'); }
+  const horsReseau = error && (!navigator.onLine || /fetch|network|load failed/i.test(error.message || ''));
+  if (!horsReseau && (error || !ok)) { await sb.auth.signOut(); S.session = null; return rendreConnexion($('#app'), 'Ce compte n’a pas accès à ORBITE.'); }
   S.session = session;
+  const h = location.hash.slice(1); if (MODULES.some(m => m.k === h)) S.vue = h;
   $('#app').innerHTML = '<div class="connexion"><p style="color:var(--brume);font-family:var(--mono)">Chargement…</p></div>';
-  try { await charger(); rendre(); } catch (e) { $('#app').innerHTML = `<div class="connexion"><p class="erreur">Impossible de charger les données : ${esc(e.message)}</p></div>`; }
+  try { await charger(); rendre(); X.viderFile(); } catch (e) { $('#app').innerHTML = `<div class="connexion"><p class="erreur">Impossible de charger les données : ${esc(e.message)}</p></div>`; }
 }
 
 M = installerModules({ sb, S, $, esc, toast, parId, aujourdhui, plusJours, jourDate, jourLong, cleJour, fmtHeure, versLocal, depuisLocal,
   dialogue, rafraichir, rendre: () => rendre(), liste, ouvert, enRetard, manquants, carteProjet, ouvrirPersonne, ouvrirAction, MODULES, ico });
+
+X = installerExtras({ sb, S, $, esc, toast, parId, aujourdhui, plusJours, jourDate, cleJour, dialogue, rafraichir, liste, ouvert });
 
 let derniereSession;
 sb.auth.onAuthStateChange((evt, session) => {
