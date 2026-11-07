@@ -25,11 +25,11 @@ export function installerExtras(c) {
     const faits = plan.filter(a => a.statut === 'Terminé').length;
     return bloc('Aujourd’hui, je fais', plan.length ? `${faits}/${plan.length}` : null,
       plan.length ? liste(plan, '') : vide('Choisis au plus trois actions pour ta journée.'),
-      `<button class="btn ${plan.length ? 'discret' : ''}" id="choisirPlan">${plan.length ? 'Modifier' : 'Choisir'}</button>`, 'plan-du-jour');
+      `<div class="boutons-entete">${c.boutonPlacer ? c.boutonPlacer() : ''}<button class="btn ${plan.length ? 'discret' : ''}" id="choisirPlan">${plan.length ? 'Modifier' : 'Choisir'}</button></div>`, 'plan-du-jour');
   }
   function choisirPlan() {
     const auj = aujourdhui();
-    const candidats = S.actions.filter(a => ouvert(a) && a.type !== 'Événement')
+    const candidats = S.actions.filter(a => ouvert(a) && a.type !== 'Événement' && (a.plan_du_jour === auj || !c.visible || c.visible(a)))
       .sort((a, b) => (b.plan_du_jour === auj) - (a.plan_du_jour === auj) || (a.statut === 'En cours' ? 0 : 1) - (b.statut === 'En cours' ? 0 : 1) || (a.echeance || '9').localeCompare(b.echeance || '9'));
     const d = dialogue(`<form><div class="tete-d"><h2>Aujourd’hui, je fais</h2><button type="button" class="btn discret" data-fermer aria-label="Fermer">✕</button></div>
       <div class="corps" style="grid-template-columns:1fr"><p class="aide" style="margin:0">Au plus trois. Ce qui n’est pas fait retourne dans le backlog demain.</p>

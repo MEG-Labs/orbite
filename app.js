@@ -3,6 +3,7 @@ import { SUPABASE_URL, SUPABASE_KEY, FUSEAU } from './config.js';
 import { installerModules } from './modules.js';
 import { installerExtras } from './extras.js';
 import { installerLot5 } from './lot5.js';
+import { installerLot6 } from './lot6.js';
 
 const sb = createClient(SUPABASE_URL, SUPABASE_KEY, { auth: { persistSession: true, autoRefreshToken: true } });
 
@@ -16,8 +17,8 @@ const CONTEXTES = ['Maison', 'Bureau', 'Téléphone', 'Ordinateur', 'Courses', '
 
 const S = { session: null, actions: [], projets: [], domaines: [], personnes: [], vue: 'accueil', filtres: {}, agendaPasses: false,
   vehicules: [], entretiens: [], interventions: [], intEnt: [], livres: [], achats: [], abonnements: [], trajets: [], routines: [], notes: [], budget: [], regles: [],
-  unites: [], postes: [], titulaires: [], participations: [], reglages: [], push: [], file: [], horsLigne: null };
-let M, X, L; // modules, installés après la définition des fonctions communes
+  unites: [], postes: [], titulaires: [], participations: [], reglages: [], journal: [], push: [], file: [], horsLigne: null };
+let M, X, L, L6; // modules, installés après la définition des fonctions communes
 
 const MODULES = [
   { k: 'accueil', l: 'Accueil', g: 'Pilotage', principal: true },
@@ -132,6 +133,7 @@ async function charger() {
     titulaires: sb.from('postes_titulaires').select('*'),
     participations: sb.from('participations').select('*'),
     reglages: sb.from('reglages').select('*'),
+    journal: sb.from('journal_jours').select('*').order('date', { ascending: false }).limit(120),
     push: sb.from('push_abonnements').select('id,appareil,cree_le'),
   };
   const cles = Object.keys(tables);
@@ -324,14 +326,16 @@ const triDate = (a, b) => (a.planifie_debut || '').localeCompare(b.planifie_debu
 /* ---------- Accueil ---------- */
 function vueAccueil(v) {
   const auj = aujourdhui(), dans7 = plusJours(auj, 7);
-  const taches = S.actions.filter(a => a.type !== 'Événement');
+  // Mode hors travail : les tâches et projets de travail sont masqués de l’accueil (les événements restent).
+  const vis = S.actions.filter(L6.visible);
+  const taches = vis.filter(a => a.type !== 'Événement');
   const enCours = taches.filter(a => a.statut === 'En cours').sort(triOuvert);
   const backlog = taches.filter(a => ['À faire', 'À traiter'].includes(a.statut)).sort(triOuvert);
-  const bloques = S.actions.filter(a => ['Bloqué', 'En attente'].includes(a.statut) || (ouvert(a) && a.relance && a.relance <= auj));
-  const retards = S.actions.filter(enRetard);
-  const aTrier = S.actions.filter(a => a.statut === 'À traiter');
+  const bloques = vis.filter(a => ['Bloqué', 'En attente'].includes(a.statut) || (ouvert(a) && a.relance && a.relance <= auj));
+  const retards = vis.filter(enRetard);
+  const aTrier = vis.filter(a => a.statut === 'À traiter');
   const passes = S.actions.filter(evtPasse);
-  const aVenir = S.actions.filter(a => ouvert(a) && a.planifie_debut && !evtPasse(a) && cleJour(a.planifie_debut) <= dans7).sort(triDate);
+  const aVenir = vis.filter(a => ouvert(a) && a.planifie_debut && !evtPasse(a) && cleJour(a.planifie_debut) <= dans7).sort(triDate);
   const evenements = aVenir.filter(a => a.type === 'Événement');
   const semaine = aVenir.filter(a => a.type !== 'Événement');
   const demain = plusJours(auj, 1);
@@ -341,11 +345,11 @@ function vueAccueil(v) {
   // Aujourd’hui : on garde aussi les événements déjà passés ou terminés (grisés), pour concorder avec la barre de charge.
   const passesAuj = S.actions.filter(a => a.type === 'Événement' && a.statut !== 'Annulé' && a.planifie_debut && cleJour(a.planifie_debut) === auj && !evenements.includes(a));
   const evtAuj = [...passesAuj, ...evtJour(auj)].sort(triDate);
-  const actifs = S.projets.filter(p => p.statut === 'Actif');
-  const aCompleter = S.actions.filter(a => manquants(a).length);
+  const actifs = S.projets.filter(p => p.statut === 'Actif' && L6.projetVisible(p));
+  const aCompleter = vis.filter(a => manquants(a).length);
 
   const cpt = (n, lbl, cls, cible) => `<button class="compteur ${n ? cls : 'calme'}" data-cible="${cible}"><b>${n}</b><span>${lbl}</span></button>`;
-  v.innerHTML = `
+  v.innerHTML = `${L6.bandeauMode()}${L6.blocFermeture()}
     <section class="bloc bloc-evenements"><header><h2>Aujourd’hui <span class="nb">${evtAuj.length}</span></h2><button class="btn discret" data-aller="agenda">Agenda</button></header>
       ${L.blocCharge()}
       ${liste(evtAuj, 'Aucun événement aujourd’hui.', { heureSeule: true })}
@@ -355,7 +359,7 @@ function vueAccueil(v) {
     ${L.blocConflits()}
     ${L.encartPneus()}
     <section class="compteurs" aria-label="Indicateurs">
-      ${cpt(enCours.length, 'En cours', 'calme', 'en-cours')}
+      ${cpt(enCours.length, 'En cours', L6.classeEnCours(enCours.length), 'en-cours')}
       ${cpt(taches.filter(ouvert).length, 'Tâches ouvertes', 'calme', 'ouvertes')}
       ${cpt(retards.length, 'En retard', 'alerte', 'retard')}
       ${cpt(bloques.length, 'Bloquées ou relances', 'attention', 'bloques')}
@@ -367,7 +371,7 @@ function vueAccueil(v) {
     <div class="grille">
       <div class="colonne">
         ${X.blocPlan()}
-        <section class="bloc"><header><h2>En cours <span class="nb">${enCours.length}</span></h2></header>
+        <section class="bloc"><header><h2>En cours <span class="nb">${enCours.length}</span></h2></header>${L6.avertEnCours(enCours.length)}
           ${liste(enCours, 'Rien en cours. Passe une tâche du backlog à « En cours » pour la retrouver ici.')}</section>
         <section class="bloc"><header><h2>Backlog et engagements <span class="nb">${backlog.length}</span></h2></header>
           ${liste(backlog, 'Backlog vide.')}</section>
@@ -384,6 +388,7 @@ function vueAccueil(v) {
     </div>`;
   v.querySelectorAll('[data-aller]').forEach(b => b.onclick = () => { S.vue = b.dataset.aller; rendre(); });
   L.brancherConflits(v);
+  L6.brancher(v);
   const pt = v.querySelector('details.plus-tard'); if (pt) pt.ontoggle = () => { S.evtOuverts = pt.open; };
   const cp = v.querySelector('#choisirPlan'); if (cp) cp.onclick = () => X.choisirPlan();
   v.querySelectorAll('[data-cible]').forEach(b => b.onclick = () => {
@@ -653,6 +658,7 @@ function ouvrirAction(a) {
         <label class="champ"><span>Échéance</span><input type="date" name="echeance" value="${a.echeance || ''}"></label>
         <label class="champ"><span>Relance</span><input type="date" name="relance" value="${a.relance || ''}"></label>
         <label class="champ"><span>Durée prévue (min)</span><input type="number" min="0" step="5" name="duree_min" value="${a.duree_min ?? ''}"></label>
+        <label class="champ"><span>Durée réelle (min)</span><input type="number" min="0" step="5" name="duree_reelle_min" value="${a.duree_reelle_min ?? ''}"></label>
       </fieldset>
 
       <fieldset><legend>Relier</legend>
@@ -698,6 +704,7 @@ function ouvrirAction(a) {
       planifie_fin: je ? null : depuisLocal(fd.get('planifie_fin')),
       echeance: vide('echeance'), relance: vide('relance'), priorite: fd.get('priorite') ? +fd.get('priorite') : null,
       duree_min: fd.get('duree_min') ? +fd.get('duree_min') : null,
+      duree_reelle_min: fd.get('duree_reelle_min') ? +fd.get('duree_reelle_min') : null,
       projet_id: vide('projet_id'), domaine_id: vide('domaine_id'), hors_projet: fd.get('hors_projet') === 'on',
       dans_perimetre: fd.get('dans_perimetre') === '' ? null : fd.get('dans_perimetre') === 'true',
       delegue_a_id: vide('delegue_a_id'), en_attente_de_id: vide('en_attente_de_id'), motif_blocage: vide('motif_blocage'),
@@ -847,17 +854,22 @@ async function demarrer(session) {
   const h = location.hash.slice(1); if (MODULES.some(m => m.k === h)) S.vue = h;
   $('#app').innerHTML = '<div class="connexion"><p style="color:var(--brume);font-family:var(--mono)">Chargement…</p></div>';
   majMeteo();
-  try { await charger(); rendre(); X.viderFile(); } catch (e) { $('#app').innerHTML = `<div class="connexion"><p class="erreur">Impossible de charger les données : ${esc(e.message)}</p></div>`; }
+  try { await charger(); rendre(); X.viderFile(); if (h === 'fermer') { history.replaceState(null, '', location.pathname); L6.ouvrirFermeture(); } } catch (e) { $('#app').innerHTML = `<div class="connexion"><p class="erreur">Impossible de charger les données : ${esc(e.message)}</p></div>`; }
 }
 
 M = installerModules({ sb, S, $, esc, toast, parId, aujourdhui, plusJours, jourDate, jourLong, cleJour, fmtHeure, versLocal, depuisLocal,
-  dialogue, rafraichir, rendre: () => rendre(), liste, ouvert, enRetard, manquants, carteProjet, ouvrirPersonne, ouvrirAction, MODULES, ico,
+  dialogue, rafraichir, rendre: () => rendre(), liste, ouvert, enRetard, manquants, carteProjet, ouvrirPersonne, ouvrirAction, MODULES, ico, blocBienEtre: () => L6.blocRevue(),
   conflitDe: t => L.conflitDe(t), encartPneus: () => L.encartPneus(), creerActionsDepuisNote: (n, txt) => L.creerActionsDepuisNote(n, txt), SUPA_URL: SUPABASE_URL });
 
 L = installerLot5({ sb, S, $, esc, toast, parId, aujourdhui, plusJours, jourDate, jourLong, cleJour, fmtHeure, dialogue, rafraichir, ouvert,
   rendre: () => rendre(), ouvrirAction, ouvrirPersonne, ficheNote: n => M.ficheNote(n), ficheAchat: a => M.ficheAchat(a), meteo: () => METEO.donnees });
 
-X = installerExtras({ sb, S, $, esc, toast, parId, aujourdhui, plusJours, jourDate, cleJour, dialogue, rafraichir, liste, ouvert, COULEURS_CAL });
+X = installerExtras({ sb, S, $, esc, toast, parId, aujourdhui, plusJours, jourDate, cleJour, dialogue, rafraichir, liste, ouvert, COULEURS_CAL,
+  visible: a => L6.visible(a), boutonPlacer: () => L6.boutonPlacer() });
+
+L6 = installerLot6({ sb, S, esc, toast, parId, aujourdhui, plusJours, jourDate, cleJour, fmtHeure, dialogue, rafraichir, rendre: () => rendre(), ouvert, depuisLocal,
+  charge: () => L.chargeDuJour(), minutesLocales: d => L.minutesLocales(d) });
+window.addEventListener('hashchange', () => { if (location.hash === '#fermer' && S.session) { history.replaceState(null, '', location.pathname); L6.ouvrirFermeture(); } });
 
 let derniereSession;
 sb.auth.onAuthStateChange((evt, session) => {

@@ -15,7 +15,7 @@ Tâches, agenda, projets et organisation de la vie courante. Remplace l'espace N
 | | Projets | Avancement, santé, budget par lots (HT, TTC, réserve, engagé, payé), actions, parties prenantes, achats et notes liés |
 | | Actions | Recherche et filtres sur tout |
 | | Délégations | Ce que j'ai délégué ou attends, par personne, avec relance et courriel de suivi |
-| | Revue hebdo | Captures, retards, projets sans suite, charge, abonnements, checklist |
+| | Revue hebdo | Captures, retards, projets sans suite, charge, abonnements, énergie et charge sur 7 jours, facteur d'estimation, checklist |
 | Vie | Transports | Trajets de la semaine, responsable et statut, génération de la semaine type |
 | | Véhicules | Programme d'entretien saisonnier, interventions, pneus montés, dépenses |
 | | Achats | Liste par magasin, commandes à recevoir, historique |
@@ -28,6 +28,14 @@ Tâches, agenda, projets et organisation de la vie courante. Remplace l'espace N
 | | Réglages | Notifications, calendriers importés (Google, Outlook) et flux ORBITE, sauvegardes, Jira, hors ligne |
 
 L'accueil commence par les **événements du jour** (avec la charge de 8 h à 17 h et les plages libres), les **conflits** entre un trajet à ta charge et un rendez-vous (avec délégation en un geste), puis l'alerte **pneus d'hiver** en octobre et novembre (selon la météo). Ensuite **Aujourd'hui, je fais** : au plus trois actions choisies pour la journée.
+
+**Équilibre travail et vie** (lot 6) :
+- **Fermer ma journée** : dès 16 h 30 en semaine (notification à 17 h 15), un rituel de deux minutes : victoires du jour (avec la durée réelle des tâches estimées), un prochain geste pour chaque tâche inachevée (demain dans mes trois, plus tard ou tel quel), de quoi je suis fier, énergie de 1 à 5. Table `journal_jours`. La fin de semaine, version courte « Comment était ta journée ? ».
+- **Mode hors travail** : la fin de semaine, après 17 h ou une fois la journée fermée, l'accueil masque les tâches et projets de travail (domaines listés dans le réglage `domaines_travail`, ou référence Jira). Les événements restent. Bascule manuelle valable jusqu'à minuit.
+- **Placer mes actions** : chaque action du plan du jour reçoit une heure dans une plage libre (proposition automatique) et apparaît en hachuré dans la barre de charge.
+- **Estimé contre réel** : durée prévue et durée réelle sur chaque tâche; le facteur personnel ajuste les durées proposées et s'affiche dans la revue hebdo.
+- **Limite des tâches en cours** : avertissement au-delà de 3 (réglage `limite_en_cours`).
+- Réglages facultatifs : `fermeture_heure` (17 par défaut).
 
 Autres outils :
 - **Recherche globale** : Ctrl+K ou / sur ordinateur, loupe dans le bandeau sur téléphone.
@@ -46,7 +54,7 @@ Données importées de Notion le 6 novembre 2026 (colonne `notion_id` pour la tr
 | --- | --- | --- |
 | Événements passés → Terminé | Aux 15 minutes (et à l'ouverture de l'app) | `prive.terminer_evenements_passes()` |
 | Semaine type des transports | Dimanche soir | `prive.generer_semaine_type()` |
-| Notifications du matin et du soir (avec conflits de demain) | Chaque heure à :15 | Edge Function `rappels` |
+| Notifications du matin et du soir (avec conflits de demain), invitation à fermer la journée | Chaque heure à :15 | Edge Function `rappels` |
 | Rappel 15 min avant chaque événement et trajet | Aux 5 minutes | Edge Function `rappels` (`{"mode":"rdv"}`), sans doublon grâce à `rappels_envoyes` |
 | Import des calendriers iCal (Google, Outlook…) | Chaque heure à :45 | Edge Function `outlook`, liens dans le réglage `calendriers_ics` |
 | Statut Jira | Chaque heure, jours de semaine | Edge Function `jira` (inactive sans `JIRA_COURRIEL` et `JIRA_JETON`) |

@@ -1,4 +1,5 @@
 // Notifications : résumé du matin et rappel du soir (appel horaire à :15),
+// invitation à fermer la journée (jours de semaine, heure de fermeture),
 // rappel 15 minutes avant chaque événement et trajet (appel aux 5 minutes avec {"mode":"rdv"}).
 import webpush from 'npm:web-push@3.6.7';
 import { admin, secret, reglage, autorise, cors, json, cleJour, heureLocale, fmtHeure, plusJours, argent } from './commun.ts';
@@ -27,7 +28,7 @@ Deno.serve(async req => {
   if (corps.mode === 'rdv') return json(await rappelsRdv(sb, abos));
 
   const [{ data: actions }, { data: trajets }, { data: abonnements }] = await Promise.all([
-    sb.from('actions').select('titre,statut,type,planifie_debut,planifie_fin,journee_entiere,echeance,relance,plan_du_jour'),
+    sb.from('actions').select('titre,statut,type,planifie_debut,planifie_fin,journee_entiere,echeance,relance,plan_du_jour,realisee_le'),
     sb.from('trajets').select('titre,date_heure,responsable,statut').gte('date_heure', plusJours(auj, -1)).lte('date_heure', plusJours(auj, 3)),
     sb.from('abonnements').select('nom,montant,prochaine_facturation,fin_essai,statut'),
   ]);
@@ -66,6 +67,17 @@ Deno.serve(async req => {
     if (conflits.length) l.push(`Conflit : ` + conflits.map(t => `trajet ${fmtHeure(t.date_heure)} pendant « ${evts.find(e => chevauche(t.date_heure, e))!.titre} »`).join(', '));
     if (evts.length) l.push(`Demain : ` + evts.slice(0, 3).map(a => (a.journee_entiere ? '' : fmtHeure(a.planifie_debut) + ' ') + a.titre).join(', '));
     if (l.length) messages.push({ title: 'Pour demain', body: l.join('\n'), url: sansResp.length || l.some(x => x.startsWith('Conflit')) ? './#transports' : './#agenda', tag: 'soir-' + auj });
+  }
+
+  // Rituel de fermeture : jours de semaine à l’heure de fermeture, si la journée n’est pas déjà fermée.
+  const hFermeture = +(await reglage(sb, 'fermeture_heure') ?? 17);
+  const jourSem = new Date(auj + 'T12:00:00Z').getUTCDay();
+  if ((h === hFermeture && jourSem >= 1 && jourSem <= 5) || corps.forcer === 'fermeture') {
+    const { data: j } = await sb.from('journal_jours').select('ferme_le').eq('date', auj).maybeSingle();
+    if (!j?.ferme_le) {
+      const faits = A.filter(a => a.type !== 'Événement' && a.statut === 'Terminé' && a.realisee_le && cleJour(a.realisee_le) === auj).length;
+      messages.push({ title: 'Ferme ta journée', body: `${faits ? `${faits} victoire${faits > 1 ? 's' : ''} aujourd’hui. ` : ''}Deux minutes pour noter ce qui reste, puis tu décroches.`, url: './#fermer', tag: 'fermeture-' + auj });
+    }
   }
 
   const envoyes = await envoyer(sb, abos, messages);

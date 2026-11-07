@@ -53,32 +53,42 @@ export function installerLot5(c) {
 
   /* ================= 3. Charge de la journée ================= */
   const JOUR_DE = 8 * 60, JOUR_A = 17 * 60;
+  // Plage [début, fin] en minutes du jour, bornée à 8 h–17 h ; un élément sans fin occupe 30 min.
+  function plage(a, auj) {
+    return [Math.max(JOUR_DE, minutesLocales(a.planifie_debut)), Math.min(JOUR_A, a.planifie_fin && cleJour(a.planifie_fin) === auj ? minutesLocales(a.planifie_fin) : minutesLocales(a.planifie_debut) + (a.duree_min || 30))];
+  }
+  function fusionner(liste) {
+    const occ = [];
+    for (const [d, f] of [...liste].sort((a, b) => a[0] - b[0])) { const der = occ[occ.length - 1]; if (der && d <= der[1]) der[1] = Math.max(der[1], f); else occ.push([d, f]); }
+    return occ;
+  }
   function chargeDuJour() {
     const auj = aujourdhui();
     const evts = evtsHoraires().filter(e => cleJour(e.planifie_debut) === auj)
-      .map(e => [Math.max(JOUR_DE, minutesLocales(e.planifie_debut)), Math.min(JOUR_A, e.planifie_fin && cleJour(e.planifie_fin) === auj ? minutesLocales(e.planifie_fin) : minutesLocales(e.planifie_debut) + 30), e])
-      .filter(([d, f]) => f > d).sort((a, b) => a[0] - b[0]);
-    // Fusion des plages occupées.
-    const occ = [];
-    for (const [d, f] of evts) { const der = occ[occ.length - 1]; if (der && d <= der[1]) der[1] = Math.max(der[1], f); else occ.push([d, f]); }
+      .map(e => [...plage({ ...e, duree_min: null }, auj), e]).filter(([d, f]) => f > d);
+    // Blocs de travail : tâches placées à une heure précise aujourd’hui (plans « quand »).
+    const blocs = S.actions.filter(a => a.type !== 'Événement' && !a.journee_entiere && a.planifie_debut && !['Annulé'].includes(a.statut) && cleJour(a.planifie_debut) === auj)
+      .map(a => [...plage(a, auj), a]).filter(([d, f]) => f > d);
+    const occ = fusionner(evts.map(([d, f]) => [d, f]));
     const pris = occ.reduce((s, [d, f]) => s + f - d, 0);
+    const tout = fusionner([...evts, ...blocs].map(([d, f]) => [d, f]));
     const maintenant = minutesLocales(new Date());
     const libres = []; let cur = Math.max(JOUR_DE, maintenant);
-    for (const [d, f] of occ) { if (d - cur >= 30) libres.push([cur, d]); cur = Math.max(cur, f); }
+    for (const [d, f] of tout) { if (d - cur >= 30) libres.push([cur, d]); cur = Math.max(cur, f); }
     if (JOUR_A - cur >= 30) libres.push([cur, JOUR_A]);
-    return { evts, occ, pris, libres, maintenant };
+    return { evts, blocs, occ, tout, pris, libres, maintenant, JOUR_DE, JOUR_A };
   }
   const hhmm = m => `${Math.floor(m / 60)} h${m % 60 ? ' ' + String(m % 60).padStart(2, '0') : ''}`;
   function blocCharge() {
-    const { occ, pris, libres, maintenant } = chargeDuJour();
+    const { occ, blocs, pris, libres, maintenant } = chargeDuJour();
     const pct = m => ((m - JOUR_DE) / (JOUR_A - JOUR_DE) * 100).toFixed(2);
     const fini = maintenant >= JOUR_A;
     const jourSem = new Date(aujourdhui() + 'T12:00:00').getDay();
     const finDeSemaine = jourSem === 0 || jourSem === 6;
     const texteLibre = finDeSemaine ? 'Fin de semaine' : fini ? 'Journée de travail terminée' : libres.length ? 'Libre : ' + libres.slice(0, 4).map(([d, f]) => `${hhmm(d)}–${hhmm(f)}`).join(' · ') : 'Aucune plage libre de 30 min d’ici 17 h';
     return `<div class="charge${finDeSemaine ? ' charge-fds' : ''}" title="${finDeSemaine ? 'Fin de semaine' : 'Plage de travail 8 h – 17 h'}">
-      <div class="charge-texte"><b>${pris ? duree(pris) : '0 h'}</b> ${finDeSemaine ? 'd’événements (8 h–17 h)' : 'en rendez-vous (8 h–17 h)'} · <span>${esc(texteLibre)}</span></div>
-      <div class="charge-barre" aria-hidden="true">${occ.map(([d, f]) => `<i style="left:${pct(d)}%;width:${(pct(f) - pct(d)).toFixed(2)}%"></i>`).join('')}
+      <div class="charge-texte"><b>${pris ? duree(pris) : '0 h'}</b> ${finDeSemaine ? 'd’événements (8 h–17 h)' : 'en rendez-vous (8 h–17 h)'} · <span>${esc(texteLibre)}</span>${blocs.length ? ` · <span>${blocs.length} bloc${blocs.length > 1 ? 's' : ''} planifié${blocs.length > 1 ? 's' : ''}</span>` : ''}</div>
+      <div class="charge-barre" aria-hidden="true">${blocs.map(([d, f, a]) => `<i class="t${a.statut === 'Terminé' ? ' fait' : ''}" style="left:${pct(d)}%;width:${(pct(f) - pct(d)).toFixed(2)}%"></i>`).join('')}${occ.map(([d, f]) => `<i style="left:${pct(d)}%;width:${(pct(f) - pct(d)).toFixed(2)}%"></i>`).join('')}
         ${maintenant > JOUR_DE && maintenant < JOUR_A ? `<b style="left:${pct(maintenant)}%"></b>` : ''}</div>
       <div class="charge-graduations" aria-hidden="true"><span>8 h</span><span>10 h</span><span>12 h</span><span>14 h</span><span>17 h</span></div></div>`;
   }
@@ -274,6 +284,6 @@ export function installerLot5(c) {
     inp.focus();
   }
 
-  return { conflitDe, blocConflits, brancherConflits, blocCharge, noteDe, compteRendu, creerActionsDepuisNote, complementReglages,
+  return { conflitDe, blocConflits, brancherConflits, blocCharge, chargeDuJour, minutesLocales, noteDe, compteRendu, creerActionsDepuisNote, complementReglages,
     blocLigneTemps, brancherLigneTemps, encartPneus, alertePneus, ouvrirRecherche };
 }
