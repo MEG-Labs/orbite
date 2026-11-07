@@ -249,6 +249,15 @@ document.addEventListener('visibilitychange', () => {
 });
 
 /* ---------- Ligne d'action réutilisable ---------- */
+// Calendrier d'origine d'un événement importé (nom et couleur réglés dans Réglages › Calendriers importés).
+const COULEURS_CAL = [['Rose', '#E86AA6'], ['Bleu', '#4C9BE8'], ['Vert', '#4FB286'], ['Violet', '#9B7BE0'], ['Jaune', '#E8B23A'], ['Turquoise', '#3BC1C1'], ['Gris', '#8FA8B8']];
+function calendrierDe(a) {
+  if (!a.uid_externe) return null;
+  const cals = S.reglages.find(r => r.cle === 'calendriers_ics')?.valeur || [];
+  const i = cals.findIndex(c => c.id === a.uid_externe.split('|')[0]);
+  const c = cals[i];
+  return { nom: c?.nom || a.source_externe || 'Calendrier', couleur: c?.couleur || COULEURS_CAL[Math.max(i, 0) % COULEURS_CAL.length][1] };
+}
 function ligne(a, { montrerProjet = true } = {}) {
   const p = parId(S.projets, a.projet_id);
   const ferme = !ouvert(a);
@@ -266,10 +275,11 @@ function ligne(a, { montrerProjet = true } = {}) {
     const dom = S.reglages.find(r => r.cle === 'jira_domaine')?.valeur || 'canac.atlassian.net';
     meta.push(`<a class="lien-jira" href="https://${esc(dom)}/browse/${esc(a.reference_externe.trim())}" target="_blank" rel="noopener">${esc(a.reference_externe.trim())}${a.statut_jira ? ' · ' + esc(a.statut_jira) : ''}</a>`);
   }
-  if (a.uid_externe) meta.push(`<span class="pastille">${esc(a.source_externe || 'Calendrier')}</span>`);
+  const cal = calendrierDe(a);
+  if (cal) meta.push(`<span class="pastille pastille-cal" style="--cal:${esc(cal.couleur)}">${esc(cal.nom)}</span>`);
   const m = manquants(a);
   return `<li class="ligne ${ferme ? 'ferme' : ''}" data-id="${a.id}">
-    ${evt ? '<span class="puce-evt" aria-hidden="true"></span>' : `<button class="coche ${a.statut === 'Terminé' ? 'fait' : ''}" data-coche="${a.id}" aria-label="${a.statut === 'Terminé' ? 'Rouvrir' : 'Marquer terminé'} : ${esc(a.titre)}"></button>`}
+    ${evt ? `<span class="puce-evt" aria-hidden="true"${cal ? ` style="background:${esc(cal.couleur)}"` : ''}></span>` : `<button class="coche ${a.statut === 'Terminé' ? 'fait' : ''}" data-coche="${a.id}" aria-label="${a.statut === 'Terminé' ? 'Rouvrir' : 'Marquer terminé'} : ${esc(a.titre)}"></button>`}
     <div>
       <div class="titre">${esc(a.titre)}${m.length ? `<span class="incomplet" title="À compléter : ${esc(m.join(', '))}"></span>` : ''}</div>
       ${meta.length ? `<div class="meta">${meta.join('')}</div>` : ''}
@@ -808,7 +818,7 @@ async function demarrer(session) {
 M = installerModules({ sb, S, $, esc, toast, parId, aujourdhui, plusJours, jourDate, jourLong, cleJour, fmtHeure, versLocal, depuisLocal,
   dialogue, rafraichir, rendre: () => rendre(), liste, ouvert, enRetard, manquants, carteProjet, ouvrirPersonne, ouvrirAction, MODULES, ico });
 
-X = installerExtras({ sb, S, $, esc, toast, parId, aujourdhui, plusJours, jourDate, cleJour, dialogue, rafraichir, liste, ouvert });
+X = installerExtras({ sb, S, $, esc, toast, parId, aujourdhui, plusJours, jourDate, cleJour, dialogue, rafraichir, liste, ouvert, COULEURS_CAL });
 
 let derniereSession;
 sb.auth.onAuthStateChange((evt, session) => {

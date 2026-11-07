@@ -2,7 +2,7 @@
 import { SUPABASE_URL } from './config.js';
 
 export function installerExtras(c) {
-  const { sb, S, $, esc, toast, parId, aujourdhui, plusJours, jourDate, cleJour, dialogue, rafraichir, liste, ouvert } = c;
+  const { sb, S, $, esc, toast, parId, aujourdhui, plusJours, jourDate, cleJour, dialogue, rafraichir, liste, ouvert, COULEURS_CAL } = c;
   const bloc = (titre, nb, corps, actions = '', cls = '') =>
     `<section class="bloc ${cls}"><header><h2>${titre}${nb != null ? ` <span class="nb">${nb}</span>` : ''}</h2>${actions}</header>${corps}</section>`;
   const vide = m => `<div class="vide">${m}</div>`;
@@ -134,7 +134,7 @@ export function installerExtras(c) {
             <p>Colle le lien <b>iCal (.ics)</b> d’un calendrier pour voir ses événements dans ORBITE. Ils sont relus chaque heure.</p>
             <p class="aide"><b>Google Agenda</b> (sur ordinateur) : Paramètres › clique le calendrier à gauche › <b>Intégrer l’agenda</b> › « Adresse secrète au format iCal ».<br>
             <b>Outlook</b> : Paramètres › Calendrier › Calendriers partagés › Publier un calendrier › « Peut afficher tous les détails » › lien ICS.</p>
-            <ul class="lignes" id="listeCals">${cals.length ? cals.map(c => `<li class="ligne ligne-cal"><div><div class="titre">${esc(c.nom)}</div><div class="meta"><span>${S.actions.filter(a => a.uid_externe?.startsWith(c.id + '|')).length} événement(s)</span><span class="lien-court">${esc(c.lien.replace(/^(https?|webcal):\/\//, '').slice(0, 38))}…</span></div></div><button class="btn discret" data-retirer-cal="${esc(c.id)}">Retirer</button></li>`).join('') : '<li class="ligne"><span class="aide">Aucun calendrier pour l’instant.</span></li>'}</ul>
+            <ul class="lignes" id="listeCals">${cals.length ? cals.map((c, i) => { const coul = c.couleur || COULEURS_CAL[i % COULEURS_CAL.length][1]; return `<li class="ligne ligne-cal" style="--cal:${esc(coul)}"><div><div class="titre"><span class="puce-cal" aria-hidden="true"></span>${esc(c.nom)}</div><div class="meta"><span>${S.actions.filter(a => a.uid_externe?.startsWith(c.id + '|')).length} événement(s)</span><span class="lien-court">${esc(c.lien.replace(/^(https?|webcal):\/\//, '').slice(0, 38))}…</span></div><div class="nuancier" role="radiogroup" aria-label="Couleur de ${esc(c.nom)}">${COULEURS_CAL.map(([n, h]) => `<button class="pastille-couleur ${h === coul ? 'choisie' : ''}" role="radio" aria-checked="${h === coul}" title="${n}" aria-label="${n}" style="background:${h}" data-couleur-cal="${esc(c.id)}" data-couleur="${h}"></button>`).join('')}</div></div><div class="actions-cal"><button class="btn discret" data-renommer-cal="${esc(c.id)}">Renommer</button><button class="btn discret" data-retirer-cal="${esc(c.id)}">Retirer</button></div></li>`; }).join('') : '<li class="ligne"><span class="aide">Aucun calendrier pour l’instant.</span></li>'}</ul>
             <div class="rangee"><input id="nomCal" placeholder="Nom (ex. Famille)" aria-label="Nom du calendrier" style="max-width:180px"><input id="lienNouveauCal" placeholder="https://calendar.google.com/calendar/ical/…/basic.ics" aria-label="Lien iCal"><button class="btn primaire" id="ajoutCal">Ajouter</button></div>
             <div class="rangee"><button class="btn" id="syncCals" ${cals.length ? '' : 'disabled'}>Synchroniser maintenant</button></div>
             <p class="aide">Ces liens sont privés : garde-les pour toi. Retirer un calendrier retire aussi ses événements d’ORBITE.</p></div>`)}
@@ -174,13 +174,26 @@ export function installerExtras(c) {
       if (/calendar\.google\.com\/calendar\/(u\/\d\/)?(r|embed)/.test(lien)) return toast('Ce lien sert à afficher l’agenda. Prends l’« Adresse secrète au format iCal » (finit par .ics).');
       if (cals.some(c => c.lien === lien)) return toast('Ce calendrier est déjà ajouté');
       const id = 'c' + Math.random().toString(36).slice(2, 8);
-      if (await ecrireReglage('calendriers_ics', [...cals, { id, nom, lien }])) { toast('Calendrier ajouté · import en cours…'); await synchroniser(); }
+      const prises = cals.map((c, i) => c.couleur || COULEURS_CAL[i % COULEURS_CAL.length][1]);
+      const couleur = (COULEURS_CAL.find(([, h]) => !prises.includes(h)) || COULEURS_CAL[cals.length % COULEURS_CAL.length])[1];
+      if (await ecrireReglage('calendriers_ics', [...cals, { id, nom, lien, couleur }])) { toast('Calendrier ajouté · import en cours…'); await synchroniser(); }
     };
     v.querySelectorAll('[data-retirer-cal]').forEach(b => b.onclick = async () => {
       if (b.dataset.ok !== '1') { b.dataset.ok = '1'; b.textContent = 'Confirmer'; return; }
       if (await ecrireReglage('calendriers_ics', cals.filter(c => c.id !== b.dataset.retirerCal))) { toast('Calendrier retiré'); await synchroniser(); }
     });
     $('#syncCals').onclick = e => synchroniser(e.target);
+    const majCals = async (liste, msg) => { if (await ecrireReglage('calendriers_ics', liste)) { const r = S.reglages.find(x => x.cle === 'calendriers_ics'); if (r) r.valeur = liste; else S.reglages.push({ cle: 'calendriers_ics', valeur: liste }); toast(msg); rafraichir(); } };
+    v.querySelectorAll('[data-couleur-cal]').forEach(b => b.onclick = () => majCals(cals.map(c => c.id === b.dataset.couleurCal ? { ...c, couleur: b.dataset.couleur } : c), 'Couleur changée'));
+    v.querySelectorAll('[data-renommer-cal]').forEach(b => b.onclick = () => {
+      const c = cals.find(x => x.id === b.dataset.renommerCal);
+      const li = b.closest('li'); const t = li.querySelector('.titre');
+      t.innerHTML = `<span class="puce-cal" aria-hidden="true"></span><input class="renommer" value="${esc(c.nom)}" aria-label="Nouveau nom">`;
+      const inp = t.querySelector('input'); inp.focus(); inp.select();
+      const ok = () => { const nom = inp.value.trim(); if (nom && nom !== c.nom) majCals(cals.map(x => x.id === c.id ? { ...x, nom } : x), 'Calendrier renommé'); else rafraichir(); };
+      inp.onkeydown = e => { if (e.key === 'Enter') ok(); if (e.key === 'Escape') rafraichir(); };
+      inp.onblur = ok;
+    });
     // Sauvegardes
     const dessinerSauv = async () => {
       const { data, error } = await sb.storage.from('sauvegardes').list('', { sortBy: { column: 'name', order: 'desc' }, limit: 12 });
