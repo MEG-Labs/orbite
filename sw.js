@@ -1,5 +1,5 @@
 // ORBITE : coquille hors ligne, notifications.
-const CACHE = 'orbite-v6';
+const CACHE = 'orbite-v7';
 const COQUILLE = ['./', 'index.html', 'styles.css', 'app.js', 'modules.js', 'extras.js', 'config.js', 'icon.svg', 'icon-192.png', 'manifest.webmanifest'];
 const LIBS = 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/+esm';
 
@@ -19,7 +19,8 @@ self.addEventListener('fetch', e => {
   }
   if (url.origin !== location.origin) return;
   // Interface : réseau d'abord, cache en secours.
-  e.respondWith(fetch(e.request).then(r => {
+  // cache: 'no-cache' : on contourne le cache HTTP de GitHub Pages (10 min) pour voir les mises à jour tout de suite.
+  e.respondWith(fetch(e.request, { cache: 'no-cache' }).then(r => {
     const copie = r.clone();
     caches.open(CACHE).then(c => c.put(e.request, copie));
     return r;

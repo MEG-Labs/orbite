@@ -221,6 +221,8 @@ const QUEBEC = { lat: 46.81, lon: -71.21 };
 function position() {
   return new Promise(ok => {
     if (!navigator.geolocation) return ok(null);
+    // Le délai du navigateur ne court qu'après l'autorisation : on n'attend pas plus de 10 s une réponse à la demande.
+    setTimeout(() => ok(null), 10e3);
     navigator.geolocation.getCurrentPosition(p => ok({ lat: p.coords.latitude, lon: p.coords.longitude }), () => ok(null),
       { enableHighAccuracy: false, maximumAge: 30 * 60e3, timeout: 15e3 });
   });
