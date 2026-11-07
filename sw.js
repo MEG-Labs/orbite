@@ -1,6 +1,6 @@
 // Cache de l'interface seulement; les données passent toujours par le réseau.
-const CACHE = 'orbite-v1';
-const COQUILLE = ['./', 'index.html', 'styles.css', 'app.js', 'config.js', 'icon.svg', 'icon-192.png', 'manifest.webmanifest'];
+const CACHE = 'orbite-v2';
+const COQUILLE = ['./', 'index.html', 'styles.css', 'app.js', 'modules.js', 'config.js', 'icon.svg', 'icon-192.png', 'manifest.webmanifest'];
 
 self.addEventListener('install', e => {
   e.waitUntil(caches.open(CACHE).then(c => c.addAll(COQUILLE)).then(() => self.skipWaiting()));

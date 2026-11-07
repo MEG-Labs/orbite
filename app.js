@@ -1,5 +1,6 @@
 import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/+esm';
 import { SUPABASE_URL, SUPABASE_KEY, FUSEAU } from './config.js';
+import { installerModules } from './modules.js';
 
 const sb = createClient(SUPABASE_URL, SUPABASE_KEY, { auth: { persistSession: true, autoRefreshToken: true } });
 
@@ -11,7 +12,27 @@ const PRIOS = { 1: '1 — Critique', 2: '2 — Haute', 3: '3 — Normale', 4: '4
 const STATUTS_PROJET = ['À envisager', 'À planifier', 'Actif', 'En pause', 'Terminé', 'Annulé'];
 const CONTEXTES = ['Maison', 'Bureau', 'Téléphone', 'Ordinateur', 'Courses', 'Partout'];
 
-const S = { session: null, actions: [], projets: [], domaines: [], personnes: [], vue: 'accueil', filtres: {}, agendaPasses: false };
+const S = { session: null, actions: [], projets: [], domaines: [], personnes: [], vue: 'accueil', filtres: {}, agendaPasses: false,
+  vehicules: [], entretiens: [], interventions: [], intEnt: [], livres: [], achats: [], abonnements: [], trajets: [], routines: [], notes: [],
+  unites: [], postes: [], titulaires: [], participations: [] };
+let M; // modules, installés après la définition des fonctions communes
+
+const MODULES = [
+  { k: 'accueil', l: 'Accueil', g: 'Pilotage', principal: true },
+  { k: 'agenda', l: 'Agenda', g: 'Pilotage', principal: true },
+  { k: 'projets', l: 'Projets', g: 'Pilotage', principal: true },
+  { k: 'actions', l: 'Actions', g: 'Pilotage', principal: true },
+  { k: 'revue', l: 'Revue hebdo', g: 'Pilotage' },
+  { k: 'transports', l: 'Transports', g: 'Vie' },
+  { k: 'vehicules', l: 'Véhicules', g: 'Vie' },
+  { k: 'achats', l: 'Achats', g: 'Vie' },
+  { k: 'abonnements', l: 'Abonnements', g: 'Vie' },
+  { k: 'bibliotheque', l: 'Bibliothèque', g: 'Vie' },
+  { k: 'routines', l: 'Routines', g: 'Vie' },
+  { k: 'carnet', l: 'Carnet', g: 'Repères' },
+  { k: 'organigramme', l: 'Organigramme', g: 'Repères' },
+  { k: 'reperes', l: 'Personnes et domaines', g: 'Repères' },
+];
 
 /* ================= Utilitaires ================= */
 const $ = (sel, el = document) => el.querySelector(sel);
@@ -66,21 +87,47 @@ const ICONES = {
   actions: '<path d="M4 6h2M4 12h2M4 18h2M9 6h11M9 12h11M9 18h11" stroke="currentColor" stroke-width="2"/>',
   reperes: '<circle cx="12" cy="12" r="8" fill="none" stroke="currentColor" stroke-width="2"/><circle cx="12" cy="12" r="2" fill="currentColor"/>',
   plus: '<path d="M12 4v16M4 12h16" stroke="currentColor" stroke-width="2.5"/>',
+  revue: '<path d="M20 12a8 8 0 1 1-2.3-5.7M20 4v4h-4" fill="none" stroke="currentColor" stroke-width="2"/>',
+  transports: '<path d="M4 16V9l2-4h12l2 4v7M4 16h16M7 19v-3M17 19v-3M4 11h16" fill="none" stroke="currentColor" stroke-width="2"/>',
+  vehicules: '<circle cx="12" cy="12" r="8" fill="none" stroke="currentColor" stroke-width="2"/><circle cx="12" cy="12" r="2.5" fill="currentColor"/><path d="M12 4v5M5 15l4.5-2M19 15l-4.5-2" stroke="currentColor" stroke-width="2"/>',
+  achats: '<path d="M3 4h3l2 11h11l2-8H7" fill="none" stroke="currentColor" stroke-width="2"/><circle cx="10" cy="19.5" r="1.5" fill="currentColor"/><circle cx="17" cy="19.5" r="1.5" fill="currentColor"/>',
+  abonnements: '<rect x="3" y="6" width="18" height="13" fill="none" stroke="currentColor" stroke-width="2"/><path d="M3 10h18M7 15h4" stroke="currentColor" stroke-width="2"/>',
+  bibliotheque: '<path d="M5 4h4v16H5zM10 4h4v16h-4zM15.5 5l3.8-1 3 15.5-3.8 1z" fill="none" stroke="currentColor" stroke-width="1.8"/>',
+  routines: '<path d="M12 21c-5-3-8-6-8-10a4 4 0 0 1 8-1 4 4 0 0 1 8 1c0 4-3 7-8 10z" fill="none" stroke="currentColor" stroke-width="2"/>',
+  carnet: '<path d="M6 3h11v18H6zM9 7h5M9 11h5M3 6h3M3 10h3M3 14h3" fill="none" stroke="currentColor" stroke-width="2"/>',
+  organigramme: '<rect x="9" y="3" width="6" height="5" fill="none" stroke="currentColor" stroke-width="2"/><rect x="3" y="16" width="6" height="5" fill="none" stroke="currentColor" stroke-width="2"/><rect x="15" y="16" width="6" height="5" fill="none" stroke="currentColor" stroke-width="2"/><path d="M12 8v4M6 16v-4h12v4" fill="none" stroke="currentColor" stroke-width="2"/>',
+  moins: '<circle cx="5" cy="12" r="2" fill="currentColor"/><circle cx="12" cy="12" r="2" fill="currentColor"/><circle cx="19" cy="12" r="2" fill="currentColor"/>',
 };
 const ico = n => `<svg viewBox="0 0 24 24" aria-hidden="true">${ICONES[n]}</svg>`;
 const LOGO = `<svg viewBox="0 0 64 64" aria-hidden="true"><ellipse cx="32" cy="32" rx="25" ry="10" fill="none" stroke="#F26B21" stroke-width="3" transform="rotate(-28 32 32)"/><circle cx="32" cy="32" r="9" fill="#E6EDF2"/><circle cx="53" cy="21" r="4" fill="#F26B21"/></svg>`;
 
 /* ================= Données ================= */
 async function charger() {
-  const [a, p, d, pe] = await Promise.all([
-    sb.from('actions').select('*').order('cree_le'),
-    sb.from('projets_suivi').select('*').order('titre'),
-    sb.from('domaines').select('*').order('ordre'),
-    sb.from('personnes').select('*').order('nom'),
-  ]);
-  const err = a.error || p.error || d.error || pe.error;
+  const tables = {
+    actions: sb.from('actions').select('*').order('cree_le'),
+    projets: sb.from('projets_suivi').select('*').order('titre'),
+    domaines: sb.from('domaines').select('*').order('ordre'),
+    personnes: sb.from('personnes').select('*').order('nom'),
+    vehicules: sb.from('vehicules').select('*').order('nom'),
+    entretiens: sb.from('entretiens').select('*').order('entretien'),
+    interventions: sb.from('interventions').select('*'),
+    intEnt: sb.from('interventions_entretiens').select('*'),
+    livres: sb.from('livres').select('*').order('titre'),
+    achats: sb.from('achats').select('*'),
+    abonnements: sb.from('abonnements').select('*').order('nom'),
+    trajets: sb.from('trajets').select('*').order('date_heure'),
+    routines: sb.from('routines').select('*'),
+    notes: sb.from('notes').select('*'),
+    unites: sb.from('unites').select('*').order('nom'),
+    postes: sb.from('postes').select('*'),
+    titulaires: sb.from('postes_titulaires').select('*'),
+    participations: sb.from('participations').select('*'),
+  };
+  const cles = Object.keys(tables);
+  const res = await Promise.all(Object.values(tables));
+  const err = res.find(r => r.error)?.error;
   if (err) throw err;
-  S.actions = a.data; S.projets = p.data; S.domaines = d.data; S.personnes = pe.data;
+  cles.forEach((k, i) => { S[k] = res[i].data; });
 }
 async function rafraichir() { await charger(); rendre(); }
 
@@ -94,7 +141,13 @@ async function majAction(id, champs) {
 function rendre() {
   const app = $('#app');
   if (!S.session) return rendreConnexion(app);
-  const vues = [['accueil', 'Accueil'], ['agenda', 'Agenda'], ['projets', 'Projets'], ['actions', 'Actions'], ['reperes', 'Repères']];
+  const courant = S.vue === 'projet' ? 'projets' : S.vue;
+  const estPrincipal = MODULES.find(m => m.k === courant)?.principal;
+  let groupe = '';
+  const navHtml = MODULES.map(m => {
+    const tete = m.g !== groupe ? `<div class="groupe-nav">${esc(m.g)}</div>` : ''; groupe = m.g;
+    return `${tete}<button data-vue="${m.k}" class="${m.principal ? '' : 'secondaire'}" ${courant === m.k ? 'aria-current="page"' : ''}>${ico(m.k)}<span>${m.l}</span></button>`;
+  }).join('') + `<button data-vue="plus" class="seulement-mobile" ${!estPrincipal ? 'aria-current="page"' : ''}>${ico('moins')}<span>Plus</span></button>`;
   app.innerHTML = `
     <header class="bandeau">
       <div class="marque">${LOGO}ORBITE</div>
@@ -103,7 +156,7 @@ function rendre() {
     </header>
     <div class="coquille">
       <nav class="nav" aria-label="Sections">
-        ${vues.map(([k, l]) => `<button data-vue="${k}" ${(S.vue === 'projet' ? 'projets' : S.vue) === k ? 'aria-current="page"' : ''}>${ico(k)}<span>${l}</span></button>`).join('')}
+        ${navHtml}
         <div class="compte">${esc(S.session.user.email)}<br><button class="btn discret" id="deco" style="padding:4px 0">Se déconnecter</button></div>
       </nav>
       <main id="vue"></main>
@@ -114,7 +167,7 @@ function rendre() {
   $('#deco').onclick = async () => { await sb.auth.signOut(); };
   horloge();
   const v = $('#vue');
-  ({ accueil: vueAccueil, agenda: vueAgenda, projets: vueProjets, projet: vueProjet, actions: vueActions, reperes: vueReperes }[S.vue] || vueAccueil)(v);
+  ({ accueil: vueAccueil, agenda: vueAgenda, projets: vueProjets, projet: vueProjet, actions: vueActions, reperes: vueReperes, ...M.vues }[S.vue] || vueAccueil)(v);
   brancherLignes(v);
 }
 
@@ -206,6 +259,7 @@ function vueAccueil(v) {
           ${liste(backlog, 'Backlog vide.')}</section>
       </div>
       <div class="colonne">
+        ${M.encartsAccueil()}
         <section class="bloc"><header><h2>7 prochains jours <span class="nb">${semaine.length}</span></h2><button class="btn discret" data-aller="agenda">Agenda</button></header>
           ${liste(semaine, 'Rien de planifié cette semaine.')}</section>
         ${bloques.length ? `<section class="bloc"><header><h2>Blocages et relances <span class="nb">${bloques.length}</span></h2></header>${liste(bloques, '')}</section>` : ''}
@@ -314,12 +368,14 @@ function vueProjet(v) {
       </div>
       <div class="colonne">${carteProjet(p).replace('class="projet"', 'class="projet bloc"')}
         ${enfants.length ? `<section class="bloc"><header><h2>Sous-projets</h2></header>${enfants.map(carteProjet).join('')}</section>` : ''}
-        ${p.notes ? `<section class="bloc"><header><h2>Notes</h2></header><div class="vide" style="color:var(--craie);white-space:pre-wrap">${esc(p.notes)}</div></section>` : ''}
+        ${p.notes ? `<section class="bloc"><header><h2>Notes du projet</h2></header><div class="vide" style="color:var(--craie);white-space:pre-wrap">${esc(p.notes)}</div></section>` : ''}
+        ${M.complementsProjet(p)}
       </div>
     </div>`;
   $('#retour').onclick = () => { S.vue = 'projets'; rendre(); };
   $('#modifierProjet').onclick = () => ouvrirProjet(p);
   $('#ajoutAction').onclick = () => ouvrirAction({ type: 'Tâche', statut: 'À faire', projet_id: p.id, domaine_id: p.domaine_id });
+  M.brancherProjet(v, p);
 }
 
 /* ---------- Toutes les actions ---------- */
@@ -362,11 +418,11 @@ function vueActions(v) {
 /* ---------- Repères : domaines et personnes ---------- */
 function vueReperes(v) {
   v.innerHTML = `
-    <h1>Repères</h1><p class="sous-titre">Domaines de vie et personnes auxquelles tu délègues.</p>
+    <h1>Personnes et domaines</h1><p class="sous-titre">Domaines de vie et personnes auxquelles tu délègues.</p>
     <div class="grille">
       <section class="bloc"><header><h2>Personnes et organisations <span class="nb">${S.personnes.length}</span></h2><button class="btn" id="ajoutPers">Ajouter</button></header>
         <div style="padding:10px 14px"><input type="search" id="qp" placeholder="Chercher une personne" style="width:100%" aria-label="Chercher une personne"></div>
-        <table class="tableau" id="tPers"><thead><tr><th>Nom</th><th class="opt">Fonction</th><th class="opt">Courriel</th><th>Actions</th></tr></thead><tbody></tbody></table></section>
+        <table class="tableau" id="tPers"><thead><tr><th>Nom</th><th class="opt">Département</th><th class="opt">Courriel</th><th>Actions</th></tr></thead><tbody></tbody></table></section>
       <section class="bloc"><header><h2>Domaines de vie</h2><button class="btn" id="ajoutDom">Ajouter</button></header>
         <ul class="lignes">${S.domaines.map(d => {
           const n = S.actions.filter(a => a.domaine_id === d.id && ouvert(a)).length;
@@ -377,7 +433,7 @@ function vueReperes(v) {
     const q = ($('#qp').value || '').toLowerCase();
     $('#tPers tbody').innerHTML = S.personnes.filter(p => p.nom.toLowerCase().includes(q)).map(p => {
       const n = S.actions.filter(a => ouvert(a) && (a.delegue_a_id === p.id || a.en_attente_de_id === p.id)).length;
-      return `<tr data-pers="${p.id}"><td>${esc(p.nom)}</td><td class="opt">${esc(p.fonction || '')}</td><td class="opt">${esc(p.courriel || '')}</td><td>${n || ''}</td></tr>`;
+      return `<tr data-pers="${p.id}"><td>${esc(p.nom)}</td><td class="opt">${esc(parId(S.unites, p.departement_id)?.nom || p.fonction || '')}</td><td class="opt">${esc(p.courriel || '')}</td><td>${n || ''}</td></tr>`;
     }).join('');
     v.querySelectorAll('[data-pers]').forEach(r => r.onclick = () => ouvrirPersonne(parId(S.personnes, r.dataset.pers)));
   };
@@ -430,13 +486,20 @@ function ouvrirCapture() {
     <div class="tete-d"><h2>Capture rapide</h2><button type="button" class="btn discret" data-fermer aria-label="Fermer">✕</button></div>
     <div class="corps">
       <label class="champ large"><span>Quoi?</span><input name="titre" class="titre-saisie" required autofocus autocomplete="off" placeholder="Un titre suffit"></label>
-      <div class="types-rapides" role="radiogroup" aria-label="Type">${TYPES.map((t, i) => `<label><input type="radio" name="type" value="${t}" ${i === 0 ? 'checked' : ''}><span>${t}</span></label>`).join('')}</div>
+      <div class="types-rapides" role="radiogroup" aria-label="Type">${[...TYPES, 'Achat', 'Note'].map((t, i) => `<label><input type="radio" name="type" value="${t}" ${i === 0 ? 'checked' : ''}><span>${t}</span></label>`).join('')}</div>
       <label class="champ"><span>Quand (facultatif)</span><input type="datetime-local" name="quand"></label>
       <label class="champ"><span>Projet</span><select name="projet_id">${opts(S.projets.filter(p => p.statut === 'Actif'), null, { vide: 'Aucun pour l’instant', lib: 'titre' })}</select></label>
     </div>
     <div class="pied"><button type="button" class="btn" data-fermer>Annuler</button><button type="submit" class="btn primaire">Capturer</button></div>
   </form>`, async fd => {
     const projet = parId(S.projets, fd.get('projet_id'));
+    if (fd.get('type') === 'Achat' || fd.get('type') === 'Note') {
+      const r = fd.get('type') === 'Achat'
+        ? await sb.from('achats').insert({ item: fd.get('titre').trim(), statut: 'À compléter', projet_id: projet?.id || null })
+        : await sb.from('notes').insert({ titre: fd.get('titre').trim(), type: 'Note', projet_id: projet?.id || null, domaine_id: projet?.domaine_id || null });
+      if (r.error) { toast('Échec : ' + r.error.message); return false; }
+      toast(fd.get('type') === 'Achat' ? 'Ajouté aux achats' : 'Note créée'); return rafraichir();
+    }
     const ligne = { titre: fd.get('titre').trim(), type: fd.get('type'), statut: fd.get('type') === 'Événement' ? 'À faire' : 'À traiter',
       planifie_debut: depuisLocal(fd.get('quand')), projet_id: projet?.id || null, domaine_id: projet?.domaine_id || null };
     const { error } = await sb.from('actions').insert(ligne);
@@ -591,12 +654,15 @@ function ouvrirPersonne(p) {
       <label class="champ"><span>Fonction</span><input name="fonction" value="${esc(p.fonction)}"></label>
       <label class="champ"><span>Courriel</span><input type="email" name="courriel" value="${esc(p.courriel)}"></label>
       <label class="champ"><span>Téléphone</span><input type="tel" name="telephone" value="${esc(p.telephone)}"></label>
+      <label class="champ"><span>Compagnie</span><select name="compagnie_id">${opts(S.unites.filter(u => u.categorie === 'Organisation'), p.compagnie_id)}</select></label>
+      <label class="champ"><span>Département</span><select name="departement_id">${opts(S.unites.filter(u => u.categorie !== 'Organisation'), p.departement_id)}</select></label>
+      ${p.id ? `<p class="champ large aide" style="margin:0">${S.titulaires.filter(t => t.personne_id === p.id).map(t => esc(parId(S.postes, t.poste_id)?.titre)).join(', ') || 'Aucun poste dans l’organigramme'}</p>` : ''}
       <label class="champ large"><span>Notes</span><textarea name="notes">${esc(p.notes)}</textarea></label>
     </div>
     <div class="pied"><button type="button" class="btn" data-fermer>Annuler</button><button type="submit" class="btn primaire">Enregistrer</button></div>
   </form>`, async fd => {
     const vide = k => (fd.get(k) || '').trim() || null;
-    const ligne = { nom: fd.get('nom').trim(), nature: fd.get('nature'), fonction: vide('fonction'), courriel: vide('courriel'), telephone: vide('telephone'), notes: vide('notes') };
+    const ligne = { nom: fd.get('nom').trim(), nature: fd.get('nature'), fonction: vide('fonction'), courriel: vide('courriel'), telephone: vide('telephone'), notes: vide('notes'), compagnie_id: vide('compagnie_id'), departement_id: vide('departement_id') };
     const { error } = nouveau ? await sb.from('personnes').insert(ligne) : await sb.from('personnes').update(ligne).eq('id', p.id);
     if (error) { toast('Échec : ' + error.message); return false; }
     toast('Enregistré'); rafraichir();
@@ -654,6 +720,9 @@ async function demarrer(session) {
   $('#app').innerHTML = '<div class="connexion"><p style="color:var(--brume);font-family:var(--mono)">Chargement…</p></div>';
   try { await charger(); rendre(); } catch (e) { $('#app').innerHTML = `<div class="connexion"><p class="erreur">Impossible de charger les données : ${esc(e.message)}</p></div>`; }
 }
+
+M = installerModules({ sb, S, $, esc, toast, parId, aujourdhui, plusJours, jourDate, jourLong, cleJour, fmtHeure, versLocal, depuisLocal,
+  dialogue, rafraichir, rendre: () => rendre(), liste, ouvert, enRetard, manquants, carteProjet, ouvrirPersonne, ouvrirAction, MODULES, ico });
 
 let derniereSession;
 sb.auth.onAuthStateChange((evt, session) => {

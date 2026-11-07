@@ -1,0 +1,702 @@
+// Modules ORBITE : véhicules, achats, abonnements, transports, bibliothèque, carnet, routines, revue, organigramme.
+export function installerModules(c) {
+  const { sb, S, $, esc, toast, parId, aujourdhui, plusJours, jourDate, cleJour, fmtHeure, versLocal, depuisLocal, dialogue, rafraichir, liste, ouvert, enRetard, manquants } = c;
+
+  /* ---------- Outils ---------- */
+  const argent = new Intl.NumberFormat('fr-CA', { style: 'currency', currency: 'CAD' });
+  const fmtArgent = v => v == null || v === '' ? '' : argent.format(+v);
+  const MOIS = ['janv.', 'févr.', 'mars', 'avr.', 'mai', 'juin', 'juil.', 'août', 'sept.', 'oct.', 'nov.', 'déc.'];
+  const MOIS_LONG = ['Janvier', 'Février', 'Mars', 'Avril', 'Mai', 'Juin', 'Juillet', 'Août', 'Septembre', 'Octobre', 'Novembre', 'Décembre'];
+  const pad = n => String(n).padStart(2, '0');
+  const ymd = (y, m) => `${y}-${pad(m)}-01`;
+  const moisDe = cle => +cle.slice(5, 7);
+  const anDe = cle => +cle.slice(0, 4);
+  const pastille = (txt, ton = '') => `<span class="pastille ${ton}">${esc(txt)}</span>`;
+  const vide = (msg) => `<div class="vide">${msg}</div>`;
+  const bloc = (titre, nb, corps, actions = '', cls = '') =>
+    `<section class="bloc ${cls}"><header><h2>${titre}${nb != null ? ` <span class="nb">${nb}</span>` : ''}</h2>${actions}</header>${corps}</section>`;
+  const entete = (titre, sous, boutons = '') =>
+    `<div class="entete-vue"><div><h1>${titre}</h1><p class="sous-titre">${sous}</p></div><div class="boutons">${boutons}</div></div>`;
+
+  /* ---------- Formulaire générique ---------- */
+  function champHTML(f, v) {
+    const lbl = `<span>${esc(f.l)}</span>`;
+    const req = f.req ? 'required' : '';
+    const cls = `champ ${f.large ? 'large' : ''}`;
+    switch (f.t) {
+      case 'textarea': return `<label class="${cls} large"><span>${esc(f.l)}</span><textarea name="${f.k}" rows="${f.rows || 4}" ${f.ph ? `placeholder="${esc(f.ph)}"` : ''}>${esc(v)}</textarea></label>`;
+      case 'number': return `<label class="${cls}">${lbl}<input type="number" step="${f.step || 'any'}" name="${f.k}" value="${v ?? ''}" ${req}></label>`;
+      case 'date': return `<label class="${cls}">${lbl}<input type="date" name="${f.k}" value="${v || ''}" ${req}></label>`;
+      case 'datetime': return `<label class="${cls}">${lbl}<input type="datetime-local" name="${f.k}" value="${versLocal(v)}" ${req}></label>`;
+      case 'bool': return `<label class="champ case ${f.large ? 'large' : ''}"><input type="checkbox" name="${f.k}" ${v ? 'checked' : ''}><span>${esc(f.l)}</span></label>`;
+      case 'select': {
+        const o = typeof f.o === 'function' ? f.o() : f.o;
+        return `<label class="${cls}">${lbl}<select name="${f.k}" ${req}>${f.req ? '' : '<option value="">—</option>'}${o.map(x => { const [val, lib] = Array.isArray(x) ? x : [x, x]; return `<option value="${esc(val)}" ${String(val) === String(v ?? '') ? 'selected' : ''}>${esc(lib)}</option>`; }).join('')}</select></label>`;
+      }
+      case 'ref': {
+        const o = f.o();
+        return `<label class="${cls}">${lbl}<select name="${f.k}" ${req}><option value="">—</option>${o.map(x => `<option value="${x.id}" ${x.id === v ? 'selected' : ''}>${esc(x[f.lib || 'nom'])}</option>`).join('')}</select></label>`;
+      }
+      case 'multi': {
+        const o = typeof f.o === 'function' ? f.o() : f.o; const sel = v || [];
+        return `<div class="champ large"><span>${esc(f.l)}</span><div class="types-rapides">${o.map(x => { const [val, lib] = Array.isArray(x) ? x : [x, x]; return `<label><input type="checkbox" name="${f.k}" value="${esc(val)}" ${sel.map(String).includes(String(val)) ? 'checked' : ''}><span>${esc(lib)}</span></label>`; }).join('')}</div></div>`;
+      }
+      case 'tags': return `<label class="${cls}">${lbl}<input name="${f.k}" value="${esc((v || []).join(', '))}" placeholder="Séparés par des virgules"></label>`;
+      default: return `<label class="${cls}">${lbl}<input name="${f.k}" value="${esc(v)}" ${req} ${f.ph ? `placeholder="${esc(f.ph)}"` : ''} ${f.titre ? 'class="titre-saisie"' : ''}></label>`;
+    }
+  }
+  function lire(f, fd) {
+    const brut = fd.get(f.k);
+    switch (f.t) {
+      case 'number': return brut === '' || brut == null ? null : +brut;
+      case 'bool': return brut === 'on';
+      case 'datetime': return depuisLocal(brut);
+      case 'multi': return fd.getAll(f.k).map(x => f.num ? +x : x);
+      case 'tags': return (brut || '').split(',').map(s => s.trim()).filter(Boolean);
+      case 'select': return brut === '' ? null : (f.num ? +brut : brut);
+      default: return (brut ?? '').trim() === '' ? null : brut.trim();
+    }
+  }
+  function fiche({ titre, table, champs, ligne = {}, apres, avant, pied = '' }) {
+    const nouveau = !ligne.id;
+    const d = dialogue(`<form>
+      <div class="tete-d"><h2>${esc(titre)}</h2><button type="button" class="btn discret" data-fermer aria-label="Fermer">✕</button></div>
+      <div class="corps">${champs.map(f => f.section ? `<p class="section-fiche">${esc(f.section)}</p>` : champHTML(f, ligne[f.k])).join('')}${pied}</div>
+      <div class="pied">${nouveau ? '' : '<button type="button" class="btn danger gauche" data-suppr>Supprimer</button>'}
+        <button type="button" class="btn" data-fermer>Annuler</button><button type="submit" class="btn primaire">Enregistrer</button></div>
+    </form>`, async (fd, dlg) => {
+      const val = {};
+      champs.filter(f => f.k && !f.virtuel).forEach(f => { val[f.k] = lire(f, fd); });
+      if (avant) { const r = avant(val, fd, dlg); if (r === false) return false; }
+      const r = nouveau ? await sb.from(table).insert(val).select('id').single() : await sb.from(table).update(val).eq('id', ligne.id).select('id').single();
+      if (r.error) { toast('Échec : ' + r.error.message); return false; }
+      if (apres) await apres(r.data.id, val, fd);
+      toast(nouveau ? 'Ajouté' : 'Enregistré'); rafraichir();
+    });
+    const s = d.querySelector('[data-suppr]');
+    if (s) s.onclick = async () => {
+      if (s.dataset.ok !== '1') { s.dataset.ok = '1'; s.textContent = 'Confirmer la suppression'; return; }
+      const { error } = await sb.from(table).delete().eq('id', ligne.id);
+      if (error) return toast('Échec : ' + error.message);
+      d.close(); toast('Supprimé'); rafraichir();
+    };
+    return d;
+  }
+  const brancher = (v, sel, fn) => v.querySelectorAll(sel).forEach(el => {
+    el.onclick = e => { if (e.target.closest('button, select, input, a') && el !== e.target.closest('button')) return; fn(el, e); };
+    if (el.getAttribute('role') === 'button') el.onkeydown = e => { if (e.key === 'Enter') fn(el, e); };
+  });
+
+  /* ================= Véhicules ================= */
+  function liensIntervention(id) { return S.intEnt.filter(x => x.intervention_id === id).map(x => x.entretien_id); }
+  function derniereRealisation(e) {
+    const ids = S.intEnt.filter(x => x.entretien_id === e.id).map(x => x.intervention_id);
+    return S.interventions.filter(i => ids.includes(i.id) && i.statut === 'Terminée' && i.date).map(i => i.date).sort().pop() || null;
+  }
+  function statutEntretien(e) {
+    if (!e.actif) return { cle: 'inactif', lib: 'Inactif', ordre: 9 };
+    if (!e.mois_prevus?.length) return { cle: 'config', lib: 'À configurer', ordre: 4 };
+    const auj = aujourdhui(), y = anDe(auj), m = moisDe(auj);
+    const debuts = e.mois_prevus.map(mm => mm <= m ? ymd(y, mm) : ymd(y - 1, mm)).sort();
+    const courant = debuts.pop();
+    const prochains = e.mois_prevus.map(mm => mm > m ? ymd(y, mm) : ymd(y + 1, mm)).sort();
+    const prochain = prochains[0];
+    const der = derniereRealisation(e);
+    const ecart = (y * 12 + m) - (anDe(courant) * 12 + moisDe(courant));
+    const moisProchain = (y * 12 + m + 1);
+    const estMoisProchain = anDe(prochain) * 12 + moisDe(prochain) === moisProchain;
+    if (der && der >= courant) return { cle: 'ok', lib: 'À jour', ordre: 6, der, prochain };
+    if (ecart === 0) return { cle: 'mois', lib: 'Ce mois-ci', ordre: 1, der, prochain: courant };
+    if (ecart <= 2) return { cle: 'retard', lib: 'En retard', ordre: 0, der, prochain: courant };
+    if (estMoisProchain) return { cle: 'avenir', lib: 'À venir', ordre: 2, der, prochain };
+    return { cle: 'plan', lib: 'Planifié', ordre: 5, der, prochain };
+  }
+  const tonStatut = { retard: 'st-Bloqué', mois: 'st-À traiter', avenir: 'st-En attente', ok: 'st-Terminé', config: '', plan: '', inactif: '' };
+  function pneusMontes(v) {
+    const inter = S.interventions.filter(i => i.vehicule_id === v.id && i.statut === 'Terminée' && i.date).sort((a, b) => b.date.localeCompare(a.date));
+    for (const i of inter) {
+      const p = liensIntervention(i.id).map(id => parId(S.entretiens, id)?.pneus_poses).find(Boolean);
+      if (p) return { pneus: p, date: i.date };
+    }
+    return null;
+  }
+  function ligneEntretien(e, montrerVehicule = true) {
+    const st = statutEntretien(e); const v = parId(S.vehicules, e.vehicule_id);
+    const quandTxt = st.cle === 'ok' ? `Prochain : ${MOIS_LONG[moisDe(st.prochain) - 1].toLowerCase()} ${anDe(st.prochain)}` : st.prochain ? `Période : ${MOIS_LONG[moisDe(st.prochain) - 1].toLowerCase()} ${anDe(st.prochain)}` : 'Indique le ou les mois prévus';
+    return `<li class="ligne" data-entretien="${e.id}" role="button" tabindex="0" style="grid-template-columns:auto minmax(0,1fr) auto">
+      ${pastille(st.lib, tonStatut[st.cle])}
+      <div><div class="titre">${esc(e.entretien)}</div><div class="meta">${montrerVehicule && v ? `<span>${esc(v.nom)}</span>` : ''}<span>${esc(quandTxt)}</span>${st.der ? `<span>Fait le ${esc(jourDate(st.der))}</span>` : ''}${e.rendez_vous ? `<span>RDV ${esc(jourDate(cleJour(e.rendez_vous)))}</span>` : ''}</div></div>
+      <div>${['retard', 'mois', 'avenir'].includes(st.cle) ? `<button class="btn" data-fait="${e.id}">Fait</button>` : ''}</div></li>`;
+  }
+
+  function vueVehicules(v) {
+    const actifs = S.entretiens.filter(e => e.actif);
+    const attention = actifs.map(e => [e, statutEntretien(e)]).filter(([, s]) => ['retard', 'mois', 'avenir', 'config'].includes(s.cle)).sort((a, b) => a[1].ordre - b[1].ordre);
+    const an = anDe(aujourdhui());
+    v.innerHTML = entete('Entretien des véhicules', 'Programme saisonnier, interventions et dépenses par véhicule.',
+      `<button class="btn" id="ajVeh">Ajouter un véhicule</button><button class="btn primaire" id="ajInt">Enregistrer une intervention</button>`) + `
+      <div class="grille">
+        <div class="colonne">
+          ${bloc('Ce qui demande mon attention', attention.length, attention.length ? `<ul class="lignes">${attention.map(([e]) => ligneEntretien(e)).join('')}</ul>` : vide('Tout est à jour pour la période en cours.'))}
+          ${bloc('Interventions et factures', S.interventions.length, S.interventions.length ? `<table class="tableau"><thead><tr><th>Date</th><th>Intervention</th><th class="opt">Véhicule</th><th class="opt">Km</th><th>Coût</th></tr></thead><tbody>
+            ${S.interventions.slice().sort((a, b) => (b.date || '').localeCompare(a.date || '')).map(i => `<tr data-inter="${i.id}"><td>${i.date ? esc(jourDate(i.date)) : '—'}</td><td>${esc(i.titre)}${i.statut !== 'Terminée' ? ' ' + pastille(i.statut) : ''}</td><td class="opt">${esc(parId(S.vehicules, i.vehicule_id)?.nom)}</td><td class="opt">${i.kilometrage ? i.kilometrage.toLocaleString('fr-CA') : ''}</td><td>${fmtArgent(i.cout_cad)}</td></tr>`).join('')}
+          </tbody></table>` : vide('Aucune intervention enregistrée.'))}
+        </div>
+        <div class="colonne">
+          ${S.vehicules.map(vh => {
+            const p = pneusMontes(vh); const ents = S.entretiens.filter(e => e.vehicule_id === vh.id);
+            const dep = S.interventions.filter(i => i.vehicule_id === vh.id && i.statut === 'Terminée' && i.date?.startsWith(String(an))).reduce((s, i) => s + (+i.cout_cad || 0), 0);
+            return `<section class="bloc"><header><h2>${esc(vh.nom)}</h2><button class="btn discret" data-veh="${vh.id}">Modifier</button></header>
+              <div class="fiche-faits">
+                <div><b>${vh.km_actuel ? vh.km_actuel.toLocaleString('fr-CA') + ' km' : '—'}</b><span>${vh.km_releve_le ? 'Relevé le ' + esc(jourDate(vh.km_releve_le)) : 'Kilométrage'}</span></div>
+                <div><b>${p ? esc(p.pneus) : '—'}</b><span>Pneus montés</span></div>
+                <div><b>${fmtArgent(dep)}</b><span>Dépenses ${an}</span></div>
+              </div>
+              <ul class="lignes">${ents.map(e => ligneEntretien(e, false)).join('')}</ul>
+              <div class="pied-bloc"><button class="btn discret" data-ajent="${vh.id}">Ajouter un entretien</button></div></section>`;
+          }).join('') || bloc('Véhicules', 0, vide('Ajoute ton premier véhicule.'))}
+        </div>
+      </div>`;
+    $('#ajVeh').onclick = () => ficheVehicule({ etat: 'En service' });
+    $('#ajInt').onclick = () => ficheIntervention({ statut: 'Terminée', date: aujourdhui(), vehicule_id: S.vehicules[0]?.id });
+    v.querySelectorAll('[data-veh]').forEach(b => b.onclick = () => ficheVehicule(parId(S.vehicules, b.dataset.veh)));
+    v.querySelectorAll('[data-ajent]').forEach(b => b.onclick = () => ficheEntretien({ vehicule_id: b.dataset.ajent, actif: true, mois_prevus: [] }));
+    v.querySelectorAll('[data-fait]').forEach(b => b.onclick = e => { e.stopPropagation(); const en = parId(S.entretiens, b.dataset.fait); ficheIntervention({ statut: 'Terminée', date: aujourdhui(), vehicule_id: en.vehicule_id, titre: en.entretien }, [en.id]); });
+    brancher(v, '[data-entretien]', el => ficheEntretien(parId(S.entretiens, el.dataset.entretien)));
+    brancher(v, '[data-inter]', el => { const i = parId(S.interventions, el.dataset.inter); ficheIntervention(i, liensIntervention(i.id)); });
+  }
+  function ficheVehicule(vh) {
+    fiche({ titre: vh.id ? vh.nom : 'Nouveau véhicule', table: 'vehicules', ligne: vh, champs: [
+      { k: 'nom', l: 'Nom', req: true, large: true, titre: true, ph: 'VW Atlas 2019' },
+      { k: 'marque', l: 'Marque' }, { k: 'modele', l: 'Modèle' }, { k: 'annee', l: 'Année', t: 'number', step: 1 },
+      { k: 'etat', l: 'État', t: 'select', o: ['En service', 'Vendu', 'Hors service'], req: true },
+      { k: 'km_actuel', l: 'Kilométrage actuel', t: 'number', step: 1 }, { k: 'km_releve_le', l: 'Relevé le', t: 'date' },
+      { k: 'pneus_reference', l: 'Pneus de référence', t: 'select', o: ['Été', 'Hiver', '4 saisons'] },
+      { k: 'dimensions_pneus', l: 'Dimensions des pneus' }, { k: 'immatriculation', l: 'Immatriculation' }, { k: 'niv', l: 'NIV' },
+      { k: 'motorisation', l: 'Motorisation' }, { k: 'notes', l: 'Notes', t: 'textarea' },
+    ] });
+  }
+  function ficheEntretien(e) {
+    fiche({ titre: e.id ? e.entretien : 'Nouvel entretien', table: 'entretiens', ligne: e, champs: [
+      { k: 'entretien', l: 'Entretien', req: true, large: true, titre: true, ph: 'Pose des pneus d’hiver' },
+      { k: 'vehicule_id', l: 'Véhicule', t: 'ref', o: () => S.vehicules, req: true },
+      { k: 'categorie', l: 'Catégorie', t: 'select', o: ['Huile moteur', 'Pneus', 'Filtres', 'Freins', 'Batterie', 'Liquides', 'Inspection', 'Autre'] },
+      { k: 'mois_prevus', l: 'Mois prévus', t: 'multi', num: true, o: MOIS_LONG.map((m, i) => [i + 1, m]) },
+      { k: 'pneus_poses', l: 'Pose de pneus', t: 'select', o: ['Été', 'Hiver'] },
+      { k: 'rendez_vous', l: 'Rendez-vous', t: 'datetime' },
+      { k: 'intervalle_km', l: 'Intervalle (km)', t: 'number', step: 500 }, { k: 'intervalle_mois', l: 'Intervalle (mois)', t: 'number', step: 1 },
+      { k: 'actif', l: 'Actif', t: 'bool' }, { k: 'notes', l: 'Notes', t: 'textarea' },
+    ] });
+  }
+  function ficheIntervention(i, entretiensLies = []) {
+    const nouveau = !i.id;
+    const cases = vid => S.entretiens.filter(e => e.vehicule_id === vid).map(e => `<label><input type="checkbox" name="entretiens" value="${e.id}" ${entretiensLies.includes(e.id) ? 'checked' : ''}><span>${esc(e.entretien)}</span></label>`).join('') || '<span class="aide">Aucun entretien programmé pour ce véhicule.</span>';
+    const d = fiche({ titre: nouveau ? 'Nouvelle intervention' : 'Intervention', table: 'interventions', ligne: i,
+      champs: [
+        { k: 'titre', l: 'Intervention', req: true, large: true, titre: true, ph: 'Changement d’huile' },
+        { k: 'vehicule_id', l: 'Véhicule', t: 'ref', o: () => S.vehicules, req: true },
+        { k: 'statut', l: 'Statut', t: 'select', o: ['Planifiée', 'Terminée', 'Annulée'], req: true },
+        { k: 'date', l: 'Date', t: 'date' }, { k: 'kilometrage', l: 'Kilométrage', t: 'number', step: 1 },
+        { k: 'cout_cad', l: 'Coût (CAD)', t: 'number', step: 0.01 }, { k: 'garage', l: 'Garage ou réalisé par' },
+        { k: 'travaux', l: 'Travaux et pièces', t: 'textarea' },
+      ],
+      pied: `<div class="champ large"><span>Entretiens réalisés</span><div class="types-rapides" id="casesEnt">${cases(i.vehicule_id)}</div></div>`,
+      apres: async (id, val, fd) => {
+        await sb.from('interventions_entretiens').delete().eq('intervention_id', id);
+        const ids = fd.getAll('entretiens');
+        if (ids.length) await sb.from('interventions_entretiens').insert(ids.map(e => ({ intervention_id: id, entretien_id: e })));
+        const vh = parId(S.vehicules, val.vehicule_id);
+        if (val.kilometrage && vh && (!vh.km_actuel || val.kilometrage > vh.km_actuel)) await sb.from('vehicules').update({ km_actuel: val.kilometrage, km_releve_le: val.date || aujourdhui() }).eq('id', vh.id);
+      } });
+    const sel = d.querySelector('[name=vehicule_id]');
+    sel.onchange = () => { d.querySelector('#casesEnt').innerHTML = cases(sel.value); };
+  }
+
+  /* ================= Achats ================= */
+  const STATUTS_ACHAT = ['À compléter', 'À acheter', 'Commandé', 'Partiellement reçu', 'Reçu', 'Annulé'];
+  function ligneAchat(a) {
+    const p = parId(S.projets, a.projet_id);
+    const total = a.quantite && a.prix_unitaire ? a.quantite * a.prix_unitaire : null;
+    const fait = a.statut === 'Reçu';
+    return `<li class="ligne ${['Reçu', 'Annulé'].includes(a.statut) ? 'ferme' : ''}" data-achat="${a.id}" role="button" tabindex="0">
+      <button class="coche ${fait ? 'fait' : ''}" data-recu="${a.id}" aria-label="${fait ? 'Remettre à acheter' : 'Marquer reçu'} : ${esc(a.item)}"></button>
+      <div><div class="titre">${esc(a.item)}</div><div class="meta">
+        ${a.quantite ? `<span>${esc(a.quantite)} ${esc(a.unite || '')}</span>` : '<span class="retard">Quantité à préciser</span>'}
+        ${a.departement ? `<span>${esc(a.departement)}</span>` : ''}${p ? `<span>${esc(p.titre)}</span>` : ''}
+        ${a.priorite ? `<span class="retard">${esc(a.priorite)}</span>` : ''}${a.besoin_pour ? `<span>Pour le ${esc(jourDate(a.besoin_pour))}</span>` : ''}
+        ${!['À acheter', 'Reçu'].includes(a.statut) ? pastille(a.statut) : ''}</div></div>
+      <div class="droite">${fmtArgent(total)}</div></li>`;
+  }
+  function vueAchats(v) {
+    const onglet = S.filtres.achats || 'acheter';
+    const groupes = { acheter: ['À compléter', 'À acheter'], recevoir: ['Commandé', 'Partiellement reçu'], historique: ['Reçu', 'Annulé'] };
+    const items = S.achats.filter(a => groupes[onglet].includes(a.statut)).sort((a, b) => b.cree_le.localeCompare(a.cree_le));
+    let corps;
+    if (onglet === 'acheter') {
+      const parMag = {};
+      items.forEach(a => (parMag[a.magasin || 'Magasin à préciser'] ||= []).push(a));
+      corps = Object.keys(parMag).sort().map(m => bloc(esc(m), parMag[m].length, `<ul class="lignes">${parMag[m].map(ligneAchat).join('')}</ul>`)).join('') || bloc('Liste', 0, vide('Rien à acheter. Note un article dès que tu y penses.'));
+    } else corps = bloc(onglet === 'recevoir' ? 'À recevoir' : 'Historique', items.length, items.length ? `<ul class="lignes">${items.map(ligneAchat).join('')}</ul>` : vide(onglet === 'recevoir' ? 'Aucune commande en attente.' : 'Rien dans l’historique.'));
+    v.innerHTML = entete('Achats', 'Tout ce qu’il faut acheter, par magasin. Le projet est facultatif.', '<button class="btn primaire" id="ajAchat">Ajouter un article</button>') + `
+      <div class="outils"><div class="onglets">
+        ${[['acheter', 'À acheter'], ['recevoir', 'À recevoir'], ['historique', 'Historique']].map(([k, l]) => `<button aria-pressed="${onglet === k}" data-onglet="${k}">${l} <span class="nb">${S.achats.filter(a => groupes[k].includes(a.statut)).length}</span></button>`).join('')}
+      </div></div><div class="pile">${corps}</div>`;
+    v.querySelectorAll('[data-onglet]').forEach(b => b.onclick = () => { S.filtres.achats = b.dataset.onglet; c.rendre(); });
+    $('#ajAchat').onclick = () => ficheAchat({ statut: 'À acheter', unite: 'unité', quantite: 1 });
+    v.querySelectorAll('[data-recu]').forEach(b => b.onclick = async e => {
+      e.stopPropagation(); const a = parId(S.achats, b.dataset.recu);
+      const { error } = await sb.from('achats').update({ statut: a.statut === 'Reçu' ? 'À acheter' : 'Reçu' }).eq('id', a.id);
+      if (error) return toast('Échec : ' + error.message);
+      toast(a.statut === 'Reçu' ? 'Remis à acheter' : 'Reçu'); rafraichir();
+    });
+    brancher(v, '[data-achat]', el => ficheAchat(parId(S.achats, el.dataset.achat)));
+  }
+  function ficheAchat(a) {
+    const magasins = [...new Set(['Canac', ...S.achats.map(x => x.magasin).filter(Boolean)])];
+    fiche({ titre: a.id ? a.item : 'Nouvel article', table: 'achats', ligne: a, champs: [
+      { k: 'item', l: 'Article', req: true, large: true, titre: true },
+      { k: 'statut', l: 'Statut', t: 'select', o: STATUTS_ACHAT, req: true },
+      { k: 'magasin', l: 'Magasin', ph: magasins.join(', ') },
+      { k: 'quantite', l: 'Quantité', t: 'number' }, { k: 'unite', l: 'Unité', ph: 'unité, paquet, boîte…' },
+      { k: 'departement', l: 'Département ou rayon' }, { k: 'priorite', l: 'Priorité', t: 'select', o: ['1 — Urgent', '2 — Bientôt', '3 — Quand possible'] },
+      { k: 'prix_unitaire', l: 'Prix unitaire (CAD)', t: 'number', step: 0.01 }, { k: 'montant_paye', l: 'Montant payé (CAD)', t: 'number', step: 0.01 },
+      { k: 'besoin_pour', l: 'Besoin pour le', t: 'date' }, { k: 'projet_id', l: 'Projet', t: 'ref', o: () => S.projets, lib: 'titre' },
+      { section: 'Commande en ligne' },
+      { k: 'commande_le', l: 'Commandé le', t: 'date' }, { k: 'reception_prevue', l: 'Réception prévue', t: 'date' },
+      { k: 'quantite_recue', l: 'Quantité reçue', t: 'number' }, { k: 'reference', l: 'Référence produit' },
+      { k: 'lien', l: 'Lien produit', large: true }, { k: 'notes', l: 'Notes', t: 'textarea' },
+    ] });
+  }
+
+  /* ================= Abonnements ================= */
+  const FACTEUR = { Hebdomadaire: 52 / 12, Mensuel: 1, Trimestriel: 1 / 3, Semestriel: 1 / 6, Annuel: 1 / 12 };
+  function deciderAvant(a) {
+    const ref = a.fin_essai || a.prochaine_facturation; if (!ref) return null;
+    return plusJours(ref, -((a.preavis_jours || 0) + 7));
+  }
+  function vueAbonnements(v) {
+    const auj = aujourdhui(), dans14 = plusJours(auj, 14);
+    const actifs = S.abonnements.filter(a => ['Actif', 'Essai', 'À résilier'].includes(a.statut));
+    const mensuel = actifs.filter(a => FACTEUR[a.frequence] && a.montant).reduce((s, a) => s + a.montant * FACTEUR[a.frequence], 0);
+    const incomplets = actifs.filter(a => !a.frequence || !a.montant || !a.prochaine_facturation && !a.date_fin);
+    const bientot = actifs.filter(a => [a.prochaine_facturation, a.fin_essai, deciderAvant(a)].some(d => d && d <= dans14)).sort((a, b) => (a.prochaine_facturation || '9').localeCompare(b.prochaine_facturation || '9'));
+    const lignes = S.abonnements.slice().sort((a, b) => (a.statut === 'Résilié') - (b.statut === 'Résilié') || (a.prochaine_facturation || '9999').localeCompare(b.prochaine_facturation || '9999'));
+    v.innerHTML = entete('Abonnements', 'Prix, fréquence, prochaine facturation et essais.', '<button class="btn primaire" id="ajAbo">Ajouter un abonnement</button>') + `
+      <section class="compteurs trois" aria-label="Budget">
+        <div class="compteur calme"><b>${fmtArgent(mensuel)}</b><span>Par mois (équivalent)</span></div>
+        <div class="compteur calme"><b>${fmtArgent(mensuel * 12)}</b><span>Par année</span></div>
+        <div class="compteur ${incomplets.length ? 'attention' : 'calme'}"><b>${incomplets.length}</b><span>Fiches à compléter</span></div>
+      </section>
+      ${bientot.length ? bloc('Dans les 14 prochains jours', bientot.length, `<ul class="lignes">${bientot.map(a => {
+        const da = deciderAvant(a);
+        return `<li class="ligne" data-abo="${a.id}" role="button" tabindex="0" style="grid-template-columns:minmax(0,1fr) auto"><div><div class="titre">${esc(a.nom)}</div><div class="meta">
+          ${a.prochaine_facturation ? `<span>Facturation ${esc(jourDate(a.prochaine_facturation))}</span>` : ''}${a.fin_essai ? `<span class="retard">Fin d’essai ${esc(jourDate(a.fin_essai))}</span>` : ''}
+          ${da && a.decision && a.decision !== 'Garder' ? `<span class="retard">Décider avant le ${esc(jourDate(da))}</span>` : ''}${a.decision ? pastille(a.decision, a.decision === 'Garder' ? 'st-Terminé' : 'st-À traiter') : ''}</div></div>
+          <div class="droite">${fmtArgent(a.montant)}</div></li>`; }).join('')}</ul>`, '', 'signal') : ''}
+      ${bloc('Tous mes abonnements', S.abonnements.length, `<table class="tableau"><thead><tr><th>Service</th><th>Montant</th><th class="opt">Fréquence</th><th>Prochaine</th><th class="opt">Statut</th><th class="opt">Décision</th></tr></thead><tbody>
+        ${lignes.map(a => `<tr data-abo="${a.id}"><td>${esc(a.nom)}${a.tarif_verifie ? '' : ' <span class="aide">tarif à vérifier</span>'}</td><td>${fmtArgent(a.montant) || '<span class="aide">À renseigner</span>'}</td>
+          <td class="opt">${esc(a.frequence) || '<span class="aide">À renseigner</span>'}</td><td>${a.prochaine_facturation ? esc(jourDate(a.prochaine_facturation)) : a.date_fin ? 'Fin ' + esc(jourDate(a.date_fin)) : '—'}</td>
+          <td class="opt">${esc(a.statut)}</td><td class="opt">${esc(a.decision || '')}</td></tr>`).join('')}</tbody></table>`)}`;
+    $('#ajAbo').onclick = () => ficheAbonnement({ statut: 'Actif', devise: 'CAD', frequence: 'Mensuel', renouvellement: 'Automatique' });
+    brancher(v, '[data-abo]', el => ficheAbonnement(parId(S.abonnements, el.dataset.abo)));
+  }
+  function ficheAbonnement(a) {
+    fiche({ titre: a.id ? a.nom : 'Nouvel abonnement', table: 'abonnements', ligne: a, champs: [
+      { k: 'nom', l: 'Service', req: true, large: true, titre: true },
+      { k: 'statut', l: 'Statut', t: 'select', o: ['Actif', 'Essai', 'À résilier', 'Résilié', 'En pause'], req: true },
+      { k: 'categorie', l: 'Catégorie', t: 'select', o: ['Divertissement', 'Téléphone et Internet', 'Logiciels', 'Maison', 'Transport', 'Santé', 'Finances', 'Autre'] },
+      { k: 'montant', l: 'Montant par cycle', t: 'number', step: 0.01 }, { k: 'devise', l: 'Devise', t: 'select', o: ['CAD', 'USD', 'EUR'] },
+      { k: 'frequence', l: 'Fréquence', t: 'select', o: Object.keys(FACTEUR) }, { k: 'renouvellement', l: 'Renouvellement', t: 'select', o: ['Automatique', 'Manuel'] },
+      { k: 'prochaine_facturation', l: 'Prochaine facturation', t: 'date' }, { k: 'date_fin', l: 'Date de fin (contrat)', t: 'date' },
+      { k: 'debut_essai', l: 'Début d’essai', t: 'date' }, { k: 'fin_essai', l: 'Fin d’essai', t: 'date' },
+      { k: 'preavis_jours', l: 'Préavis (jours)', t: 'number', step: 1 }, { k: 'decision', l: 'Décision', t: 'select', o: ['Garder', 'Réduire', 'Annuler', 'À évaluer'] },
+      { k: 'tarif_verifie', l: 'Tarif vérifié', t: 'bool' }, { k: 'resilie_le', l: 'Résilié le', t: 'date' },
+      { k: 'compte', l: 'Compte utilisé' }, { k: 'moyen_paiement', l: 'Moyen de paiement', ph: 'Ex. Visa perso (pas le numéro)' },
+      { k: 'lien_gestion', l: 'Lien pour gérer ou annuler', large: true }, { k: 'notes', l: 'Notes', t: 'textarea' },
+    ] });
+  }
+
+  /* ================= Transports familiaux ================= */
+  const MODELE_SEMAINE = [
+    { code: 'AM_DEPOT', h: '07:40', lib: 'Déposer les trois enfants', enfants: 'Trois enfants' },
+    { code: 'MIDI_RETOUR', h: '11:10', lib: 'Récupérer les trois enfants', enfants: 'Trois enfants' },
+    { code: 'MIDI_DEPOT', h: '12:20', lib: 'Déposer les trois enfants', enfants: 'Trois enfants' },
+    { code: 'PM_RETOUR', h: '14:09', lib: 'Récupérer Édouard', enfants: 'Édouard' },
+  ];
+  const JOURS = ['LUNDI', 'MARDI', 'MERCREDI', 'JEUDI', 'VENDREDI', 'SAMEDI', 'DIMANCHE'];
+  const STATUTS_TRAJET = ['À attribuer', 'À confirmer', 'Confirmé', 'Fait', 'Annulé'];
+  function lundiDe(cle) { const d = new Date(cle + 'T12:00:00'); const j = (d.getDay() + 6) % 7; d.setDate(d.getDate() - j); return d.toISOString().slice(0, 10); }
+  const responsables = () => [...new Set(['Maman', 'Papa', 'Mamie', ...S.trajets.map(t => t.responsable).filter(Boolean)])];
+  function ligneTrajet(t) {
+    return `<li class="ligne trajet ${t.statut === 'Annulé' ? 'ferme' : ''}" data-trajet="${t.id}">
+      <div class="heure">${t.date_heure ? esc(fmtHeure.format(new Date(t.date_heure))) : '—'}</div>
+      <div><div class="titre">${esc(t.titre.split(' • ').pop())}</div><div class="meta">${t.enfants ? `<span>${esc(t.enfants)}</span>` : ''}${t.depart || t.destination ? `<span>${esc(t.depart || '?')} → ${esc(t.destination || '?')}</span>` : ''}</div></div>
+      <div class="selecteurs">
+        <select data-resp="${t.id}" aria-label="Responsable">${['', ...responsables()].map(r => `<option value="${esc(r)}" ${r === (t.responsable || '') ? 'selected' : ''}>${r || 'Qui?'}</option>`).join('')}</select>
+        <select data-stt="${t.id}" aria-label="Statut" class="stt-${esc(t.statut)}">${STATUTS_TRAJET.map(s => `<option ${s === t.statut ? 'selected' : ''}>${s}</option>`).join('')}</select>
+      </div></li>`;
+  }
+  function vueTransports(v) {
+    const base = S.filtres.semaine || lundiDe(aujourdhui());
+    const fin = plusJours(base, 7);
+    const items = S.trajets.filter(t => t.date_heure && cleJour(t.date_heure) >= base && cleJour(t.date_heure) < fin).sort((a, b) => a.date_heure.localeCompare(b.date_heure));
+    const parJour = {}; items.forEach(t => (parJour[cleJour(t.date_heure)] ||= []).push(t));
+    const aAttribuer = items.filter(t => t.statut !== 'Annulé' && (!t.responsable || t.statut === 'À attribuer')).length;
+    const auj = aujourdhui();
+    v.innerHTML = entete('Transports familiaux', `Semaine du ${esc(jourDate(base))}${aAttribuer ? ` · <span class="retard">${aAttribuer} trajet${aAttribuer > 1 ? 's' : ''} à attribuer</span>` : ''}`,
+      `<button class="btn" id="genSem">Créer la semaine type</button><button class="btn primaire" id="ajTraj">Ajouter un trajet</button>`) + `
+      <div class="outils"><div class="onglets">
+        <button data-sem="-7">‹ Précédente</button><button data-sem="0" aria-pressed="${base === lundiDe(auj)}">Cette semaine</button><button data-sem="7">Suivante ›</button>
+      </div></div>
+      ${Object.keys(parJour).length ? Object.keys(parJour).map(j => `<section class="jour ${j === auj ? 'aujourdhui' : ''}"><h3>${esc(c.jourLong(j))}${j === auj ? ' · aujourd’hui' : ''}</h3><ul class="lignes">${parJour[j].map(ligneTrajet).join('')}</ul></section>`).join('')
+        : bloc('Semaine', 0, vide('Aucun trajet cette semaine. « Créer la semaine type » ajoute les 20 trajets du lundi au vendredi, sans responsable.'))}`;
+    v.querySelectorAll('[data-sem]').forEach(b => b.onclick = () => { const n = +b.dataset.sem; S.filtres.semaine = n === 0 ? lundiDe(auj) : plusJours(base, n); c.rendre(); });
+    $('#ajTraj').onclick = () => ficheTrajet({ statut: 'À attribuer' });
+    $('#genSem').onclick = async () => {
+      const existantes = new Set(S.trajets.map(t => t.cle_occurrence));
+      const nouveaux = [];
+      for (let i = 0; i < 5; i++) {
+        const jour = plusJours(base, i);
+        for (const m of MODELE_SEMAINE) {
+          const cle = `${jour}|${m.code}`;
+          if (existantes.has(cle)) continue;
+          nouveaux.push({ cle_occurrence: cle, titre: `${JOURS[i]} • ${m.lib}`, date_heure: depuisLocal(`${jour}T${m.h}`), enfants: m.enfants, statut: 'À attribuer' });
+        }
+      }
+      if (!nouveaux.length) return toast('La semaine type existe déjà');
+      const { error } = await sb.from('trajets').insert(nouveaux);
+      if (error) return toast('Échec : ' + error.message);
+      toast(`${nouveaux.length} trajets créés`); rafraichir();
+    };
+    v.querySelectorAll('[data-resp]').forEach(s => s.onchange = async () => {
+      const t = parId(S.trajets, s.dataset.resp);
+      const maj = { responsable: s.value || null };
+      if (s.value && t.statut === 'À attribuer') maj.statut = 'Confirmé';
+      const { error } = await sb.from('trajets').update(maj).eq('id', t.id);
+      if (error) return toast('Échec : ' + error.message);
+      toast('Responsable : ' + (s.value || 'aucun')); rafraichir();
+    });
+    v.querySelectorAll('[data-stt]').forEach(s => s.onchange = async () => {
+      const { error } = await sb.from('trajets').update({ statut: s.value }).eq('id', s.dataset.stt);
+      if (error) return toast('Échec : ' + error.message);
+      toast(s.value); rafraichir();
+    });
+    v.querySelectorAll('[data-trajet] .titre').forEach(el => { el.style.cursor = 'pointer'; el.onclick = () => ficheTrajet(parId(S.trajets, el.closest('[data-trajet]').dataset.trajet)); });
+  }
+  function ficheTrajet(t) {
+    fiche({ titre: t.id ? 'Trajet' : 'Nouveau trajet', table: 'trajets', ligne: t, champs: [
+      { k: 'titre', l: 'Trajet', req: true, large: true, titre: true, ph: 'LUNDI • Déposer les trois enfants' },
+      { k: 'date_heure', l: 'Date et heure', t: 'datetime', req: true },
+      { k: 'statut', l: 'Statut', t: 'select', o: STATUTS_TRAJET, req: true },
+      { k: 'responsable', l: 'Responsable', t: 'select', o: responsables },
+      { k: 'enfants', l: 'Enfant(s)' }, { k: 'depart', l: 'Départ' }, { k: 'destination', l: 'Destination' },
+    ] });
+  }
+  function trajetsDuJour() {
+    const auj = aujourdhui();
+    return S.trajets.filter(t => t.date_heure && cleJour(t.date_heure) === auj && t.statut !== 'Annulé').sort((a, b) => a.date_heure.localeCompare(b.date_heure));
+  }
+
+  /* ================= Bibliothèque ================= */
+  const STATUTS_LIVRE = ['À lire', 'En lecture', 'En pause', 'Terminé', 'Abandonné'];
+  const ENVIES = [[1, '1 — Mon prochain livre'], [2, '2 — Bientôt'], [3, '3 — Un jour']];
+  const NOTES = [[5, '5 — Coup de cœur'], [4, '4 — Très bon'], [3, '3 — Correct'], [2, '2 — Bof'], [1, '1 — À éviter']];
+  function carteLivre(l) {
+    const pct = l.longueur && l.position ? Math.min(100, Math.round(100 * l.position / l.longueur)) : 0;
+    return `<div class="projet" data-livre="${l.id}" role="button" tabindex="0">
+      <div class="tete"><span class="nom">${esc(l.titre)}</span>${l.note ? `<span class="etoiles" aria-label="${l.note} sur 5">${'★'.repeat(l.note)}${'☆'.repeat(5 - l.note)}</span>` : ''}</div>
+      <div class="prochaine">${[l.auteur, l.format, l.disponibilite].filter(Boolean).map(esc).join(' · ') || '&nbsp;'}</div>
+      ${l.statut === 'En lecture' ? `<div class="chiffres"><span>${l.position || 0} / ${l.longueur || '?'} ${esc((l.unite || 'pages').toLowerCase())}</span>${l.commence_le ? `<span>Depuis le ${esc(jourDate(l.commence_le))}</span>` : ''}</div>
+        <div class="jauge" aria-hidden="true"><i style="width:${pct}%"></i></div>${l.repere ? `<div class="geste">▸ ${esc(l.repere)}</div>` : ''}
+        <div class="pied-bloc" style="padding:8px 0 0"><button class="btn" data-avance="${l.id}">Mettre à jour ma page</button></div>` : ''}
+      ${l.statut === 'Terminé' ? `<div class="chiffres">${l.termine_le ? `<span>Terminé le ${esc(jourDate(l.termine_le))}</span>` : ''}${l.conseille_par ? `<span>Conseillé par ${esc(l.conseille_par)}</span>` : ''}</div>${l.avis ? `<div class="geste">« ${esc(l.avis)} »</div>` : ''}` : ''}
+      ${l.statut === 'À lire' && l.pourquoi ? `<div class="geste">${esc(l.pourquoi)}</div>` : ''}
+    </div>`;
+  }
+  function vueBibliotheque(v) {
+    const L = S.livres;
+    const enLecture = L.filter(l => l.statut === 'En lecture');
+    const prochain = L.filter(l => l.statut === 'À lire' && l.envie === 1);
+    const aLire = L.filter(l => l.statut === 'À lire' && l.envie !== 1);
+    const avis = L.filter(l => l.statut === 'Terminé' && (!l.avis || !l.note));
+    const termines = L.filter(l => l.statut === 'Terminé').sort((a, b) => (b.termine_le || '').localeCompare(a.termine_le || ''));
+    const an = String(anDe(aujourdhui()));
+    const cartes = arr => `<div class="cartes-projets">${arr.map(carteLivre).join('')}</div>`;
+    v.innerHTML = entete('Bibliothèque et lectures', `${termines.filter(l => l.termine_le?.startsWith(an)).length} livre(s) lu(s) en ${an}. Idéalement, un seul livre en lecture à la fois.`, '<button class="btn primaire" id="ajLivre">Ajouter un livre</button>') + `
+      <div class="pile">
+        <h2 class="titre-section">En ce moment <span class="nb">${enLecture.length}</span></h2>${enLecture.length ? cartes(enLecture) : bloc('', null, vide('Aucun livre en lecture.'))}
+        ${avis.length ? `<h2 class="titre-section">Avis à rédiger <span class="nb">${avis.length}</span></h2>${cartes(avis)}` : ''}
+        <h2 class="titre-section">Mon prochain livre</h2>${prochain.length ? cartes(prochain) : bloc('', null, vide('Choisis « Envie : 1 — Mon prochain livre » sur un titre à lire.'))}
+        ${aLire.length ? `<h2 class="titre-section">À lire <span class="nb">${aLire.length}</span></h2>${cartes(aLire)}` : ''}
+        <h2 class="titre-section">Terminés <span class="nb">${termines.length}</span></h2>${termines.length ? cartes(termines) : bloc('', null, vide('Aucun livre terminé.'))}
+      </div>`;
+    $('#ajLivre').onclick = () => ficheLivre({ statut: 'À lire', unite: 'Pages' });
+    v.querySelectorAll('[data-avance]').forEach(b => b.onclick = e => { e.stopPropagation(); avancerLivre(parId(S.livres, b.dataset.avance)); });
+    brancher(v, '[data-livre]', el => ficheLivre(parId(S.livres, el.dataset.livre)));
+  }
+  function avancerLivre(l) {
+    c.dialogue(`<form><div class="tete-d"><h2>${esc(l.titre)}</h2><button type="button" class="btn discret" data-fermer aria-label="Fermer">✕</button></div>
+      <div class="corps"><label class="champ"><span>Où j’en suis (${esc((l.unite || 'pages').toLowerCase())})</span><input type="number" name="position" value="${l.position ?? ''}" min="0" autofocus></label>
+      <label class="champ"><span>Sur</span><input type="number" name="longueur" value="${l.longueur ?? ''}" min="0"></label>
+      <label class="champ large"><span>Repère de reprise</span><input name="repere" value="${esc(l.repere)}" placeholder="Reprendre au chapitre 8"></label>
+      <label class="champ case large"><input type="checkbox" name="fini"><span>Je l’ai terminé</span></label></div>
+      <div class="pied"><button type="button" class="btn" data-fermer>Annuler</button><button type="submit" class="btn primaire">Enregistrer</button></div></form>`, async fd => {
+      const maj = { position: fd.get('position') ? +fd.get('position') : null, longueur: fd.get('longueur') ? +fd.get('longueur') : null, repere: fd.get('repere') || null };
+      if (fd.get('fini') === 'on') Object.assign(maj, { statut: 'Terminé', termine_le: aujourdhui(), position: maj.longueur || maj.position });
+      const { error } = await sb.from('livres').update(maj).eq('id', l.id);
+      if (error) { toast('Échec : ' + error.message); return false; }
+      toast(maj.statut ? 'Bravo, livre terminé' : 'Progression enregistrée'); rafraichir();
+    });
+  }
+  function ficheLivre(l) {
+    fiche({ titre: l.id ? l.titre : 'Nouveau livre', table: 'livres', ligne: l, champs: [
+      { k: 'titre', l: 'Titre', req: true, large: true, titre: true }, { k: 'auteur', l: 'Auteur' },
+      { k: 'statut', l: 'Statut', t: 'select', o: STATUTS_LIVRE, req: true }, { k: 'envie', l: 'Envie', t: 'select', o: ENVIES, num: true },
+      { k: 'format', l: 'Format', t: 'select', o: ['Papier', 'Numérique', 'Audio'] }, { k: 'disponibilite', l: 'Disponibilité', t: 'select', o: ['À trouver', 'Possédé', 'Emprunté', 'Bibliothèque', 'Abonnement'] },
+      { k: 'unite', l: 'Unité', t: 'select', o: ['Pages', 'Pourcentage', 'Minutes', 'Chapitres'] }, { k: 'longueur', l: 'Longueur totale', t: 'number', step: 1 },
+      { k: 'position', l: 'Position actuelle', t: 'number', step: 1 }, { k: 'repere', l: 'Repère de reprise' },
+      { k: 'commence_le', l: 'Commencé le', t: 'date' }, { k: 'termine_le', l: 'Terminé le', t: 'date' },
+      { k: 'genres', l: 'Genres', t: 'tags' }, { k: 'langue', l: 'Langue', t: 'select', o: ['Français', 'Anglais', 'Autre'] },
+      { k: 'conseille_par', l: 'Conseillé par' }, { k: 'a_recommander', l: 'À recommander à' },
+      { k: 'pourquoi', l: 'Pourquoi le lire', t: 'textarea', rows: 2 },
+      { section: 'Mon avis' },
+      { k: 'note', l: 'Note sur 5', t: 'select', o: NOTES, num: true }, { k: 'coup_de_coeur', l: 'Coup de cœur', t: 'bool' },
+      { k: 'avis', l: 'Mon avis', t: 'textarea', rows: 3, ph: 'De quoi parle-t-il? Qu’est-ce qui m’a plu, moins plu? À qui le conseiller?' },
+      { k: 'a_retenir', l: 'À retenir', t: 'textarea', rows: 3 }, { k: 'citations', l: 'Citations et passages', t: 'textarea', rows: 3 },
+      { k: 'lien', l: 'Lien du livre', large: true },
+    ] });
+  }
+
+  /* ================= Carnet ================= */
+  const TYPES_NOTE = ['Note', 'Idée', 'Compte rendu', 'Décision', 'Référence', 'Bilan'];
+  function vueCarnet(v) {
+    const f = S.filtres; const type = f.typeNote || ''; const q = (f.qn || '').toLowerCase(); const arch = !!f.archives;
+    const items = S.notes.filter(n => n.archivee === arch && (!type || n.type === type) && (!q || [n.titre, n.contenu].some(x => (x || '').toLowerCase().includes(q))))
+      .sort((a, b) => (b.date || '').localeCompare(a.date || '') || b.cree_le.localeCompare(a.cree_le));
+    v.innerHTML = entete('Carnet', 'Notes, idées, comptes rendus, décisions et bilans.', '<button class="btn primaire" id="ajNote">Nouvelle note</button>') + `
+      <div class="outils"><input type="search" id="qn" placeholder="Chercher dans les notes" value="${esc(f.qn || '')}" aria-label="Chercher">
+        <select id="tn" aria-label="Type"><option value="">Tous les types</option>${TYPES_NOTE.map(t => `<option ${t === type ? 'selected' : ''}>${t}</option>`).join('')}</select>
+        <div class="onglets"><button aria-pressed="${!arch}" data-arch="0">Actives</button><button aria-pressed="${arch}" data-arch="1">Archives</button></div></div>
+      ${bloc(`${items.length} note${items.length > 1 ? 's' : ''}`, null, items.length ? `<ul class="lignes">${items.map(n => {
+        const p = parId(S.projets, n.projet_id); const ext = (n.contenu || '').replace(/\s+/g, ' ').slice(0, 160);
+        return `<li class="ligne" data-note="${n.id}" role="button" tabindex="0" style="grid-template-columns:minmax(0,1fr) auto"><div><div class="titre">${esc(n.titre)}</div>
+          <div class="meta">${pastille(n.type)}${p ? `<span>${esc(p.titre)}</span>` : ''}${(n.mots_cles || []).map(m => `<span>#${esc(m)}</span>`).join('')}</div>${ext ? `<div class="geste extrait">${esc(ext)}${n.contenu.length > 160 ? '…' : ''}</div>` : ''}</div>
+          <div class="droite">${n.date ? esc(jourDate(n.date)) : ''}</div></li>`; }).join('')}</ul>` : vide(q || type ? 'Aucune note pour ces filtres.' : 'Le carnet est vide.'))}`;
+    const qn = $('#qn');
+    qn.oninput = () => { clearTimeout(vueCarnet.t); vueCarnet.t = setTimeout(() => { S.filtres.qn = qn.value; const p = qn.selectionStart; c.rendre(); const n = $('#qn'); n.focus(); n.setSelectionRange(p, p); }, 200); };
+    $('#tn').onchange = e => { S.filtres.typeNote = e.target.value; c.rendre(); };
+    v.querySelectorAll('[data-arch]').forEach(b => b.onclick = () => { S.filtres.archives = b.dataset.arch === '1'; c.rendre(); });
+    $('#ajNote').onclick = () => ficheNote({ type: 'Note', date: aujourdhui() });
+    brancher(v, '[data-note]', el => ficheNote(parId(S.notes, el.dataset.note)));
+  }
+  function ficheNote(n) {
+    fiche({ titre: n.id ? n.titre : 'Nouvelle note', table: 'notes', ligne: n, champs: [
+      { k: 'titre', l: 'Titre', req: true, large: true, titre: true },
+      { k: 'type', l: 'Type', t: 'select', o: TYPES_NOTE, req: true }, { k: 'date', l: 'Date', t: 'date' },
+      { k: 'contenu', l: 'Contenu', t: 'textarea', rows: 14 },
+      { k: 'projet_id', l: 'Projet', t: 'ref', o: () => S.projets, lib: 'titre' }, { k: 'domaine_id', l: 'Domaine', t: 'ref', o: () => S.domaines },
+      { k: 'mots_cles', l: 'Mots-clés', t: 'multi', o: ['À explorer', 'Important', 'Réutilisable'] },
+      { k: 'archivee', l: 'Archivée', t: 'bool' },
+    ] });
+  }
+
+  /* ================= Routines ================= */
+  const JOURS_SEM = ['Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi', 'Dimanche'];
+  function realisations7j(r) {
+    const depuis = plusJours(aujourdhui(), -6);
+    return S.actions.filter(a => a.routine_id === r.id && a.statut === 'Terminé' && a.realisee_le && cleJour(a.realisee_le) >= depuis).length;
+  }
+  function vueRoutines(v) {
+    const R = S.routines.slice().sort((a, b) => b.active - a.active || a.nom.localeCompare(b.nom));
+    v.innerHTML = entete('Routines et équilibre', 'Tes habitudes et leur rythme sur les sept derniers jours.', '<button class="btn primaire" id="ajRout">Nouvelle routine</button>') +
+      bloc('Mes pratiques', R.length, R.length ? `<ul class="lignes">${R.map(r => {
+        const n = realisations7j(r); const cible = r.cible_7j; const dom = parId(S.domaines, r.domaine_id);
+        const pct = cible ? Math.min(100, Math.round(100 * n / cible)) : 0;
+        return `<li class="ligne ${r.active ? '' : 'ferme'}" data-routine="${r.id}" role="button" tabindex="0" style="grid-template-columns:minmax(0,1fr) auto"><div>
+          <div class="titre">${esc(r.nom)}</div><div class="meta">${r.frequence ? `<span>${esc(r.frequence)}</span>` : ''}${r.jours?.length ? `<span>${esc(r.jours.map(j => j.slice(0, 3)).join(' '))}</span>` : ''}${r.horaire ? `<span>${esc(r.horaire)}</span>` : ''}${dom ? `<span>${esc(dom.nom)}</span>` : ''}</div>
+          ${r.consigne ? `<div class="geste">${esc(r.consigne)}</div>` : ''}
+          <div class="chiffres"><span>${n}${cible ? ' / ' + cible : ''} sur 7 jours</span></div>${cible ? `<div class="jauge" aria-hidden="true"><i style="width:${pct}%"></i></div>` : ''}</div>
+          <div>${r.active ? `<button class="btn" data-faitr="${r.id}">Fait aujourd’hui</button>` : ''}</div></li>`; }).join('')}</ul>`
+        : vide('Aucune routine pour l’instant. Crée une habitude (ex. « Revue hebdomadaire », « Marche 30 min ») avec une cible sur 7 jours.'));
+    $('#ajRout').onclick = () => ficheRoutine({ active: true, frequence: 'Hebdomadaire', type: 'Habitude' });
+    v.querySelectorAll('[data-faitr]').forEach(b => b.onclick = async e => {
+      e.stopPropagation(); const r = parId(S.routines, b.dataset.faitr);
+      const maintenant = new Date().toISOString();
+      const { error } = await sb.from('actions').insert({ titre: r.nom, type: 'Routine', statut: 'Terminé', routine_id: r.id, realisee_le: maintenant, planifie_debut: depuisLocal(aujourdhui() + 'T00:00'), journee_entiere: true, domaine_id: r.domaine_id, hors_projet: true });
+      if (error) return toast('Échec : ' + error.message);
+      toast('Bravo : ' + r.nom); rafraichir();
+    });
+    brancher(v, '[data-routine]', el => ficheRoutine(parId(S.routines, el.dataset.routine)));
+  }
+  function ficheRoutine(r) {
+    fiche({ titre: r.id ? r.nom : 'Nouvelle routine', table: 'routines', ligne: r, champs: [
+      { k: 'nom', l: 'Routine', req: true, large: true, titre: true },
+      { k: 'type', l: 'Type', t: 'select', o: ['Habitude', 'Entretien', 'Administration', 'Revue'] },
+      { k: 'frequence', l: 'Fréquence', t: 'select', o: ['Quotidienne', 'Hebdomadaire', 'Mensuelle', 'Trimestrielle', 'Annuelle', 'Personnalisée'] },
+      { k: 'jours', l: 'Jours', t: 'multi', o: JOURS_SEM }, { k: 'horaire', l: 'Horaire souhaité', ph: 'Matin, 6 h 30…' },
+      { k: 'cible_7j', l: 'Cible sur 7 jours', t: 'number', step: 1 }, { k: 'domaine_id', l: 'Domaine', t: 'ref', o: () => S.domaines },
+      { k: 'consigne', l: 'Consigne', t: 'textarea', rows: 2 }, { k: 'active', l: 'Active', t: 'bool' },
+    ] });
+  }
+
+  /* ================= Revue hebdomadaire ================= */
+  function semaineIso(cle) { const d = new Date(cle + 'T12:00:00'); d.setDate(d.getDate() + 3 - (d.getDay() + 6) % 7); const a = new Date(d.getFullYear(), 0, 4); return `${d.getFullYear()}-S${pad(1 + Math.round(((d - a) / 864e5 - 3 + (a.getDay() + 6) % 7) / 7))}`; }
+  const CHECKLIST = [
+    'Vider les captures : classer, planifier, déléguer ou abandonner.',
+    'Traiter les retards et les blocages; prévoir les relances.',
+    'Vérifier les jalons et les rendez-vous des deux prochaines semaines.',
+    'Donner une prochaine action à chaque projet actif.',
+    'Choisir le résultat principal de la semaine et les projets qui peuvent attendre.',
+    'Avant d’ouvrir un nouveau chantier, décider lequel ralentir ou mettre en pause.',
+    'Vérifier la charge prévue et laisser une marge.',
+    'Ajuster les routines qui ne correspondent plus à la réalité.',
+    'Vérifier les renouvellements et fins d’essai des abonnements.',
+  ];
+  function vueRevue(v) {
+    const sem = semaineIso(aujourdhui()); const cle = 'orbite-revue-' + sem;
+    let coches = []; try { coches = JSON.parse(localStorage.getItem(cle) || '[]'); } catch { }
+    const auj = aujourdhui(), dans14 = plusJours(auj, 14);
+    const captures = S.actions.filter(a => a.statut === 'À traiter');
+    const retards = S.actions.filter(a => enRetard(a) || (['Bloqué', 'En attente'].includes(a.statut)));
+    const sansSuite = S.projets.filter(p => p.statut === 'Actif' && !p.prochaine_action);
+    const charge = S.actions.filter(a => ouvert(a) && a.planifie_debut && cleJour(a.planifie_debut) >= auj && cleJour(a.planifie_debut) <= dans14);
+    const minutes = charge.reduce((s, a) => s + (a.duree_min || (a.planifie_fin ? (new Date(a.planifie_fin) - new Date(a.planifie_debut)) / 6e4 : 0)), 0);
+    const abos = S.abonnements.filter(a => ['Actif', 'Essai'].includes(a.statut) && [a.prochaine_facturation, a.fin_essai].some(d => d && d >= auj && d <= dans14));
+    const aCompleter = S.actions.filter(a => manquants(a).length);
+    v.innerHTML = entete('Revue hebdomadaire', `${esc(sem)} · Vider ce qui s’accumule, débloquer les projets, choisir une semaine réaliste. Environ 20 minutes.`) + `
+      <div class="grille">
+        <div class="colonne">
+          ${bloc('1. Vider les captures', captures.length, liste(captures, 'Aucune capture à trier.'))}
+          ${bloc('2. Traiter les retards et les blocages', retards.length, liste(retards, 'Aucun retard ni blocage.'))}
+          ${bloc('3. Donner une suite aux projets', sansSuite.length, sansSuite.length ? sansSuite.map(c.carteProjet).join('') : vide('Chaque projet actif a une prochaine action.'))}
+          ${bloc('4. Vérifier la charge des 14 prochains jours', charge.length, `<div class="vide" style="color:var(--craie)">${charge.length} élément(s) planifié(s), environ ${Math.round(minutes / 60)} h réservées.</div>${liste(charge.sort((a, b) => a.planifie_debut.localeCompare(b.planifie_debut)), '')}`)}
+          ${abos.length ? bloc('5. Abonnements à décider', abos.length, `<ul class="lignes">${abos.map(a => `<li class="ligne" style="grid-template-columns:minmax(0,1fr) auto" data-aller="abonnements"><div><div class="titre">${esc(a.nom)}</div><div class="meta"><span>${esc(jourDate(a.fin_essai || a.prochaine_facturation))}</span>${a.decision ? `<span>${esc(a.decision)}</span>` : ''}</div></div><div class="droite">${fmtArgent(a.montant)}</div></li>`).join('')}</ul>`) : ''}
+          ${aCompleter.length ? bloc('Fiches à corriger', aCompleter.length, liste(aCompleter, '')) : ''}
+        </div>
+        <div class="colonne">${bloc('Ma checklist', `${coches.length}/${CHECKLIST.length}`, `<ul class="lignes">${CHECKLIST.map((t, i) => `<li class="ligne ${coches.includes(i) ? 'ferme' : ''}" style="grid-template-columns:22px minmax(0,1fr)"><button class="coche ${coches.includes(i) ? 'fait' : ''}" data-check="${i}" aria-label="${esc(t)}"></button><div class="titre" style="font-weight:400">${esc(t)}</div></li>`).join('')}</ul>
+          <div class="pied-bloc"><span class="aide">Termine par un résultat principal pour la semaine, puis note ton bilan dans le carnet.</span><button class="btn" id="bilan">Écrire le bilan</button></div>`)}</div>
+      </div>`;
+    v.querySelectorAll('[data-check]').forEach(b => b.onclick = e => {
+      e.stopPropagation(); const i = +b.dataset.check;
+      coches = coches.includes(i) ? coches.filter(x => x !== i) : [...coches, i];
+      try { localStorage.setItem(cle, JSON.stringify(coches)); } catch { }
+      c.rendre();
+    });
+    v.querySelectorAll('[data-aller]').forEach(el => el.onclick = () => { S.vue = el.dataset.aller; c.rendre(); });
+    $('#bilan').onclick = () => ficheNote({ type: 'Bilan', date: auj, titre: `Revue ${sem}`, contenu: 'Résultat principal de la semaine :\n\nCe qui avance :\n\nCe qui attend :\n\nÀ ralentir ou mettre en pause :\n' });
+  }
+
+  /* ================= Organigramme ================= */
+  const NIVEAUX = { 1: 'Présidence / DG', 2: 'VP exécutive / principale', 3: 'Vice-présidence', 4: 'Direction principale', 5: 'Direction', 6: 'Direction adjointe', 7: 'Gestion / supervision', 8: 'Chef d’équipe', 9: 'Professionnel / spécialiste', 10: 'Technicien / soutien' };
+  const titulaires = pid => S.titulaires.filter(t => t.poste_id === pid).map(t => parId(S.personnes, t.personne_id)).filter(Boolean);
+  function noeudPoste(p, profondeur = 0) {
+    const enfants = S.postes.filter(x => x.superieur_id === p.id).sort((a, b) => (a.niveau || 99) - (b.niveau || 99) || a.titre.localeCompare(b.titre));
+    const tit = titulaires(p.id); const u = parId(S.unites, p.unite_id);
+    const moi = tit.some(x => x.notion_id === '3f7d3833158f817d866ad8dfd702076b');
+    return `<li class="noeud ${moi ? 'moi' : ''}">
+      <div class="poste" data-poste="${p.id}" role="button" tabindex="0">
+        <div class="titre">${esc(p.titre)}${p.statut !== 'Pourvu' ? ' ' + pastille(p.statut, p.statut === 'Vacant' ? 'st-Bloqué' : 'st-En attente') : ''}</div>
+        <div class="meta">${tit.length ? `<span>${tit.map(x => `<a href="#" data-pers="${x.id}">${esc(x.nom)}</a>`).join(', ')}</span>` : '<span>Aucun titulaire</span>'}${u ? `<span>${esc(u.nom)}</span>` : ''}</div>
+      </div>
+      ${enfants.length ? `<details ${profondeur < 2 || enfants.some(e => titulaires(e.id).some(x => x.notion_id === '3f7d3833158f817d866ad8dfd702076b')) ? 'open' : ''}><summary>${enfants.length} poste${enfants.length > 1 ? 's' : ''} rattaché${enfants.length > 1 ? 's' : ''}</summary><ul class="arbre">${enfants.map(e => noeudPoste(e, profondeur + 1)).join('')}</ul></details>` : ''}
+    </li>`;
+  }
+  function noeudUnite(u) {
+    const sous = S.unites.filter(x => x.parent_id === u.id).sort((a, b) => a.nom.localeCompare(b.nom));
+    const postes = S.postes.filter(p => p.unite_id === u.id).sort((a, b) => (a.niveau || 99) - (b.niveau || 99));
+    return `<li class="noeud"><div class="poste" data-unite="${u.id}" role="button" tabindex="0"><div class="titre">${esc(u.nom)} ${pastille(u.categorie)}</div>
+      <div class="meta">${postes.map(p => `<span>${esc(p.titre)}${titulaires(p.id).length ? ' : ' + titulaires(p.id).map(x => esc(x.nom)).join(', ') : ''}</span>`).join('') || '<span>Aucun poste</span>'}</div></div>
+      ${sous.length ? `<ul class="arbre">${sous.map(noeudUnite).join('')}</ul>` : ''}</li>`;
+  }
+  function vueOrganigramme(v) {
+    const mode = S.filtres.org || 'postes';
+    const racines = S.postes.filter(p => !p.superieur_id).sort((a, b) => (a.niveau || 99) - (b.niveau || 99));
+    const unitesRacines = S.unites.filter(u => !u.parent_id).sort((a, b) => (a.categorie !== 'Organisation') - (b.categorie !== 'Organisation') || a.nom.localeCompare(b.nom));
+    const vacants = S.postes.filter(p => p.statut !== 'Pourvu').length;
+    v.innerHTML = entete('Organigramme et structure', `${S.postes.length} postes, ${S.unites.length} unités${vacants ? `, ${vacants} poste(s) vacant(s) ou à renseigner` : ''}.`,
+      `<button class="btn" id="ajUnite">Ajouter une unité</button><button class="btn primaire" id="ajPoste">Ajouter un poste</button>`) + `
+      <div class="outils"><div class="onglets"><button aria-pressed="${mode === 'postes'}" data-org="postes">Postes et hiérarchie</button><button aria-pressed="${mode === 'unites'}" data-org="unites">Unités</button></div></div>
+      <section class="bloc organigramme"><ul class="arbre racine">${mode === 'postes' ? racines.map(p => noeudPoste(p)).join('') : unitesRacines.map(noeudUnite).join('')}</ul></section>`;
+    v.querySelectorAll('[data-org]').forEach(b => b.onclick = () => { S.filtres.org = b.dataset.org; c.rendre(); });
+    $('#ajPoste').onclick = () => fichePoste({ statut: 'Pourvu' });
+    $('#ajUnite').onclick = () => ficheUnite({ categorie: 'Département', actif: true });
+    v.querySelectorAll('[data-pers]').forEach(a => a.onclick = e => { e.preventDefault(); e.stopPropagation(); c.ouvrirPersonne(parId(S.personnes, a.dataset.pers)); });
+    brancher(v, '[data-poste]', el => fichePoste(parId(S.postes, el.dataset.poste)));
+    brancher(v, '[data-unite]', el => ficheUnite(parId(S.unites, el.dataset.unite)));
+  }
+  function fichePoste(p) {
+    const tit = p.id ? S.titulaires.filter(t => t.poste_id === p.id).map(t => t.personne_id) : [];
+    fiche({ titre: p.id ? p.titre : 'Nouveau poste', table: 'postes', ligne: { ...p, _tit: tit }, champs: [
+      { k: 'titre', l: 'Poste', req: true, large: true, titre: true },
+      { k: 'niveau', l: 'Niveau', t: 'select', num: true, o: Object.entries(NIVEAUX).map(([k, l]) => [k, `${pad(k)} — ${l}`]) },
+      { k: 'statut', l: 'Statut', t: 'select', o: ['Pourvu', 'Vacant', 'À renseigner'], req: true },
+      { k: 'unite_id', l: 'Unité', t: 'ref', o: () => S.unites },
+      { k: 'superieur_id', l: 'Supérieur hiérarchique', t: 'ref', o: () => S.postes.filter(x => x.id !== p.id).sort((a, b) => a.titre.localeCompare(b.titre)), lib: 'titre' },
+      { k: 'mission', l: 'Mission', t: 'textarea', rows: 2 },
+    ], pied: `<label class="champ large"><span>Titulaires (Ctrl ou Cmd pour en choisir plusieurs)</span><select name="_tit" multiple size="6">${S.personnes.map(x => `<option value="${x.id}" ${tit.includes(x.id) ? 'selected' : ''}>${esc(x.nom)}</option>`).join('')}</select></label>`,
+    apres: async (id, val, fd) => {
+      await sb.from('postes_titulaires').delete().eq('poste_id', id);
+      const ids = fd.getAll('_tit');
+      if (ids.length) await sb.from('postes_titulaires').insert(ids.map(pid => ({ poste_id: id, personne_id: pid })));
+    } });
+  }
+  function ficheUnite(u) {
+    fiche({ titre: u.id ? u.nom : 'Nouvelle unité', table: 'unites', ligne: u, champs: [
+      { k: 'nom', l: 'Unité', req: true, large: true, titre: true },
+      { k: 'categorie', l: 'Catégorie', t: 'select', o: ['Organisation', 'Division', 'Direction', 'Site', 'Département', 'Équipe'], req: true },
+      { k: 'code', l: 'Code' }, { k: 'parent_id', l: 'Unité parente', t: 'ref', o: () => S.unites.filter(x => x.id !== u.id) },
+      { k: 'mandat', l: 'Mandat', t: 'textarea', rows: 3 }, { k: 'actif', l: 'Active', t: 'bool' },
+    ] });
+  }
+
+  /* ================= Plus (menu mobile) ================= */
+  function vuePlus(v) {
+    v.innerHTML = entete('Tous les espaces', 'Choisis un module.') + `<div class="grille-modules">${c.MODULES.filter(m => !m.principal).map(m => `<button class="tuile" data-vue="${m.k}">${c.ico(m.k)}<span>${m.l}</span></button>`).join('')}</div>`;
+    v.querySelectorAll('.tuile').forEach(b => b.onclick = () => { S.vue = b.dataset.vue; S.filtres = {}; c.rendre(); });
+  }
+
+  /* ================= Encarts de l'accueil ================= */
+  function encartsAccueil() {
+    const traj = trajetsDuJour();
+    const entretiens = S.entretiens.filter(e => e.actif).map(e => [e, statutEntretien(e)]).filter(([, s]) => ['retard', 'mois'].includes(s.cle));
+    const achats = S.achats.filter(a => ['À compléter', 'À acheter'].includes(a.statut));
+    const dans7 = plusJours(aujourdhui(), 7);
+    const abos = S.abonnements.filter(a => ['Actif', 'Essai'].includes(a.statut) && [a.prochaine_facturation, a.fin_essai].some(d => d && d >= aujourdhui() && d <= dans7));
+    const lecture = S.livres.find(l => l.statut === 'En lecture');
+    const lignes = [];
+    if (entretiens.length) lignes.push(['vehicules', `${entretiens.length} entretien${entretiens.length > 1 ? 's' : ''} à faire`, entretiens.map(([e]) => e.entretien + ' · ' + (parId(S.vehicules, e.vehicule_id)?.modele || '')).slice(0, 2).join(', ')]);
+    if (achats.length) lignes.push(['achats', `${achats.length} article${achats.length > 1 ? 's' : ''} à acheter`, achats.slice(0, 3).map(a => a.item).join(', ')]);
+    if (abos.length) lignes.push(['abonnements', `${abos.length} facturation${abos.length > 1 ? 's' : ''} cette semaine`, abos.map(a => `${a.nom} ${fmtArgent(a.montant)}`).join(', ')]);
+    if (lecture) lignes.push(['bibliotheque', 'En lecture : ' + lecture.titre, lecture.longueur ? `${lecture.position || 0} / ${lecture.longueur}` : '']);
+    return `
+      ${bloc('Transports du jour', traj.length, traj.length ? `<ul class="lignes">${traj.map(t => `<li class="ligne" style="grid-template-columns:52px minmax(0,1fr) auto" data-aller="transports"><div class="heure">${esc(fmtHeure.format(new Date(t.date_heure)))}</div><div><div class="titre">${esc(t.titre.split(' • ').pop())}</div><div class="meta"><span>${esc(t.enfants || '')}</span></div></div><div>${t.responsable ? pastille(t.responsable, 'st-Terminé') : pastille('À attribuer', 'st-Bloqué')}</div></li>`).join('')}</ul>` : vide('Aucun transport aujourd’hui.'), '<button class="btn discret" data-aller="transports">Semaine</button>')}
+      ${lignes.length ? bloc('À surveiller', null, `<ul class="lignes">${lignes.map(([k, t, d]) => `<li class="ligne" style="grid-template-columns:22px minmax(0,1fr)" data-aller="${k}"><span class="ico-mini">${c.ico(k)}</span><div><div class="titre">${esc(t)}</div>${d ? `<div class="meta"><span>${esc(d)}</span></div>` : ''}</div></li>`).join('')}</ul>`) : ''}`;
+  }
+
+  /* ================= Projet : compléments ================= */
+  function complementsProjet(p) {
+    const parts = S.participations.filter(x => x.projet_id === p.id);
+    const achats = S.achats.filter(a => a.projet_id === p.id);
+    const notes = S.notes.filter(n => n.projet_id === p.id);
+    return `
+      ${bloc('Parties prenantes', parts.length, parts.length ? `<ul class="lignes">${parts.map(x => { const pe = parId(S.personnes, x.personne_id); return `<li class="ligne" style="grid-template-columns:minmax(0,1fr)"><div><div class="titre">${esc(pe?.nom)}</div><div class="meta">${x.roles.map(r => pastille(r)).join('')}${x.mandat ? `<span>${esc(x.mandat)}</span>` : ''}</div></div></li>`; }).join('')}</ul>` : vide('Aucune partie prenante.'), `<button class="btn discret" data-ajpart="${p.id}">Ajouter</button>`)}
+      ${achats.length ? bloc('Achats', achats.length, `<ul class="lignes">${achats.map(ligneAchat).join('')}</ul>`) : ''}
+      ${bloc('Notes', notes.length, notes.length ? `<ul class="lignes">${notes.map(n => `<li class="ligne" data-note="${n.id}" role="button" tabindex="0" style="grid-template-columns:minmax(0,1fr) auto"><div><div class="titre">${esc(n.titre)}</div><div class="meta">${pastille(n.type)}</div></div><div class="droite">${n.date ? esc(jourDate(n.date)) : ''}</div></li>`).join('')}</ul>` : vide('Aucune note liée.'), `<button class="btn discret" data-ajnote="${p.id}">Ajouter</button>`)}`;
+  }
+  function brancherProjet(v, p) {
+    brancher(v, '[data-note]', el => ficheNote(parId(S.notes, el.dataset.note)));
+    brancher(v, '[data-achat]', el => ficheAchat(parId(S.achats, el.dataset.achat)));
+    v.querySelectorAll('[data-ajnote]').forEach(b => b.onclick = () => ficheNote({ type: 'Compte rendu', date: aujourdhui(), projet_id: p.id }));
+    v.querySelectorAll('[data-ajpart]').forEach(b => b.onclick = () => fiche({ titre: 'Partie prenante', table: 'participations', ligne: { projet_id: p.id, statut: 'Actif', roles: [] }, champs: [
+      { k: 'projet_id', l: 'Projet', t: 'ref', o: () => S.projets, lib: 'titre', req: true },
+      { k: 'personne_id', l: 'Personne', t: 'ref', o: () => S.personnes, req: true },
+      { k: 'roles', l: 'Rôles', t: 'multi', o: ['Sponsor', 'Lead / chargé de projet', 'Responsable de volet', 'Équipe de réalisation', 'Client / bénéficiaire', 'Fournisseur / expert', 'Approbateur'] },
+      { k: 'mandat', l: 'Mandat', t: 'textarea', rows: 2 },
+    ] }));
+  }
+
+  return {
+    vues: { vehicules: vueVehicules, achats: vueAchats, abonnements: vueAbonnements, transports: vueTransports, bibliotheque: vueBibliotheque, carnet: vueCarnet, routines: vueRoutines, revue: vueRevue, organigramme: vueOrganigramme, plus: vuePlus },
+    encartsAccueil, complementsProjet, brancherProjet, ficheAchat, ficheNote,
+  };
+}
