@@ -161,6 +161,13 @@ async function charger() {
     const { error } = await sb.from('actions').update({ statut: 'Terminé' }).in('id', passes.map(a => a.id));
     if (!error) passes.forEach(a => { a.statut = 'Terminé'; });
   }
+  // Trajets passés qui ne sont pas à ma charge : marqués « Fait » (aussi fait côté serveur aux 15 minutes).
+  const moiT = S.reglages.find(r => r.cle === 'moi_transport')?.valeur || 'Papa';
+  const trajetsPasses = S.trajets.filter(t => t.date_heure && !['Fait', 'Annulé'].includes(t.statut) && t.responsable !== moiT && new Date(t.date_heure).getTime() + 30 * 6e4 < maintenant.getTime());
+  if (trajetsPasses.length) {
+    const { error } = await sb.from('trajets').update({ statut: 'Fait' }).in('id', trajetsPasses.map(t => t.id));
+    if (!error) trajetsPasses.forEach(t => { t.statut = 'Fait'; });
+  }
   try { localStorage.setItem('orbite-cache', JSON.stringify({ le: new Date().toISOString(), donnees: Object.fromEntries(cles.map(k => [k, S[k]])) })); } catch { }
 }
 async function rafraichir() { await charger(); rendre(); }
@@ -859,7 +866,7 @@ async function demarrer(session) {
 
 M = installerModules({ sb, S, $, esc, toast, parId, aujourdhui, plusJours, jourDate, jourLong, cleJour, fmtHeure, versLocal, depuisLocal,
   dialogue, rafraichir, rendre: () => rendre(), liste, ouvert, enRetard, manquants, carteProjet, ouvrirPersonne, ouvrirAction, MODULES, ico, blocBienEtre: () => L6.blocRevue(),
-  conflitDe: t => L.conflitDe(t), encartPneus: () => L.encartPneus(), creerActionsDepuisNote: (n, txt) => L.creerActionsDepuisNote(n, txt), SUPA_URL: SUPABASE_URL });
+  conflitDe: t => L.conflitDe(t), agendaDe: t => L.agendaDe(t), moiTransport: () => L.moi(), encartPneus: () => L.encartPneus(), creerActionsDepuisNote: (n, txt) => L.creerActionsDepuisNote(n, txt), SUPA_URL: SUPABASE_URL });
 
 L = installerLot5({ sb, S, $, esc, toast, parId, aujourdhui, plusJours, jourDate, jourLong, cleJour, fmtHeure, dialogue, rafraichir, ouvert,
   rendre: () => rendre(), ouvrirAction, ouvrirPersonne, ficheNote: n => M.ficheNote(n), ficheAchat: a => M.ficheAchat(a), meteo: () => METEO.donnees });

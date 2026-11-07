@@ -19,10 +19,25 @@ export function installerLot5(c) {
     const f = Math.max(new Date(e.planifie_fin || e.planifie_debut).getTime(), d + 30 * 6e4);
     return t - 30 * 6e4 < f && t + 30 * 6e4 > d;
   }
+  // Un événement de l’agenda qui EST le trajet (ex. « Pick-up Édouard » à 14 h pour le trajet de 14 h 09) n’est pas un conflit :
+  // il chevauche le trajet et son titre nomme un des enfants ou un geste de transport.
+  const sansAccent = s => (s || '').toString().normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+  const MOTS_VIDES = ['les', 'des', 'deux', 'trois', 'quatre', 'cinq', 'et', 'avec'];
+  const GESTE_TRANSPORT = /pick ?-?up|recuper|depos|drop|cherch|reconduir|transport|covoit|lift/;
+  function correspond(t, e) {
+    if (!t?.date_heure || !chevauche(t.date_heure, e)) return false;
+    const titre = sansAccent(e.titre);
+    const noms = sansAccent(t.enfants).split(/[^a-z]+/).filter(m => m.length >= 3 && !MOTS_VIDES.includes(m));
+    return noms.some(n => titre.includes(n)) || GESTE_TRANSPORT.test(titre);
+  }
+  function agendaDe(t) {
+    if (!t?.date_heure || t.statut === 'Annulé') return null;
+    return evtsHoraires().find(e => correspond(t, e)) || null;
+  }
   function conflitDe(t) {
     if (!t?.date_heure || ['Annulé', 'Fait'].includes(t.statut)) return null;
     if (t.responsable && t.responsable !== moi()) return null;
-    return evtsHoraires().find(e => chevauche(t.date_heure, e)) || null;
+    return evtsHoraires().find(e => chevauche(t.date_heure, e) && !correspond(t, e)) || null;
   }
   function conflits() {
     const auj = aujourdhui(), fin = plusJours(auj, 7), maintenant = Date.now();
@@ -284,6 +299,6 @@ export function installerLot5(c) {
     inp.focus();
   }
 
-  return { conflitDe, blocConflits, brancherConflits, blocCharge, chargeDuJour, minutesLocales, noteDe, compteRendu, creerActionsDepuisNote, complementReglages,
+  return { conflitDe, agendaDe, moi, blocConflits, brancherConflits, blocCharge, chargeDuJour, minutesLocales, noteDe, compteRendu, creerActionsDepuisNote, complementReglages,
     blocLigneTemps, brancherLigneTemps, encartPneus, alertePneus, ouvrirRecherche };
 }

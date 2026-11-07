@@ -37,6 +37,8 @@ L'accueil commence par les **événements du jour** (avec la charge de 8 h à 17
 - **Limite des tâches en cours** : avertissement au-delà de 3 (réglage `limite_en_cours`).
 - Réglages facultatifs : `fermeture_heure` (17 par défaut).
 
+**Trajets et agenda** : un événement qui chevauche un trajet et nomme un enfant ou un geste de transport (pick-up, récupérer, déposer…) est reconnu comme ce trajet. Ce n'est pas un conflit, il s'affiche « À l'agenda » (avec « C'est moi » si personne n'est inscrit), et le rappel de 15 minutes n'est envoyé qu'une fois.
+
 Autres outils :
 - **Recherche globale** : Ctrl+K ou / sur ordinateur, loupe dans le bandeau sur téléphone.
 - **Compte rendu** depuis un événement : note liée au projet; les lignes « - [ ] … » deviennent des tâches.
@@ -52,7 +54,7 @@ Données importées de Notion le 6 novembre 2026 (colonne `notion_id` pour la tr
 
 | Tâche programmée | Quand (heure de Toronto) | Fonction |
 | --- | --- | --- |
-| Événements passés → Terminé | Aux 15 minutes (et à l'ouverture de l'app) | `prive.terminer_evenements_passes()` |
+| Événements passés → Terminé; trajets passés qui ne sont pas à ma charge → Fait | Aux 15 minutes (et à l'ouverture de l'app) | `prive.terminer_evenements_passes()`, `prive.terminer_trajets_passes()` |
 | Semaine type des transports | Dimanche soir | `prive.generer_semaine_type()` |
 | Notifications du matin et du soir (avec conflits de demain), invitation à fermer la journée | Chaque heure à :15 | Edge Function `rappels` |
 | Rappel 15 min avant chaque événement et trajet | Aux 5 minutes | Edge Function `rappels` (`{"mode":"rdv"}`), sans doublon grâce à `rappels_envoyes` |

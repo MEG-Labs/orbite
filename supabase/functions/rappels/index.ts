@@ -29,7 +29,7 @@ Deno.serve(async req => {
 
   const [{ data: actions }, { data: trajets }, { data: abonnements }] = await Promise.all([
     sb.from('actions').select('titre,statut,type,planifie_debut,planifie_fin,journee_entiere,echeance,relance,plan_du_jour,realisee_le'),
-    sb.from('trajets').select('titre,date_heure,responsable,statut').gte('date_heure', plusJours(auj, -1)).lte('date_heure', plusJours(auj, 3)),
+    sb.from('trajets').select('titre,enfants,date_heure,responsable,statut').gte('date_heure', plusJours(auj, -1)).lte('date_heure', plusJours(auj, 3)),
     sb.from('abonnements').select('nom,montant,prochaine_facturation,fin_essai,statut'),
   ]);
   const A = actions || [], T = (trajets || []).filter(t => t.statut !== 'Annulé');
@@ -63,8 +63,9 @@ Deno.serve(async req => {
     if (sansResp.length) l.push(`${sansResp.length} trajet${sansResp.length > 1 ? 's' : ''} de demain sans responsable : ` + sansResp.map(t => fmtHeure(t.date_heure)).join(', '));
     // Conflits : un trajet à ma charge pendant un événement.
     const moi = String(await reglage(sb, 'moi_transport') ?? 'Papa');
-    const conflits = tDemain.filter(t => t.responsable === moi).filter(t => evts.some(e => chevauche(t.date_heure, e)));
-    if (conflits.length) l.push(`Conflit : ` + conflits.map(t => `trajet ${fmtHeure(t.date_heure)} pendant « ${evts.find(e => chevauche(t.date_heure, e))!.titre} »`).join(', '));
+    const conflitAvec = (t: { date_heure: string; enfants?: string | null }) => evts.find(e => chevauche(t.date_heure, e) && !correspond(t, e));
+    const conflits = tDemain.filter(t => t.responsable === moi).filter(t => conflitAvec(t));
+    if (conflits.length) l.push(`Conflit : ` + conflits.map(t => `trajet ${fmtHeure(t.date_heure)} pendant « ${conflitAvec(t)!.titre} »`).join(', '));
     if (evts.length) l.push(`Demain : ` + evts.slice(0, 3).map(a => (a.journee_entiere ? '' : fmtHeure(a.planifie_debut) + ' ') + a.titre).join(', '));
     if (l.length) messages.push({ title: 'Pour demain', body: l.join('\n'), url: sansResp.length || l.some(x => x.startsWith('Conflit')) ? './#transports' : './#agenda', tag: 'soir-' + auj });
   }
@@ -91,6 +92,17 @@ function chevauche(dh: string, e: { planifie_debut: string; planifie_fin?: strin
   return t - 30 * 6e4 < Math.max(f, d + 30 * 6e4) && t + 30 * 6e4 > d;
 }
 
+// Un événement qui EST le trajet (« Pick-up Édouard » pour « Récupérer Édouard ») : il nomme un enfant ou un geste de transport.
+const sansAccent = (s?: string | null) => (s || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+const MOTS_VIDES = ['les', 'des', 'deux', 'trois', 'quatre', 'cinq', 'et', 'avec'];
+const GESTE_TRANSPORT = /pick ?-?up|recuper|depos|drop|cherch|reconduir|transport|covoit|lift/;
+function correspond(t: { date_heure: string; enfants?: string | null }, e: { titre: string; planifie_debut: string; planifie_fin?: string | null; journee_entiere?: boolean }) {
+  if (!chevauche(t.date_heure, e)) return false;
+  const titre = sansAccent(e.titre);
+  const noms = sansAccent(t.enfants).split(/[^a-z]+/).filter(m => m.length >= 3 && !MOTS_VIDES.includes(m));
+  return noms.some(n => titre.includes(n)) || GESTE_TRANSPORT.test(titre);
+}
+
 type Abo = { id: string; endpoint: string; p256dh: string; auth: string };
 type Msg = { title: string; body: string; url: string; tag: string };
 
@@ -99,17 +111,20 @@ async function rappelsRdv(sb: ReturnType<typeof admin>, abos: Abo[]) {
   const maintenant = Date.now();
   const de = new Date(maintenant + 10 * 6e4).toISOString(), a = new Date(maintenant + 20 * 6e4).toISOString();
   const moi = String(await reglage(sb, 'moi_transport') ?? 'Papa');
-  const [{ data: evts }, { data: trajets }] = await Promise.all([
+  const [{ data: evts }, { data: trajets }, { data: autour }] = await Promise.all([
     sb.from('actions').select('id,titre,statut,planifie_debut,planifie_fin,lieu,source_externe').eq('type', 'Événement').eq('journee_entiere', false)
       .in('statut', OUVERTS).gte('planifie_debut', de).lt('planifie_debut', a),
     sb.from('trajets').select('id,titre,date_heure,enfants,depart,destination,responsable,statut').gte('date_heure', de).lt('date_heure', a).neq('statut', 'Annulé'),
+    // Événements autour des trajets : un trajet déjà à l’agenda n’a pas besoin d’un second rappel.
+    sb.from('actions').select('titre,planifie_debut,planifie_fin,journee_entiere').eq('type', 'Événement').eq('journee_entiere', false).neq('statut', 'Annulé')
+      .gte('planifie_debut', new Date(maintenant - 60 * 6e4).toISOString()).lt('planifie_debut', new Date(maintenant + 80 * 6e4).toISOString()),
   ]);
   const candidats: (Msg & { cle: string })[] = [];
   for (const e of evts || []) {
     const lignes = [e.planifie_fin ? `Jusqu’à ${fmtHeure(e.planifie_fin)}` : '', e.lieu ? `📍 ${e.lieu}` : '', e.source_externe || ''].filter(Boolean);
     candidats.push({ cle: `rdv|${e.id}|${e.planifie_debut}`, title: `Dans 15 min · ${fmtHeure(e.planifie_debut)} ${e.titre}`, body: lignes.join('\n') || 'Commence bientôt.', url: './#agenda', tag: 'rdv-' + e.id });
   }
-  for (const t of (trajets || []).filter(t => !t.responsable || t.responsable === moi)) {
+  for (const t of (trajets || []).filter(t => (!t.responsable || t.responsable === moi) && !(autour || []).some(e => correspond(t, e)))) {
     const trajet = [t.enfants, [t.depart, t.destination].filter(Boolean).join(' → ')].filter(Boolean).join(' · ');
     candidats.push({ cle: `trajet|${t.id}|${t.date_heure}`, title: `${t.responsable ? 'Ton trajet' : 'Trajet sans responsable'} · ${fmtHeure(t.date_heure)}`, body: trajet || t.titre || '', url: './#transports', tag: 'trajet-' + t.id });
   }

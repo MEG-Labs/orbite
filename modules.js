@@ -355,7 +355,11 @@ export function installerModules(c) {
   function ligneTrajet(t) {
     return `<li class="ligne trajet ${t.statut === 'Annulé' ? 'ferme' : ''}" data-trajet="${t.id}">
       <div class="heure">${t.date_heure ? esc(fmtHeure.format(new Date(t.date_heure))) : '—'}</div>
-      <div><div class="titre">${esc(t.titre.split(' • ').pop())}</div><div class="meta">${t.enfants ? `<span>${esc(t.enfants)}</span>` : ''}${t.depart || t.destination ? `<span>${esc(t.depart || '?')} → ${esc(t.destination || '?')}</span>` : ''}${(() => { const e = c.conflitDe(t); return e ? `<span class="retard">${t.responsable ? 'Conflit' : 'Tu es pris'} : ${esc(e.titre)} ${esc(fmtHeure.format(new Date(e.planifie_debut)))}</span>` : ''; })()}</div></div>
+      <div><div class="titre">${esc(t.titre.split(' • ').pop())}</div><div class="meta">${t.enfants ? `<span>${esc(t.enfants)}</span>` : ''}${t.depart || t.destination ? `<span>${esc(t.depart || '?')} → ${esc(t.destination || '?')}</span>` : ''}${(() => { const e = c.conflitDe(t); return e ? `<span class="retard">${t.responsable ? 'Conflit' : 'Tu es pris'} : ${esc(e.titre)} ${esc(fmtHeure.format(new Date(e.planifie_debut)))}</span>` : ''; })()}${(() => {
+        // Événement de l’agenda qui correspond à ce trajet : rappel neutre, et attribution en un geste si personne n’est inscrit.
+        const e = c.agendaDe(t); if (!e) return '';
+        return `<span class="a-agenda">À l’agenda : ${esc(e.titre)} ${esc(fmtHeure.format(new Date(e.planifie_debut)))}</span>${!t.responsable && !['Fait', 'Annulé'].includes(t.statut) ? `<button class="btn discret btn-moi" data-moi="${t.id}">C’est moi</button>` : ''}`;
+      })()}</div></div>
       <div class="selecteurs">
         <select data-resp="${t.id}" aria-label="Responsable">${['', ...responsables()].map(r => `<option value="${esc(r)}" ${r === (t.responsable || '') ? 'selected' : ''}>${r || 'Qui?'}</option>`).join('')}</select>
         <select data-stt="${t.id}" aria-label="Statut" class="stt-${esc(t.statut)}">${STATUTS_TRAJET.map(s => `<option ${s === t.statut ? 'selected' : ''}>${s}</option>`).join('')}</select>
@@ -400,6 +404,12 @@ export function installerModules(c) {
       const { error } = await sb.from('trajets').update(maj).eq('id', t.id);
       if (error) return toast('Échec : ' + error.message);
       toast('Responsable : ' + (s.value || 'aucun')); rafraichir();
+    });
+    v.querySelectorAll('[data-moi]').forEach(b => b.onclick = async e => {
+      e.stopPropagation();
+      const { error } = await sb.from('trajets').update({ responsable: c.moiTransport(), statut: 'Confirmé' }).eq('id', b.dataset.moi);
+      if (error) return toast('Échec : ' + error.message);
+      toast('Trajet à ta charge'); rafraichir();
     });
     v.querySelectorAll('[data-stt]').forEach(s => s.onchange = async () => {
       const { error } = await sb.from('trajets').update({ statut: s.value }).eq('id', s.dataset.stt);
