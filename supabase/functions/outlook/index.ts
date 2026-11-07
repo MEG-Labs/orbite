@@ -135,7 +135,16 @@ Deno.serve(async req => {
       const parUid = new Map(existants.map(x => [x.uid_externe, x]));
       const disparus = existants.filter(x => !uids.has(x.uid_externe) && new Date(x.planifie_debut).getTime() > maintenant).map(x => x.id);
       for (let i = 0; i < disparus.length; i += 200) await sb.from('actions').delete().in('id', disparus.slice(i, i + 200));
-      const nouveaux = lignes.filter(l => !parUid.has(l.uid_externe as string));
+      let nouveaux = lignes.filter(l => !parUid.has(l.uid_externe as string));
+      // Un événement déjà saisi dans ORBITE (même titre, même début) est relié au calendrier au lieu d'être dédoublé.
+      if (nouveaux.length) {
+        const { data: manuels } = await sb.from('actions').select('id,titre,planifie_debut').is('uid_externe', null).eq('type', 'Événement').gte('planifie_debut', new Date(de).toISOString());
+        const cle = (t: unknown, d: unknown) => `${String(t).trim().toLowerCase()}|${new Date(d as string).getTime()}`;
+        const parCle = new Map((manuels || []).map(m => [cle(m.titre, m.planifie_debut), m.id]));
+        const relies: Record<string, unknown>[] = [];
+        nouveaux = nouveaux.filter(l => { const id = parCle.get(cle(l.titre, l.planifie_debut)); if (!id) return true; parCle.delete(cle(l.titre, l.planifie_debut)); relies.push({ id, l }); return false; });
+        for (const { id, l } of relies as { id: string; l: Record<string, unknown> }[]) await sb.from('actions').update({ uid_externe: l.uid_externe, source_externe: l.source_externe, planifie_fin: l.planifie_fin, lieu: l.lieu }).eq('id', id);
+      }
       for (let i = 0; i < nouveaux.length; i += 200) {
         const { error } = await sb.from('actions').insert(nouveaux.slice(i, i + 200));
         if (error) throw new Error(error.message);
