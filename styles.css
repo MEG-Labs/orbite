@@ -361,3 +361,9 @@ a.lien-jira { color: #7FB3FF; text-decoration: none; font-family: var(--mono); f
 .pastille-couleur.choisie { border-color: var(--craie); box-shadow: 0 0 0 2px var(--nuit) inset; }
 .actions-cal { display: flex; flex-direction: column; gap: 4px; align-self: start; }
 @media (max-width: 700px) { .pastille-couleur { width: 22px; height: 22px; } .nuancier { gap: 5px; } }
+/* Accueil : événements en tête */
+.bloc-evenements { margin-bottom: 22px; border-top: 3px solid var(--orange); }
+.jour-evt > h3 { font-family: var(--mono); font-size: 12px; letter-spacing: .06em; text-transform: uppercase; color: var(--brume); margin: 0; padding: 10px 16px 4px; }
+.jour-evt.aujourdhui > h3 { color: var(--orange-pale); }
+.jour-evt + .jour-evt { border-top: 1px solid var(--acier); }
+.jour-evt .lignes { margin: 0; }

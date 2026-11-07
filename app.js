@@ -54,8 +54,9 @@ const plusJours = (cle, n) => { const d = new Date(cle + 'T12:00:00'); d.setDate
 const jourDate = cle => fmtJour.format(new Date(cle + 'T12:00:00'));
 const jourLong = cle => fmtJourLong.format(new Date(cle + 'T12:00:00'));
 
-function quand(a) {
+function quand(a, heureSeule = false) {
   if (!a.planifie_debut) return '';
+  if (heureSeule) return a.journee_entiere ? 'Journée' : `${fmtHeure.format(new Date(a.planifie_debut))}${a.planifie_fin && !a.journee_entiere ? ' – ' + fmtHeure.format(new Date(a.planifie_fin)) : ''}`;
   const j = cleJour(a.planifie_debut);
   const lbl = j === aujourdhui() ? 'Auj.' : j === plusJours(aujourdhui(), 1) ? 'Demain' : jourDate(j);
   if (a.journee_entiere) return lbl;
@@ -258,7 +259,7 @@ function calendrierDe(a) {
   const c = cals[i];
   return { nom: c?.nom || a.source_externe || 'Calendrier', couleur: c?.couleur || COULEURS_CAL[Math.max(i, 0) % COULEURS_CAL.length][1] };
 }
-function ligne(a, { montrerProjet = true } = {}) {
+function ligne(a, { montrerProjet = true, heureSeule = false } = {}) {
   const p = parId(S.projets, a.projet_id);
   const ferme = !ouvert(a);
   const evt = a.type === 'Événement';
@@ -285,7 +286,7 @@ function ligne(a, { montrerProjet = true } = {}) {
       ${meta.length ? `<div class="meta">${meta.join('')}</div>` : ''}
       ${a.prochain_geste && ouvert(a) ? `<div class="geste">▸ ${esc(a.prochain_geste)}</div>` : ''}
     </div>
-    <div class="droite">${esc(quand(a))}</div>
+    <div class="droite">${esc(quand(a, heureSeule))}</div>
   </li>`;
 }
 function liste(items, vide, opts) {
@@ -321,12 +322,20 @@ function vueAccueil(v) {
   const retards = S.actions.filter(enRetard);
   const aTrier = S.actions.filter(a => a.statut === 'À traiter');
   const passes = S.actions.filter(evtPasse);
-  const semaine = S.actions.filter(a => ouvert(a) && a.planifie_debut && !evtPasse(a) && cleJour(a.planifie_debut) <= dans7).sort(triDate);
+  const aVenir = S.actions.filter(a => ouvert(a) && a.planifie_debut && !evtPasse(a) && cleJour(a.planifie_debut) <= dans7).sort(triDate);
+  const evenements = aVenir.filter(a => a.type === 'Événement');
+  const semaine = aVenir.filter(a => a.type !== 'Événement');
+  const demain = plusJours(auj, 1);
+  const joursEvt = [...new Set(evenements.map(a => cleJour(a.planifie_debut) < auj ? auj : cleJour(a.planifie_debut)))];
+  const libJour = j => j === auj ? 'Aujourd’hui' : j === demain ? 'Demain' : jourLong(j);
   const actifs = S.projets.filter(p => p.statut === 'Actif');
   const aCompleter = S.actions.filter(a => manquants(a).length);
 
   const cpt = (n, lbl, cls, cible) => `<button class="compteur ${n ? cls : 'calme'}" data-cible="${cible}"><b>${n}</b><span>${lbl}</span></button>`;
   v.innerHTML = `
+    <section class="bloc bloc-evenements"><header><h2>Événements <span class="nb">${evenements.length}</span></h2><button class="btn discret" data-aller="agenda">Agenda</button></header>
+      ${joursEvt.length ? joursEvt.map(j => `<div class="jour-evt ${j === auj ? 'aujourdhui' : ''}"><h3>${esc(libJour(j))}</h3>${liste(evenements.filter(a => (cleJour(a.planifie_debut) < auj ? auj : cleJour(a.planifie_debut)) === j), '', { heureSeule: true })}</div>`).join('')
+        : '<div class="vide">Aucun événement dans les 7 prochains jours.</div>'}</section>
     <section class="compteurs" aria-label="Indicateurs">
       ${cpt(enCours.length, 'En cours', 'calme', 'en-cours')}
       ${cpt(taches.filter(ouvert).length, 'Tâches ouvertes', 'calme', 'ouvertes')}
@@ -347,8 +356,8 @@ function vueAccueil(v) {
       </div>
       <div class="colonne">
         ${M.encartsAccueil()}
-        <section class="bloc"><header><h2>7 prochains jours <span class="nb">${semaine.length}</span></h2><button class="btn discret" data-aller="agenda">Agenda</button></header>
-          ${liste(semaine, 'Rien de planifié cette semaine.')}</section>
+        <section class="bloc"><header><h2>Tâches planifiées · 7 jours <span class="nb">${semaine.length}</span></h2><button class="btn discret" data-aller="agenda">Agenda</button></header>
+          ${liste(semaine, 'Aucune tâche planifiée cette semaine.')}</section>
         ${bloques.length ? `<section class="bloc"><header><h2>Blocages et relances <span class="nb">${bloques.length}</span></h2></header>${liste(bloques, '')}</section>` : ''}
         <section class="bloc"><header><h2>Projets en mouvement <span class="nb">${actifs.length}</span></h2><button class="btn discret" data-aller="projets">Tous</button></header>
           ${actifs.map(carteProjet).join('') || '<div class="vide">Aucun projet actif.</div>'}</section>
