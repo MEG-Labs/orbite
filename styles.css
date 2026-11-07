@@ -98,6 +98,7 @@ h2 .nb { color: var(--brume); font-weight: 400; }
 .coche.fait { background: var(--vert); border-color: var(--vert); }
 .coche.fait::after { content: ""; width: 9px; height: 5px; border: solid var(--nuit); border-width: 0 0 2px 2px; transform: rotate(-45deg) translate(1px, -1px); }
 .ligne.ferme .titre { text-decoration: line-through; color: var(--brume); }
+.ligne.passe { opacity: .55; }
 .puce-evt { width: 8px; height: 8px; margin: 7px 5px; background: var(--orange); }
 
 .pastille { display: inline-flex; align-items: center; gap: 5px; font: 12px/1.6 var(--mono); padding: 0 6px; border: 1px solid var(--acier); border-radius: var(--r); white-space: nowrap; color: var(--brume); }
@@ -433,3 +434,5 @@ dialog.recherche .resultats { max-height: 60vh; overflow: auto; display: block; 
   dialog.recherche { margin-top: 8px; }
   .ligne-conflit + .ligne-conflit, .bloc.signal header .btn { }
 }
+
+.charge-fds .charge-barre i { background: color-mix(in srgb, var(--acier) 80%, transparent); }

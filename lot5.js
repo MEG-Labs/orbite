@@ -73,9 +73,11 @@ export function installerLot5(c) {
     const { occ, pris, libres, maintenant } = chargeDuJour();
     const pct = m => ((m - JOUR_DE) / (JOUR_A - JOUR_DE) * 100).toFixed(2);
     const fini = maintenant >= JOUR_A;
-    const texteLibre = fini ? 'Journée de travail terminée' : libres.length ? 'Libre : ' + libres.slice(0, 4).map(([d, f]) => `${hhmm(d)}–${hhmm(f)}`).join(' · ') : 'Aucune plage libre de 30 min d’ici 17 h';
-    return `<div class="charge" title="Plage de travail 8 h – 17 h">
-      <div class="charge-texte"><b>${pris ? duree(pris) : '0 h'}</b> en rendez-vous (8 h–17 h) · <span>${esc(texteLibre)}</span></div>
+    const jourSem = new Date(aujourdhui() + 'T12:00:00').getDay();
+    const finDeSemaine = jourSem === 0 || jourSem === 6;
+    const texteLibre = finDeSemaine ? 'Fin de semaine' : fini ? 'Journée de travail terminée' : libres.length ? 'Libre : ' + libres.slice(0, 4).map(([d, f]) => `${hhmm(d)}–${hhmm(f)}`).join(' · ') : 'Aucune plage libre de 30 min d’ici 17 h';
+    return `<div class="charge${finDeSemaine ? ' charge-fds' : ''}" title="${finDeSemaine ? 'Fin de semaine' : 'Plage de travail 8 h – 17 h'}">
+      <div class="charge-texte"><b>${pris ? duree(pris) : '0 h'}</b> ${finDeSemaine ? 'd’événements (8 h–17 h)' : 'en rendez-vous (8 h–17 h)'} · <span>${esc(texteLibre)}</span></div>
       <div class="charge-barre" aria-hidden="true">${occ.map(([d, f]) => `<i style="left:${pct(d)}%;width:${(pct(f) - pct(d)).toFixed(2)}%"></i>`).join('')}
         ${maintenant > JOUR_DE && maintenant < JOUR_A ? `<b style="left:${pct(maintenant)}%"></b>` : ''}</div>
       <div class="charge-graduations" aria-hidden="true"><span>8 h</span><span>10 h</span><span>12 h</span><span>14 h</span><span>17 h</span></div></div>`;

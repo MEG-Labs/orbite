@@ -268,8 +268,10 @@ function calendrierDe(a) {
 }
 function ligne(a, { montrerProjet = true, heureSeule = false } = {}) {
   const p = parId(S.projets, a.projet_id);
-  const ferme = !ouvert(a);
   const evt = a.type === 'Événement';
+  // Un événement passé ou terminé est grisé (pas barré) : il a eu lieu.
+  const passe = evt && a.statut !== 'Annulé' && (!ouvert(a) || new Date(a.planifie_fin || a.planifie_debut) < new Date());
+  const ferme = !ouvert(a) && !passe;
   const meta = [];
   if (a.statut !== 'À faire' && !evt) meta.push(`<span class="pastille st-${esc(a.statut)}">${esc(a.statut)}</span>`);
   if (a.priorite && a.priorite <= 2) meta.push(`<span class="pastille prio-${a.priorite}">P${a.priorite}</span>`);
@@ -286,7 +288,7 @@ function ligne(a, { montrerProjet = true, heureSeule = false } = {}) {
   const cal = calendrierDe(a);
   if (cal) meta.push(`<span class="pastille pastille-cal" style="--cal:${esc(cal.couleur)}">${esc(cal.nom)}</span>`);
   const m = manquants(a);
-  return `<li class="ligne ${ferme ? 'ferme' : ''}" data-id="${a.id}">
+  return `<li class="ligne ${ferme ? 'ferme' : ''}${passe ? ' passe' : ''}" data-id="${a.id}">
     ${evt ? `<span class="puce-evt" aria-hidden="true"${cal ? ` style="background:${esc(cal.couleur)}"` : ''}></span>` : `<button class="coche ${a.statut === 'Terminé' ? 'fait' : ''}" data-coche="${a.id}" aria-label="${a.statut === 'Terminé' ? 'Rouvrir' : 'Marquer terminé'} : ${esc(a.titre)}"></button>`}
     <div>
       <div class="titre">${esc(a.titre)}${m.length ? `<span class="incomplet" title="À compléter : ${esc(m.join(', '))}"></span>` : ''}</div>
@@ -336,14 +338,17 @@ function vueAccueil(v) {
   const joursEvt = [...new Set(evenements.map(a => cleJour(a.planifie_debut) < auj ? auj : cleJour(a.planifie_debut)))];
   const libJour = j => j === auj ? 'Aujourd’hui' : j === demain ? 'Demain' : jourLong(j);
   const evtJour = j => evenements.filter(a => (cleJour(a.planifie_debut) < auj ? auj : cleJour(a.planifie_debut)) === j);
+  // Aujourd’hui : on garde aussi les événements déjà passés ou terminés (grisés), pour concorder avec la barre de charge.
+  const passesAuj = S.actions.filter(a => a.type === 'Événement' && a.statut !== 'Annulé' && a.planifie_debut && cleJour(a.planifie_debut) === auj && !evenements.includes(a));
+  const evtAuj = [...passesAuj, ...evtJour(auj)].sort(triDate);
   const actifs = S.projets.filter(p => p.statut === 'Actif');
   const aCompleter = S.actions.filter(a => manquants(a).length);
 
   const cpt = (n, lbl, cls, cible) => `<button class="compteur ${n ? cls : 'calme'}" data-cible="${cible}"><b>${n}</b><span>${lbl}</span></button>`;
   v.innerHTML = `
-    <section class="bloc bloc-evenements"><header><h2>Aujourd’hui <span class="nb">${evtJour(auj).length}</span></h2><button class="btn discret" data-aller="agenda">Agenda</button></header>
+    <section class="bloc bloc-evenements"><header><h2>Aujourd’hui <span class="nb">${evtAuj.length}</span></h2><button class="btn discret" data-aller="agenda">Agenda</button></header>
       ${L.blocCharge()}
-      ${liste(evtJour(auj), 'Aucun événement aujourd’hui.', { heureSeule: true })}
+      ${liste(evtAuj, 'Aucun événement aujourd’hui.', { heureSeule: true })}
       <details class="plus-tard" ${S.evtOuverts ? 'open' : ''}><summary>7 prochains jours <span class="nb">${evenements.length - evtJour(auj).length}</span></summary>
         ${joursEvt.filter(j => j !== auj).map(j => `<div class="jour-evt"><h3>${esc(libJour(j))}</h3>${liste(evtJour(j), '', { heureSeule: true })}</div>`).join('') || '<div class="vide">Rien de prévu.</div>'}
       </details></section>
