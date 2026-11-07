@@ -348,3 +348,5 @@ a.lien-jira { color: #7FB3FF; text-decoration: none; font-family: var(--mono); f
 .ligne-budget .droite { font-variant-numeric: tabular-nums; }
 .ligne-budget.exclu { opacity: .45; text-decoration: line-through; }
 .note-budget { font-size: 11px; opacity: .6; padding: 8px 12px 12px; margin: 0; }
+.ligne-cal { grid-template-columns: minmax(0, 1fr) auto; }
+.ligne-cal .lien-court { opacity: .6; overflow-wrap: anywhere; }

@@ -25,7 +25,7 @@ Tâches, agenda, projets et organisation de la vie courante. Remplace l'espace N
 | Repères | Carnet | Notes, idées, comptes rendus, décisions, bilans |
 | | Organigramme | Postes et hiérarchie, unités, titulaires |
 | | Personnes et domaines | Répertoire et domaines de vie |
-| | Réglages | Notifications, calendriers Outlook, sauvegardes, Jira, hors ligne |
+| | Réglages | Notifications, calendriers importés (Google, Outlook) et flux ORBITE, sauvegardes, Jira, hors ligne |
 
 L'accueil commence par **Aujourd'hui, je fais** : au plus trois actions choisies pour la journée.
 
@@ -40,7 +40,7 @@ Données importées de Notion le 6 novembre 2026 (colonne `notion_id` pour la tr
 | Événements passés → Terminé | Aux 15 minutes (et à l'ouverture de l'app) | `prive.terminer_evenements_passes()` |
 | Semaine type des transports | Dimanche soir | `prive.generer_semaine_type()` |
 | Notifications (matin, soir, rendez-vous) | Chaque heure à :15 | Edge Function `rappels` |
-| Import du calendrier Outlook publié | Chaque heure à :45 | Edge Function `outlook` |
+| Import des calendriers iCal (Google, Outlook…) | Chaque heure à :45 | Edge Function `outlook`, liens dans le réglage `calendriers_ics` |
 | Statut Jira | Chaque heure, jours de semaine | Edge Function `jira` (inactive sans `JIRA_COURRIEL` et `JIRA_JETON`) |
 | Sauvegarde complète (12 conservées) | Dimanche matin | Edge Function `sauvegarde` → stockage privé `sauvegardes` |
 

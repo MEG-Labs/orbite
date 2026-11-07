@@ -111,6 +111,7 @@ export function installerExtras(c) {
 
   /* ================= Réglages ================= */
   async function vueReglages(v) {
+    const cals = reglage('calendriers_ics') || [];
     const lienCal = `${SUPABASE_URL}/functions/v1/calendrier?jeton=${reglage('calendrier_jeton')}`;
     const heures = Array.from({ length: 24 }, (_, h) => [h, `${h} h`]);
     const optH = (sel) => heures.map(([h, l]) => `<option value="${h}" ${+sel === h ? 'selected' : ''}>${l}</option>`).join('');
@@ -129,10 +130,14 @@ export function installerExtras(c) {
             <p>Ajoute ce lien dans Outlook : <b>Calendrier › Ajouter un calendrier › À partir d’Internet</b>. Tes événements, tâches planifiées et trajets apparaîtront dans un calendrier « ORBITE », mis à jour automatiquement.</p>
             <div class="rangee"><input readonly value="${esc(lienCal)}" id="lienCal" aria-label="Lien du calendrier"><button class="btn" id="copierCal">Copier</button></div>
             <p class="aide">Ce lien est privé : toute personne qui l’a peut lire ton agenda ORBITE.</p></div>`)}
-          ${bloc('Outlook dans ORBITE', null, `<div class="reglage">
-            <p>Pour importer ton agenda Outlook : dans Outlook sur le Web, <b>Paramètres › Calendrier › Calendriers partagés › Publier un calendrier</b>, choisis « Peut afficher tous les détails », puis copie le lien <b>ICS</b> ici. ORBITE le relit chaque heure.</p>
-            <div class="rangee"><input id="lienOutlook" placeholder="https://outlook.office365.com/owa/calendar/…/calendar.ics" value="${esc(reglage('outlook_ics') || '')}" aria-label="Lien ICS Outlook"><button class="btn primaire" id="majOutlook">Enregistrer</button></div>
-            <div class="rangee"><button class="btn" id="syncOutlook" ${reglage('outlook_ics') ? '' : 'disabled'}>Synchroniser maintenant</button><span class="aide">${S.actions.filter(a => a.uid_externe).length} événement(s) importé(s)</span></div></div>`)}
+          ${bloc('Calendriers importés', null, `<div class="reglage">
+            <p>Colle le lien <b>iCal (.ics)</b> d’un calendrier pour voir ses événements dans ORBITE. Ils sont relus chaque heure.</p>
+            <p class="aide"><b>Google Agenda</b> (sur ordinateur) : Paramètres › clique le calendrier à gauche › <b>Intégrer l’agenda</b> › « Adresse secrète au format iCal ».<br>
+            <b>Outlook</b> : Paramètres › Calendrier › Calendriers partagés › Publier un calendrier › « Peut afficher tous les détails » › lien ICS.</p>
+            <ul class="lignes" id="listeCals">${cals.length ? cals.map(c => `<li class="ligne ligne-cal"><div><div class="titre">${esc(c.nom)}</div><div class="meta"><span>${S.actions.filter(a => a.uid_externe?.startsWith(c.id + '|')).length} événement(s)</span><span class="lien-court">${esc(c.lien.replace(/^(https?|webcal):\/\//, '').slice(0, 38))}…</span></div></div><button class="btn discret" data-retirer-cal="${esc(c.id)}">Retirer</button></li>`).join('') : '<li class="ligne"><span class="aide">Aucun calendrier pour l’instant.</span></li>'}</ul>
+            <div class="rangee"><input id="nomCal" placeholder="Nom (ex. Famille)" aria-label="Nom du calendrier" style="max-width:180px"><input id="lienNouveauCal" placeholder="https://calendar.google.com/calendar/ical/…/basic.ics" aria-label="Lien iCal"><button class="btn primaire" id="ajoutCal">Ajouter</button></div>
+            <div class="rangee"><button class="btn" id="syncCals" ${cals.length ? '' : 'disabled'}>Synchroniser maintenant</button></div>
+            <p class="aide">Ces liens sont privés : garde-les pour toi. Retirer un calendrier retire aussi ses événements d’ORBITE.</p></div>`)}
         </div>
         <div class="colonne">
           ${bloc('Sauvegardes', null, `<div class="reglage">
@@ -154,15 +159,28 @@ export function installerExtras(c) {
     $('#hSoir').onchange = async e => { if (await ecrireReglage('rappel_soir_heure', +e.target.value)) toast(`Rappel à ${e.target.value} h`); };
     // Calendriers
     $('#copierCal').onclick = async () => { try { await navigator.clipboard.writeText($('#lienCal').value); toast('Lien copié'); } catch { $('#lienCal').select(); } };
-    $('#majOutlook').onclick = async () => {
-      const val = $('#lienOutlook').value.trim();
-      if (val && !/^(https?|webcal):\/\//.test(val)) return toast('Le lien doit commencer par https://');
-      if (await ecrireReglage('outlook_ics', val || null)) { toast(val ? 'Lien enregistré' : 'Import désactivé'); rafraichir(); }
+    const synchroniser = async (bouton) => {
+      if (bouton) bouton.disabled = true;
+      try {
+        const r = await appeler('outlook');
+        const ko = (r.calendriers || []).filter(c => c.erreur);
+        toast(r.erreur ? 'Échec : ' + r.erreur : ko.length ? `${r.evenements} événements · problème avec ${ko.map(c => `${c.nom} (${c.erreur})`).join(', ')}` : `${r.evenements} événements synchronisés`);
+        rafraichir();
+      } catch (er) { toast('Échec : ' + er.message); if (bouton) bouton.disabled = false; }
     };
-    $('#syncOutlook').onclick = async e => {
-      e.target.disabled = true;
-      try { const r = await appeler('outlook'); toast(r.erreur ? 'Échec : ' + r.erreur : `${r.evenements} événements synchronisés`); rafraichir(); } catch (er) { toast('Échec : ' + er.message); e.target.disabled = false; }
+    $('#ajoutCal').onclick = async () => {
+      const nom = $('#nomCal').value.trim() || 'Calendrier', lien = $('#lienNouveauCal').value.trim();
+      if (!/^(https?|webcal):\/\//.test(lien)) return toast('Le lien doit commencer par https://');
+      if (/calendar\.google\.com\/calendar\/(u\/\d\/)?(r|embed)/.test(lien)) return toast('Ce lien sert à afficher l’agenda. Prends l’« Adresse secrète au format iCal » (finit par .ics).');
+      if (cals.some(c => c.lien === lien)) return toast('Ce calendrier est déjà ajouté');
+      const id = 'c' + Math.random().toString(36).slice(2, 8);
+      if (await ecrireReglage('calendriers_ics', [...cals, { id, nom, lien }])) { toast('Calendrier ajouté · import en cours…'); await synchroniser(); }
     };
+    v.querySelectorAll('[data-retirer-cal]').forEach(b => b.onclick = async () => {
+      if (b.dataset.ok !== '1') { b.dataset.ok = '1'; b.textContent = 'Confirmer'; return; }
+      if (await ecrireReglage('calendriers_ics', cals.filter(c => c.id !== b.dataset.retirerCal))) { toast('Calendrier retiré'); await synchroniser(); }
+    });
+    $('#syncCals').onclick = e => synchroniser(e.target);
     // Sauvegardes
     const dessinerSauv = async () => {
       const { data, error } = await sb.storage.from('sauvegardes').list('', { sortBy: { column: 'name', order: 'desc' }, limit: 12 });

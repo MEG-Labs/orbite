@@ -266,7 +266,7 @@ function ligne(a, { montrerProjet = true } = {}) {
     const dom = S.reglages.find(r => r.cle === 'jira_domaine')?.valeur || 'canac.atlassian.net';
     meta.push(`<a class="lien-jira" href="https://${esc(dom)}/browse/${esc(a.reference_externe.trim())}" target="_blank" rel="noopener">${esc(a.reference_externe.trim())}${a.statut_jira ? ' · ' + esc(a.statut_jira) : ''}</a>`);
   }
-  if (a.uid_externe) meta.push('<span>Outlook</span>');
+  if (a.uid_externe) meta.push(`<span class="pastille">${esc(a.source_externe || 'Calendrier')}</span>`);
   const m = manquants(a);
   return `<li class="ligne ${ferme ? 'ferme' : ''}" data-id="${a.id}">
     ${evt ? '<span class="puce-evt" aria-hidden="true"></span>' : `<button class="coche ${a.statut === 'Terminé' ? 'fait' : ''}" data-coche="${a.id}" aria-label="${a.statut === 'Terminé' ? 'Rouvrir' : 'Marquer terminé'} : ${esc(a.titre)}"></button>`}
