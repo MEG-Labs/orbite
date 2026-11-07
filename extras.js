@@ -185,7 +185,7 @@ export function installerExtras(c) {
     const XLSX = await import('https://cdn.jsdelivr.net/npm/xlsx@0.18.5/xlsx.mjs');
     const wb = XLSX.utils.book_new();
     const feuilles = { Actions: S.actions, Projets: S.projets, Achats: S.achats, Abonnements: S.abonnements, Trajets: S.trajets, Véhicules: S.vehicules, Entretiens: S.entretiens,
-      Interventions: S.interventions, Livres: S.livres, Notes: S.notes, Routines: S.routines, Personnes: S.personnes, Postes: S.postes, Unités: S.unites, Domaines: S.domaines };
+      Interventions: S.interventions, Livres: S.livres, Budget: S.budget, Notes: S.notes, Routines: S.routines, Personnes: S.personnes, Postes: S.postes, Unités: S.unites, Domaines: S.domaines };
     for (const [nom, lignes] of Object.entries(feuilles)) {
       const plates = lignes.map(r => Object.fromEntries(Object.entries(r).map(([k, val]) => [k, Array.isArray(val) ? val.join(', ') : val])));
       XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(plates.length ? plates : [{}]), nom.slice(0, 31));

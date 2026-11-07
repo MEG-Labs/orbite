@@ -14,7 +14,7 @@ const STATUTS_PROJET = ['À envisager', 'À planifier', 'Actif', 'En pause', 'Te
 const CONTEXTES = ['Maison', 'Bureau', 'Téléphone', 'Ordinateur', 'Courses', 'Partout'];
 
 const S = { session: null, actions: [], projets: [], domaines: [], personnes: [], vue: 'accueil', filtres: {}, agendaPasses: false,
-  vehicules: [], entretiens: [], interventions: [], intEnt: [], livres: [], achats: [], abonnements: [], trajets: [], routines: [], notes: [],
+  vehicules: [], entretiens: [], interventions: [], intEnt: [], livres: [], achats: [], abonnements: [], trajets: [], routines: [], notes: [], budget: [],
   unites: [], postes: [], titulaires: [], participations: [], reglages: [], push: [], file: [], horsLigne: null };
 let M, X; // modules, installés après la définition des fonctions communes
 
@@ -123,6 +123,7 @@ async function charger() {
     trajets: sb.from('trajets').select('*').order('date_heure'),
     routines: sb.from('routines').select('*'),
     notes: sb.from('notes').select('*'),
+    budget: sb.from('budget_lignes').select('*'),
     unites: sb.from('unites').select('*').order('nom'),
     postes: sb.from('postes').select('*'),
     titulaires: sb.from('postes_titulaires').select('*'),

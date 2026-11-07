@@ -673,17 +673,73 @@ export function installerModules(c) {
       ${lignes.length ? bloc('À surveiller', null, `<ul class="lignes">${lignes.map(([k, t, d]) => `<li class="ligne" style="grid-template-columns:22px minmax(0,1fr)" data-aller="${k}"><span class="ico-mini">${c.ico(k)}</span><div><div class="titre">${esc(t)}</div>${d ? `<div class="meta"><span>${esc(d)}</span></div>` : ''}</div></li>`).join('')}</ul>`) : ''}`;
   }
 
+  /* ================= Projet : budget ================= */
+  const TAXES_QC = 14.975;
+  const htLigne = l => (+l.quantite || 0) * (+l.prix_unitaire_ht || 0) + (+l.heures || 0) * (+l.tarif_horaire_ht || 0) + (+l.autres_frais_ht || 0);
+  const ttcLigne = l => htLigne(l) * (1 + (l.taxes_pct ?? TAXES_QC) / 100);
+  const STATUTS_BUDGET = ['À chiffrer', 'Estimation', 'Soumission', 'Engagé', 'Payé', 'Exclu'];
+  function blocBudget(p) {
+    const lignes = S.budget.filter(l => l.projet_id === p.id);
+    if (!lignes.length && !p.budget_prevu) return bloc('Budget', null, vide('Aucun poste de dépense.'), `<button class="btn discret" data-ajbudget="${p.id}">Ajouter un poste</button>`);
+    const actives = lignes.filter(l => l.statut !== 'Exclu');
+    const somme = f => actives.reduce((t, l) => t + (f(l) || 0), 0);
+    const ht = somme(htLigne), ttc = somme(ttcLigne), engage = somme(l => +l.engage_ttc), paye = somme(l => +l.paye_ttc);
+    const reserve = ttc * (+p.reserve_pct || 0) / 100;
+    const aChiffrer = actives.filter(l => l.statut === 'À chiffrer' || !htLigne(l)).length;
+    const valides = actives.filter(l => l.chiffrage_valide).length;
+    const lots = [...new Set(lignes.map(l => l.lot || 'Sans lot'))].sort();
+    const ouverts = S.filtres.lotsOuverts || (S.filtres.lotsOuverts = new Set());
+    const tuile = (lib, val, sous = '') => `<div class="tuile-budget"><span>${lib}</span><strong>${val}</strong>${sous ? `<small>${sous}</small>` : ''}</div>`;
+    const ecart = p.budget_prevu ? (+p.budget_prevu) - (ttc + reserve) : null;
+    const corps = `
+      <div class="tuiles-budget">
+        ${tuile('Estimé HT', fmtArgent(ht))}
+        ${tuile('Estimé TTC', fmtArgent(ttc + reserve), p.reserve_pct ? `dont réserve ${p.reserve_pct} % : ${fmtArgent(reserve)}` : 'réserve 0 %')}
+        ${tuile('Engagé / payé', `${fmtArgent(engage)} / ${fmtArgent(paye)}`)}
+        ${tuile('Chiffrage', `${actives.length - aChiffrer} / ${actives.length}`, `${aChiffrer} à chiffrer · ${valides} validés`)}
+        ${p.budget_prevu ? tuile('Budget prévu', fmtArgent(p.budget_prevu), `<span class="${ecart < 0 ? 'neg' : ''}">écart ${fmtArgent(ecart)}</span>`) : ''}
+      </div>
+      ${lots.map(lot => {
+        const ls = lignes.filter(l => (l.lot || 'Sans lot') === lot).sort((a, b) => (a.statut === 'À chiffrer') - (b.statut === 'À chiffrer') || a.poste.localeCompare(b.poste));
+        const tLot = ls.filter(l => l.statut !== 'Exclu').reduce((t, l) => t + ttcLigne(l), 0);
+        const nbAC = ls.filter(l => l.statut === 'À chiffrer').length;
+        return `<details class="lot-budget" data-lot="${esc(lot)}" ${ouverts.has(lot) ? 'open' : ''}><summary><span class="titre">${esc(lot)}</span><span class="meta">${ls.length} poste${ls.length > 1 ? 's' : ''}${nbAC ? ` · ${nbAC} à chiffrer` : ''}</span><span class="montant">${fmtArgent(tLot)}</span></summary>
+          <ul class="lignes">${ls.map(l => `<li class="ligne ligne-budget ${l.statut === 'Exclu' ? 'exclu' : ''}" data-budget="${l.id}" role="button" tabindex="0"><div><div class="titre">${esc(l.poste)}</div><div class="meta">${pastille(l.statut, l.statut === 'À chiffrer' ? 'st-Bloqué' : ['Engagé', 'Payé'].includes(l.statut) ? 'st-Terminé' : '')}${l.quantite != null ? `<span>${+l.quantite} ${esc(l.unite || '')} × ${fmtArgent(l.prix_unitaire_ht)}</span>` : ''}${l.fournisseur ? `<span>${esc(l.fournisseur)}</span>` : ''}${l.chiffrage_valide ? '<span>✓ validé</span>' : ''}</div></div><div class="droite">${htLigne(l) ? fmtArgent(ttcLigne(l)) : '—'}</div></li>`).join('')}</ul></details>`;
+      }).join('')}
+      <p class="note-budget">TTC calculé avec ${TAXES_QC} % (TPS + TVQ) quand une ligne n’a pas de taux.</p>`;
+    return bloc('Budget', lignes.length, corps, `<div class="boutons"><button class="btn discret" data-reserve="${p.id}">Réserve</button><button class="btn discret" data-ajbudget="${p.id}">Ajouter</button></div>`, 'bloc-budget');
+  }
+  function ficheBudget(l) {
+    fiche({ titre: l.id ? l.poste : 'Nouveau poste de dépense', table: 'budget_lignes', ligne: l, champs: [
+      { k: 'poste', l: 'Poste de dépense', req: true, large: true, titre: true },
+      { k: 'lot', l: 'Lot', ph: 'ex. 04 · Plomberie' },
+
+      { k: 'statut', l: 'Statut', t: 'select', o: STATUTS_BUDGET, req: true },
+      { section: 'Matériel' }, { k: 'quantite', l: 'Quantité', t: 'number' }, { k: 'unite', l: 'Unité' }, { k: 'prix_unitaire_ht', l: 'Prix unitaire HT', t: 'number' },
+      { section: 'Main-d’œuvre et frais' }, { k: 'heures', l: 'Heures', t: 'number' }, { k: 'tarif_horaire_ht', l: 'Tarif horaire HT', t: 'number' }, { k: 'autres_frais_ht', l: 'Autres frais HT', t: 'number' },
+      { k: 'taxes_pct', l: `Taxes % (vide = ${TAXES_QC})`, t: 'number' },
+      { section: 'Suivi' }, { k: 'engage_ttc', l: 'Engagé TTC', t: 'number' }, { k: 'paye_ttc', l: 'Payé TTC', t: 'number' },
+      { k: 'fournisseur', l: 'Fournisseur' }, { k: 'date_paiement', l: 'Paiement prévu', t: 'date' }, { k: 'chiffrage_valide', l: 'Chiffrage validé', t: 'bool' },
+      { k: 'notes', l: 'Notes / hypothèses', t: 'textarea', rows: 3 },
+    ], avant: val => { val.projet_id = l.projet_id; } });
+  }
+
   /* ================= Projet : compléments ================= */
   function complementsProjet(p) {
     const parts = S.participations.filter(x => x.projet_id === p.id);
     const achats = S.achats.filter(a => a.projet_id === p.id);
     const notes = S.notes.filter(n => n.projet_id === p.id);
     return `
+      ${blocBudget(p)}
       ${bloc('Parties prenantes', parts.length, parts.length ? `<ul class="lignes">${parts.map(x => { const pe = parId(S.personnes, x.personne_id); return `<li class="ligne" style="grid-template-columns:minmax(0,1fr)"><div><div class="titre">${esc(pe?.nom)}</div><div class="meta">${x.roles.map(r => pastille(r)).join('')}${x.mandat ? `<span>${esc(x.mandat)}</span>` : ''}</div></div></li>`; }).join('')}</ul>` : vide('Aucune partie prenante.'), `<button class="btn discret" data-ajpart="${p.id}">Ajouter</button>`)}
       ${achats.length ? bloc('Achats', achats.length, `<ul class="lignes">${achats.map(ligneAchat).join('')}</ul>`) : ''}
       ${bloc('Notes', notes.length, notes.length ? `<ul class="lignes">${notes.map(n => `<li class="ligne" data-note="${n.id}" role="button" tabindex="0" style="grid-template-columns:minmax(0,1fr) auto"><div><div class="titre">${esc(n.titre)}</div><div class="meta">${pastille(n.type)}</div></div><div class="droite">${n.date ? esc(jourDate(n.date)) : ''}</div></li>`).join('')}</ul>` : vide('Aucune note liée.'), `<button class="btn discret" data-ajnote="${p.id}">Ajouter</button>`)}`;
   }
   function brancherProjet(v, p) {
+    brancher(v, '[data-budget]', el => ficheBudget(parId(S.budget, el.dataset.budget)));
+    v.querySelectorAll('[data-ajbudget]').forEach(b => b.onclick = () => { const ouv = v.querySelector('details.lot-budget[open]'); ficheBudget({ projet_id: p.id, statut: 'À chiffrer', lot: ouv?.dataset.lot || null }); });
+    v.querySelectorAll('details.lot-budget').forEach(d => d.ontoggle = () => { const o = S.filtres.lotsOuverts || (S.filtres.lotsOuverts = new Set()); d.open ? o.add(d.dataset.lot) : o.delete(d.dataset.lot); });
+    v.querySelectorAll('[data-reserve]').forEach(b => b.onclick = () => fiche({ titre: 'Réserve pour imprévus', table: 'projets', ligne: { id: p.id, reserve_pct: p.reserve_pct }, champs: [{ k: 'reserve_pct', l: 'Réserve (% du TTC)', t: 'number', req: true }] }));
     brancher(v, '[data-note]', el => ficheNote(parId(S.notes, el.dataset.note)));
     brancher(v, '[data-achat]', el => ficheAchat(parId(S.achats, el.dataset.achat)));
     v.querySelectorAll('[data-ajnote]').forEach(b => b.onclick = () => ficheNote({ type: 'Compte rendu', date: aujourdhui(), projet_id: p.id }));

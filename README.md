@@ -12,7 +12,7 @@ Tâches, agenda, projets et organisation de la vie courante. Remplace l'espace N
 | --- | --- | --- |
 | Pilotage | Accueil | Compteurs, en cours, backlog, transports du jour, à surveiller, 7 prochains jours, projets |
 | | Agenda | Événements, tâches planifiées et échéances, jour par jour |
-| | Projets | Avancement, santé, actions, parties prenantes, achats et notes liés |
+| | Projets | Avancement, santé, budget par lots (HT, TTC, réserve, engagé, payé), actions, parties prenantes, achats et notes liés |
 | | Actions | Recherche et filtres sur tout |
 | | Délégations | Ce que j'ai délégué ou attends, par personne, avec relance et courriel de suivi |
 | | Revue hebdo | Captures, retards, projets sans suite, charge, abonnements, checklist |

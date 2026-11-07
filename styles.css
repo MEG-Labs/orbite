@@ -326,3 +326,23 @@ a.lien-jira { color: #7FB3FF; text-decoration: none; font-family: var(--mono); f
   .ligne:has(.boutons-ligne) { grid-template-columns: 1fr !important; }
   .boutons-ligne { justify-content: flex-start; }
 }
+
+/* v4 : budget de projet */
+.tuiles-budget { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 8px; padding: 12px; }
+.tuile-budget { border: 1px solid var(--acier); border-radius: 3px; padding: 8px 10px; display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.tuile-budget span { font-size: 11px; text-transform: uppercase; letter-spacing: .04em; opacity: .7; }
+.tuile-budget strong { font-size: 16px; color: var(--orange); font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.tuile-budget small { font-size: 11px; opacity: .75; }
+.tuile-budget .neg { color: var(--rouge); }
+.lot-budget { border-top: 1px solid var(--acier); }
+.lot-budget > summary { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 2px 12px; padding: 10px 12px; cursor: pointer; list-style: none; }
+.lot-budget > summary::-webkit-details-marker { display: none; }
+.lot-budget > summary::before { content: '▸'; position: absolute; margin-left: -10px; opacity: .6; }
+.lot-budget[open] > summary::before { content: '▾'; }
+.lot-budget > summary .titre { font-weight: 600; }
+.lot-budget > summary .meta { grid-column: 1; font-size: 12px; opacity: .7; }
+.lot-budget > summary .montant { grid-column: 2; grid-row: 1 / span 2; align-self: center; font-variant-numeric: tabular-nums; }
+.ligne-budget { grid-template-columns: minmax(0, 1fr) auto; }
+.ligne-budget .droite { font-variant-numeric: tabular-nums; }
+.ligne-budget.exclu { opacity: .45; text-decoration: line-through; }
+.note-budget { font-size: 11px; opacity: .6; padding: 8px 12px 12px; margin: 0; }
