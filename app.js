@@ -328,14 +328,17 @@ function vueAccueil(v) {
   const demain = plusJours(auj, 1);
   const joursEvt = [...new Set(evenements.map(a => cleJour(a.planifie_debut) < auj ? auj : cleJour(a.planifie_debut)))];
   const libJour = j => j === auj ? 'Aujourd’hui' : j === demain ? 'Demain' : jourLong(j);
+  const evtJour = j => evenements.filter(a => (cleJour(a.planifie_debut) < auj ? auj : cleJour(a.planifie_debut)) === j);
   const actifs = S.projets.filter(p => p.statut === 'Actif');
   const aCompleter = S.actions.filter(a => manquants(a).length);
 
   const cpt = (n, lbl, cls, cible) => `<button class="compteur ${n ? cls : 'calme'}" data-cible="${cible}"><b>${n}</b><span>${lbl}</span></button>`;
   v.innerHTML = `
-    <section class="bloc bloc-evenements"><header><h2>Événements <span class="nb">${evenements.length}</span></h2><button class="btn discret" data-aller="agenda">Agenda</button></header>
-      ${joursEvt.length ? joursEvt.map(j => `<div class="jour-evt ${j === auj ? 'aujourdhui' : ''}"><h3>${esc(libJour(j))}</h3>${liste(evenements.filter(a => (cleJour(a.planifie_debut) < auj ? auj : cleJour(a.planifie_debut)) === j), '', { heureSeule: true })}</div>`).join('')
-        : '<div class="vide">Aucun événement dans les 7 prochains jours.</div>'}</section>
+    <section class="bloc bloc-evenements"><header><h2>Aujourd’hui <span class="nb">${evtJour(auj).length}</span></h2><button class="btn discret" data-aller="agenda">Agenda</button></header>
+      ${liste(evtJour(auj), 'Aucun événement aujourd’hui.', { heureSeule: true })}
+      <details class="plus-tard" ${S.evtOuverts ? 'open' : ''}><summary>7 prochains jours <span class="nb">${evenements.length - evtJour(auj).length}</span></summary>
+        ${joursEvt.filter(j => j !== auj).map(j => `<div class="jour-evt"><h3>${esc(libJour(j))}</h3>${liste(evtJour(j), '', { heureSeule: true })}</div>`).join('') || '<div class="vide">Rien de prévu.</div>'}
+      </details></section>
     <section class="compteurs" aria-label="Indicateurs">
       ${cpt(enCours.length, 'En cours', 'calme', 'en-cours')}
       ${cpt(taches.filter(ouvert).length, 'Tâches ouvertes', 'calme', 'ouvertes')}
@@ -365,6 +368,7 @@ function vueAccueil(v) {
       </div>
     </div>`;
   v.querySelectorAll('[data-aller]').forEach(b => b.onclick = () => { S.vue = b.dataset.aller; rendre(); });
+  const pt = v.querySelector('details.plus-tard'); if (pt) pt.ontoggle = () => { S.evtOuverts = pt.open; };
   const cp = v.querySelector('#choisirPlan'); if (cp) cp.onclick = () => X.choisirPlan();
   v.querySelectorAll('[data-cible]').forEach(b => b.onclick = () => {
     const c = b.dataset.cible;

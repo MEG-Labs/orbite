@@ -367,3 +367,10 @@ a.lien-jira { color: #7FB3FF; text-decoration: none; font-family: var(--mono); f
 .jour-evt.aujourdhui > h3 { color: var(--orange-pale); }
 .jour-evt + .jour-evt { border-top: 1px solid var(--acier); }
 .jour-evt .lignes { margin: 0; }
+.plus-tard { border-top: 1px solid var(--acier); }
+.plus-tard > summary { cursor: pointer; list-style: none; padding: 12px 16px; font-family: var(--mono); font-size: 13px; color: var(--brume); display: flex; align-items: center; gap: 8px; }
+.plus-tard > summary::-webkit-details-marker { display: none; }
+.plus-tard > summary::before { content: '▸'; color: var(--orange); }
+.plus-tard[open] > summary::before { content: '▾'; }
+.plus-tard > summary:hover { color: var(--craie); }
+.plus-tard .jour-evt { border-top: 1px solid var(--acier); }
