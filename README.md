@@ -27,7 +27,14 @@ Tâches, agenda, projets et organisation de la vie courante. Remplace l'espace N
 | | Personnes et domaines | Répertoire et domaines de vie |
 | | Réglages | Notifications, calendriers importés (Google, Outlook) et flux ORBITE, sauvegardes, Jira, hors ligne |
 
-L'accueil commence par **Aujourd'hui, je fais** : au plus trois actions choisies pour la journée.
+L'accueil commence par les **événements du jour** (avec la charge de 8 h à 17 h et les plages libres), les **conflits** entre un trajet à ta charge et un rendez-vous (avec délégation en un geste), puis l'alerte **pneus d'hiver** en octobre et novembre (selon la météo). Ensuite **Aujourd'hui, je fais** : au plus trois actions choisies pour la journée.
+
+Autres outils :
+- **Recherche globale** : Ctrl+K ou / sur ordinateur, loupe dans le bandeau sur téléphone.
+- **Compte rendu** depuis un événement : note liée au projet; les lignes « - [ ] … » deviennent des tâches.
+- **Classement automatique** (Réglages) : un mot-clé dans le titre d'un événement le relie à un projet.
+- **Ligne de temps** des jalons dans chaque projet.
+- **Achats reliés au budget** : un achat commandé engage le poste, reçu il le passe à « Payé »; photo ou PDF de facture en stockage privé `factures`.
 
 Capture rapide : bouton orange, ou touche **N** sur ordinateur (tâche, événement, jalon, rappel, achat, note).
 
@@ -39,7 +46,8 @@ Données importées de Notion le 6 novembre 2026 (colonne `notion_id` pour la tr
 | --- | --- | --- |
 | Événements passés → Terminé | Aux 15 minutes (et à l'ouverture de l'app) | `prive.terminer_evenements_passes()` |
 | Semaine type des transports | Dimanche soir | `prive.generer_semaine_type()` |
-| Notifications (matin, soir, rendez-vous) | Chaque heure à :15 | Edge Function `rappels` |
+| Notifications du matin et du soir (avec conflits de demain) | Chaque heure à :15 | Edge Function `rappels` |
+| Rappel 15 min avant chaque événement et trajet | Aux 5 minutes | Edge Function `rappels` (`{"mode":"rdv"}`), sans doublon grâce à `rappels_envoyes` |
 | Import des calendriers iCal (Google, Outlook…) | Chaque heure à :45 | Edge Function `outlook`, liens dans le réglage `calendriers_ics` |
 | Statut Jira | Chaque heure, jours de semaine | Edge Function `jira` (inactive sans `JIRA_COURRIEL` et `JIRA_JETON`) |
 | Sauvegarde complète (12 conservées) | Dimanche matin | Edge Function `sauvegarde` → stockage privé `sauvegardes` |

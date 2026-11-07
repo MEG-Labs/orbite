@@ -130,6 +130,7 @@ export function installerModules(c) {
   }
 
   function vueVehicules(v) {
+    setTimeout(() => { const h = c.encartPneus?.(); if (h) v.insertAdjacentHTML('afterbegin', h); });
     const actifs = S.entretiens.filter(e => e.actif);
     const attention = actifs.map(e => [e, statutEntretien(e)]).filter(([, s]) => ['retard', 'mois', 'avenir', 'config'].includes(s.cle)).sort((a, b) => a[1].ordre - b[1].ordre);
     const an = anDe(aujourdhui());
@@ -224,7 +225,7 @@ export function installerModules(c) {
         ${a.quantite ? `<span>${esc(a.quantite)} ${esc(a.unite || '')}</span>` : '<span class="retard">Quantité à préciser</span>'}
         ${a.departement ? `<span>${esc(a.departement)}</span>` : ''}${p ? `<span>${esc(p.titre)}</span>` : ''}
         ${a.priorite ? `<span class="retard">${esc(a.priorite)}</span>` : ''}${a.besoin_pour ? `<span>Pour le ${esc(jourDate(a.besoin_pour))}</span>` : ''}
-        ${!['À acheter', 'Reçu'].includes(a.statut) ? pastille(a.statut) : ''}</div></div>
+        ${!['À acheter', 'Reçu'].includes(a.statut) ? pastille(a.statut) : ''}${a.budget_ligne_id ? '<span>budget</span>' : ''}${a.facture_chemin ? '<span>facture</span>' : ''}</div></div>
       <div class="droite">${fmtArgent(total)}</div></li>`;
   }
   function vueAchats(v) {
@@ -253,7 +254,22 @@ export function installerModules(c) {
   }
   function ficheAchat(a) {
     const magasins = [...new Set(['Canac', ...S.achats.map(x => x.magasin).filter(Boolean)])];
-    fiche({ titre: a.id ? a.item : 'Nouvel article', table: 'achats', ligne: a, champs: [
+    const postes = () => S.budget.slice().sort((x, y) => (x.lot || '').localeCompare(y.lot || '') || x.poste.localeCompare(y.poste))
+      .map(l => [l.id, `${parId(S.projets, l.projet_id)?.titre || ''} · ${(l.lot || '').replace(/^\d+ · /, '')} · ${l.poste}`]);
+    const pied = `<div class="champ large facture"><span>Photo ou PDF de la facture</span>
+      ${a.facture_chemin ? `<div class="rangee"><button type="button" class="btn" data-voir-facture>Voir la facture</button><span class="aide">Une nouvelle photo remplace l’ancienne.</span></div>` : ''}
+      <input type="file" name="facture" accept="image/*,application/pdf"></div>`;
+    const d = fiche({ titre: a.id ? a.item : 'Nouvel article', table: 'achats', ligne: a, pied, apres: async (id, val, fd) => {
+      const f = fd.get('facture');
+      if (!f || !f.size) return;
+      if (f.size > 10 * 1024 * 1024) return toast('Facture trop lourde (10 Mo max.)');
+      const ext = (f.name.split('.').pop() || 'jpg').toLowerCase().replace(/[^a-z0-9]/g, '');
+      const chemin = `${id}/${Date.now()}.${ext}`;
+      const up = await sb.storage.from('factures').upload(chemin, f, { contentType: f.type || undefined, upsert: false });
+      if (up.error) return toast('Facture non envoyée : ' + up.error.message);
+      if (a.facture_chemin) await sb.storage.from('factures').remove([a.facture_chemin]);
+      await sb.from('achats').update({ facture_chemin: chemin }).eq('id', id);
+    }, champs: [
       { k: 'item', l: 'Article', req: true, large: true, titre: true },
       { k: 'statut', l: 'Statut', t: 'select', o: STATUTS_ACHAT, req: true },
       { k: 'magasin', l: 'Magasin', ph: magasins.join(', ') },
@@ -264,8 +280,17 @@ export function installerModules(c) {
       { section: 'Commande en ligne' },
       { k: 'commande_le', l: 'Commandé le', t: 'date' }, { k: 'reception_prevue', l: 'Réception prévue', t: 'date' },
       { k: 'quantite_recue', l: 'Quantité reçue', t: 'number' }, { k: 'reference', l: 'Référence produit' },
-      { k: 'lien', l: 'Lien produit', large: true }, { k: 'notes', l: 'Notes', t: 'textarea' },
+      { k: 'lien', l: 'Lien produit', large: true },
+      { section: 'Budget' },
+      { k: 'budget_ligne_id', l: 'Poste de budget (passe à « Payé » quand l’article est reçu)', t: 'select', o: postes, large: true },
+      { k: 'notes', l: 'Notes', t: 'textarea' },
     ] });
+    const vf = d.querySelector('[data-voir-facture]');
+    if (vf) vf.onclick = async () => {
+      const { data, error } = await sb.storage.from('factures').createSignedUrl(a.facture_chemin, 300);
+      if (error) return toast('Échec : ' + error.message);
+      window.open(data.signedUrl, '_blank', 'noopener');
+    };
   }
 
   /* ================= Abonnements ================= */
@@ -330,7 +355,7 @@ export function installerModules(c) {
   function ligneTrajet(t) {
     return `<li class="ligne trajet ${t.statut === 'Annulé' ? 'ferme' : ''}" data-trajet="${t.id}">
       <div class="heure">${t.date_heure ? esc(fmtHeure.format(new Date(t.date_heure))) : '—'}</div>
-      <div><div class="titre">${esc(t.titre.split(' • ').pop())}</div><div class="meta">${t.enfants ? `<span>${esc(t.enfants)}</span>` : ''}${t.depart || t.destination ? `<span>${esc(t.depart || '?')} → ${esc(t.destination || '?')}</span>` : ''}</div></div>
+      <div><div class="titre">${esc(t.titre.split(' • ').pop())}</div><div class="meta">${t.enfants ? `<span>${esc(t.enfants)}</span>` : ''}${t.depart || t.destination ? `<span>${esc(t.depart || '?')} → ${esc(t.destination || '?')}</span>` : ''}${(() => { const e = c.conflitDe(t); return e ? `<span class="retard">${t.responsable ? 'Conflit' : 'Tu es pris'} : ${esc(e.titre)} ${esc(fmtHeure.format(new Date(e.planifie_debut)))}</span>` : ''; })()}</div></div>
       <div class="selecteurs">
         <select data-resp="${t.id}" aria-label="Responsable">${['', ...responsables()].map(r => `<option value="${esc(r)}" ${r === (t.responsable || '') ? 'selected' : ''}>${r || 'Qui?'}</option>`).join('')}</select>
         <select data-stt="${t.id}" aria-label="Statut" class="stt-${esc(t.statut)}">${STATUTS_TRAJET.map(s => `<option ${s === t.statut ? 'selected' : ''}>${s}</option>`).join('')}</select>
@@ -490,7 +515,13 @@ export function installerModules(c) {
     brancher(v, '[data-note]', el => ficheNote(parId(S.notes, el.dataset.note)));
   }
   function ficheNote(n) {
-    fiche({ titre: n.id ? n.titre : 'Nouvelle note', table: 'notes', ligne: n, champs: [
+    const evt = n.action_id ? parId(S.actions, n.action_id) : null;
+    const issues = n.id ? S.actions.filter(a => a.note_id === n.id) : [];
+    const pied = n.id ? `<div class="champ large pied-note">
+      ${evt ? `<span class="aide">Événement : ${esc(evt.titre)}${evt.planifie_debut ? ' · ' + esc(jourDate(cleJour(evt.planifie_debut))) : ''}</span>` : ''}
+      ${issues.length ? `<span class="aide">${issues.length} tâche${issues.length > 1 ? 's' : ''} créée${issues.length > 1 ? 's' : ''} depuis cette note</span>` : ''}
+      <button type="button" class="btn" data-creer-actions>Créer les tâches « - [ ] »</button></div>` : '';
+    const d = fiche({ titre: n.id ? n.titre : 'Nouvelle note', table: 'notes', ligne: n, pied, champs: [
       { k: 'titre', l: 'Titre', req: true, large: true, titre: true },
       { k: 'type', l: 'Type', t: 'select', o: TYPES_NOTE, req: true }, { k: 'date', l: 'Date', t: 'date' },
       { k: 'contenu', l: 'Contenu', t: 'textarea', rows: 14 },
@@ -498,6 +529,14 @@ export function installerModules(c) {
       { k: 'mots_cles', l: 'Mots-clés', t: 'multi', o: ['À explorer', 'Important', 'Réutilisable'] },
       { k: 'archivee', l: 'Archivée', t: 'bool' },
     ] });
+    const b = d.querySelector('[data-creer-actions]');
+    if (b) b.onclick = async () => {
+      b.disabled = true;
+      const zone = d.querySelector('[name=contenu]');
+      const nouveau = await c.creerActionsDepuisNote({ ...n, projet_id: d.querySelector('[name=projet_id]').value || null, domaine_id: d.querySelector('[name=domaine_id]').value || null }, zone.value);
+      if (nouveau != null) zone.value = nouveau;
+      b.disabled = false;
+    };
   }
 
   /* ================= Routines ================= */
@@ -704,7 +743,7 @@ export function installerModules(c) {
         const tLot = ls.filter(l => l.statut !== 'Exclu').reduce((t, l) => t + ttcLigne(l), 0);
         const nbAC = ls.filter(l => l.statut === 'À chiffrer').length;
         return `<details class="lot-budget" data-lot="${esc(lot)}" ${ouverts.has(lot) ? 'open' : ''}><summary><span class="titre">${esc(lot)}</span><span class="meta">${ls.length} poste${ls.length > 1 ? 's' : ''}${nbAC ? ` · ${nbAC} à chiffrer` : ''}</span><span class="montant">${fmtArgent(tLot)}</span></summary>
-          <ul class="lignes">${ls.map(l => `<li class="ligne ligne-budget ${l.statut === 'Exclu' ? 'exclu' : ''}" data-budget="${l.id}" role="button" tabindex="0"><div><div class="titre">${esc(l.poste)}</div><div class="meta">${pastille(l.statut, l.statut === 'À chiffrer' ? 'st-Bloqué' : ['Engagé', 'Payé'].includes(l.statut) ? 'st-Terminé' : '')}${l.quantite != null ? `<span>${+l.quantite} ${esc(l.unite || '')} × ${fmtArgent(l.prix_unitaire_ht)}</span>` : ''}${l.fournisseur ? `<span>${esc(l.fournisseur)}</span>` : ''}${l.chiffrage_valide ? '<span>✓ validé</span>' : ''}</div></div><div class="droite">${htLigne(l) ? fmtArgent(ttcLigne(l)) : '—'}</div></li>`).join('')}</ul></details>`;
+          <ul class="lignes">${ls.map(l => `<li class="ligne ligne-budget ${l.statut === 'Exclu' ? 'exclu' : ''}" data-budget="${l.id}" role="button" tabindex="0"><div><div class="titre">${esc(l.poste)}</div><div class="meta">${pastille(l.statut, l.statut === 'À chiffrer' ? 'st-Bloqué' : ['Engagé', 'Payé'].includes(l.statut) ? 'st-Terminé' : '')}${l.quantite != null ? `<span>${+l.quantite} ${esc(l.unite || '')} × ${fmtArgent(l.prix_unitaire_ht)}</span>` : ''}${l.fournisseur ? `<span>${esc(l.fournisseur)}</span>` : ''}${l.chiffrage_valide ? '<span>✓ validé</span>' : ''}${(() => { const ach = S.achats.filter(x => x.budget_ligne_id === l.id && x.statut !== 'Annulé'); return ach.length ? `<span>${ach.length} achat${ach.length > 1 ? 's' : ''}${ach.some(x => x.facture_chemin) ? ' · facture' : ''}</span>` : ''; })()}</div></div><div class="droite">${htLigne(l) ? fmtArgent(ttcLigne(l)) : '—'}</div></li>`).join('')}</ul></details>`;
       }).join('')}
       <p class="note-budget">TTC calculé avec ${TAXES_QC} % (TPS + TVQ) quand une ligne n’a pas de taux.</p>`;
     return bloc('Budget', lignes.length, corps, `<div class="boutons"><button class="btn discret" data-reserve="${p.id}">Réserve</button><button class="btn discret" data-ajbudget="${p.id}">Ajouter</button></div>`, 'bloc-budget');

@@ -2,6 +2,7 @@ import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js
 import { SUPABASE_URL, SUPABASE_KEY, FUSEAU } from './config.js';
 import { installerModules } from './modules.js';
 import { installerExtras } from './extras.js';
+import { installerLot5 } from './lot5.js';
 
 const sb = createClient(SUPABASE_URL, SUPABASE_KEY, { auth: { persistSession: true, autoRefreshToken: true } });
 
@@ -14,9 +15,9 @@ const STATUTS_PROJET = ['À envisager', 'À planifier', 'Actif', 'En pause', 'Te
 const CONTEXTES = ['Maison', 'Bureau', 'Téléphone', 'Ordinateur', 'Courses', 'Partout'];
 
 const S = { session: null, actions: [], projets: [], domaines: [], personnes: [], vue: 'accueil', filtres: {}, agendaPasses: false,
-  vehicules: [], entretiens: [], interventions: [], intEnt: [], livres: [], achats: [], abonnements: [], trajets: [], routines: [], notes: [], budget: [],
+  vehicules: [], entretiens: [], interventions: [], intEnt: [], livres: [], achats: [], abonnements: [], trajets: [], routines: [], notes: [], budget: [], regles: [],
   unites: [], postes: [], titulaires: [], participations: [], reglages: [], push: [], file: [], horsLigne: null };
-let M, X; // modules, installés après la définition des fonctions communes
+let M, X, L; // modules, installés après la définition des fonctions communes
 
 const MODULES = [
   { k: 'accueil', l: 'Accueil', g: 'Pilotage', principal: true },
@@ -125,6 +126,7 @@ async function charger() {
     routines: sb.from('routines').select('*'),
     notes: sb.from('notes').select('*'),
     budget: sb.from('budget_lignes').select('*'),
+    regles: sb.from('regles_classement').select('*'),
     unites: sb.from('unites').select('*').order('nom'),
     postes: sb.from('postes').select('*'),
     titulaires: sb.from('postes_titulaires').select('*'),
@@ -182,6 +184,7 @@ function rendre() {
     <header class="bandeau">
       <div class="marque">${LOGO}ORBITE</div>
       <div class="devise">Processus de soutien. Projets logistiques. Le reste, <u>je délègue</u>.</div>
+      <button class="btn-recherche" id="btnRecherche" aria-label="Chercher partout" title="Chercher partout (Ctrl+K)"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5" fill="none" stroke="currentColor" stroke-width="2"/><path d="m15.5 15.5 5 5" stroke="currentColor" stroke-width="2" stroke-linecap="square"/></svg><span>Chercher</span><kbd>Ctrl K</kbd></button>
       <div class="horloge" id="horloge"></div>
     </header>
     <div class="coquille">
@@ -194,10 +197,12 @@ function rendre() {
     <button class="fab" id="fab" aria-label="Capture rapide" title="Capture rapide (N)">${ico('plus')}</button>`;
   app.querySelectorAll('[data-vue]').forEach(b => b.onclick = () => { S.vue = b.dataset.vue; S.filtres = {}; history.replaceState(null, '', S.vue === 'accueil' ? location.pathname : '#' + S.vue); rendre(); window.scrollTo(0, 0); });
   $('#fab').onclick = () => ouvrirCapture();
+  $('#btnRecherche').onclick = () => L.ouvrirRecherche();
   $('#deco').onclick = async () => { await sb.auth.signOut(); };
   horloge();
   const v = document.createElement('div'); $('#vue').appendChild(v);
-  ({ accueil: vueAccueil, agenda: vueAgenda, projets: vueProjets, projet: vueProjet, actions: vueActions, reperes: vueReperes, ...M.vues, ...X.vues }[S.vue] || vueAccueil)(v);
+  ({ accueil: vueAccueil, agenda: vueAgenda, projets: vueProjets, projet: vueProjet, actions: vueActions, reperes: vueReperes, ...M.vues, ...X.vues,
+    reglages: async v => { await X.vues.reglages(v); L.complementReglages(v); } }[S.vue] || vueAccueil)(v);
   brancherLignes(v);
 }
 
@@ -242,6 +247,8 @@ async function majMeteo() {
       lieu: ici ? 'Ta position' : METEO.donnees?.lieu === 'Ta position' ? 'Dernière position connue' : 'Québec (position non autorisée)' };
     try { localStorage.setItem('orbite-meteo', JSON.stringify(METEO.donnees)); } catch { }
     horloge();
+    // L'alerte pneus dépend de la température : on redessine l'accueil si elle apparaît ou disparaît.
+    if (S.session && S.vue === 'accueil' && L && !document.querySelector('dialog[open]') && !!L.alertePneus() !== !!document.querySelector('.alerte-pneus')) rendre();
   } catch { }
 }
 setInterval(majMeteo, 20 * 60e3);
@@ -335,10 +342,13 @@ function vueAccueil(v) {
   const cpt = (n, lbl, cls, cible) => `<button class="compteur ${n ? cls : 'calme'}" data-cible="${cible}"><b>${n}</b><span>${lbl}</span></button>`;
   v.innerHTML = `
     <section class="bloc bloc-evenements"><header><h2>Aujourd’hui <span class="nb">${evtJour(auj).length}</span></h2><button class="btn discret" data-aller="agenda">Agenda</button></header>
+      ${L.blocCharge()}
       ${liste(evtJour(auj), 'Aucun événement aujourd’hui.', { heureSeule: true })}
       <details class="plus-tard" ${S.evtOuverts ? 'open' : ''}><summary>7 prochains jours <span class="nb">${evenements.length - evtJour(auj).length}</span></summary>
         ${joursEvt.filter(j => j !== auj).map(j => `<div class="jour-evt"><h3>${esc(libJour(j))}</h3>${liste(evtJour(j), '', { heureSeule: true })}</div>`).join('') || '<div class="vide">Rien de prévu.</div>'}
       </details></section>
+    ${L.blocConflits()}
+    ${L.encartPneus()}
     <section class="compteurs" aria-label="Indicateurs">
       ${cpt(enCours.length, 'En cours', 'calme', 'en-cours')}
       ${cpt(taches.filter(ouvert).length, 'Tâches ouvertes', 'calme', 'ouvertes')}
@@ -368,6 +378,7 @@ function vueAccueil(v) {
       </div>
     </div>`;
   v.querySelectorAll('[data-aller]').forEach(b => b.onclick = () => { S.vue = b.dataset.aller; rendre(); });
+  L.brancherConflits(v);
   const pt = v.querySelector('details.plus-tard'); if (pt) pt.ontoggle = () => { S.evtOuverts = pt.open; };
   const cp = v.querySelector('#choisirPlan'); if (cp) cp.onclick = () => X.choisirPlan();
   v.querySelectorAll('[data-cible]').forEach(b => b.onclick = () => {
@@ -464,6 +475,7 @@ function vueProjet(v) {
     <div class="grille">
       <div class="colonne">
         <section class="bloc"><header><h2>Résultat attendu</h2></header><div class="vide" style="color:var(--craie)">${p.resultat_attendu ? esc(p.resultat_attendu) : '<span style="color:var(--brume)">Pas encore défini. Quel changement concret doit être obtenu?</span>'}</div></section>
+        ${L.blocLigneTemps(p)}
         <section class="bloc"><header><h2>Actions ouvertes <span class="nb">${ouverts.length}</span></h2></header>${liste(ouverts, 'Aucune action ouverte.', { montrerProjet: false })}</section>
         ${fermes.length ? `<section class="bloc"><header><h2>Terminées et annulées <span class="nb">${fermes.length}</span></h2></header>${liste(fermes, '', { montrerProjet: false })}</section>` : ''}
       </div>
@@ -477,6 +489,7 @@ function vueProjet(v) {
   $('#modifierProjet').onclick = () => ouvrirProjet(p);
   $('#ajoutAction').onclick = () => ouvrirAction({ type: 'Tâche', statut: 'À faire', projet_id: p.id, domaine_id: p.domaine_id });
   M.brancherProjet(v, p);
+  L.brancherLigneTemps(v, p);
 }
 
 /* ---------- Toutes les actions ---------- */
@@ -667,6 +680,8 @@ function ouvrirAction(a) {
     </div>
     <div class="pied">
       ${nouveau ? '' : '<button type="button" class="btn danger gauche" id="suppr">Supprimer</button>'}
+      ${!nouveau && a.type === 'Événement' ? `<button type="button" class="btn" id="cr">${L.noteDe(a) ? 'Ouvrir le compte rendu' : 'Compte rendu'}</button>` : ''}
+      ${a.note_id && parId(S.notes, a.note_id) ? '<button type="button" class="btn discret" id="voirNote">Note d’origine</button>' : ''}
       <button type="button" class="btn" data-fermer>Annuler</button><button type="submit" class="btn primaire">Enregistrer</button>
     </div></form>`, async fd => {
     const vide = k => (fd.get(k) || '').trim() || null;
@@ -693,6 +708,8 @@ function ouvrirAction(a) {
   const cb = d.querySelector('[name=journee_entiere]');
   const bascule = () => { d.querySelectorAll('.heure').forEach(e => e.hidden = cb.checked); d.querySelector('.jourent').hidden = !cb.checked; };
   cb.onchange = bascule; bascule();
+  const cr = d.querySelector('#cr'); if (cr) cr.onclick = () => { d.close(); L.compteRendu(a); };
+  const vn = d.querySelector('#voirNote'); if (vn) vn.onclick = () => { d.close(); M.ficheNote(parId(S.notes, a.note_id)); };
   const s = d.querySelector('#suppr');
   if (s) s.onclick = async () => {
     if (s.dataset.confirme !== '1') { s.dataset.confirme = '1'; s.textContent = 'Confirmer la suppression'; return; }
@@ -829,7 +846,11 @@ async function demarrer(session) {
 }
 
 M = installerModules({ sb, S, $, esc, toast, parId, aujourdhui, plusJours, jourDate, jourLong, cleJour, fmtHeure, versLocal, depuisLocal,
-  dialogue, rafraichir, rendre: () => rendre(), liste, ouvert, enRetard, manquants, carteProjet, ouvrirPersonne, ouvrirAction, MODULES, ico });
+  dialogue, rafraichir, rendre: () => rendre(), liste, ouvert, enRetard, manquants, carteProjet, ouvrirPersonne, ouvrirAction, MODULES, ico,
+  conflitDe: t => L.conflitDe(t), encartPneus: () => L.encartPneus(), creerActionsDepuisNote: (n, txt) => L.creerActionsDepuisNote(n, txt), SUPA_URL: SUPABASE_URL });
+
+L = installerLot5({ sb, S, $, esc, toast, parId, aujourdhui, plusJours, jourDate, jourLong, cleJour, fmtHeure, dialogue, rafraichir, ouvert,
+  rendre: () => rendre(), ouvrirAction, ouvrirPersonne, ficheNote: n => M.ficheNote(n), ficheAchat: a => M.ficheAchat(a), meteo: () => METEO.donnees });
 
 X = installerExtras({ sb, S, $, esc, toast, parId, aujourdhui, plusJours, jourDate, cleJour, dialogue, rafraichir, liste, ouvert, COULEURS_CAL });
 
@@ -842,6 +863,7 @@ sb.auth.onAuthStateChange((evt, session) => {
 });
 
 document.addEventListener('keydown', e => {
+  if (S.session && ((e.key.toLowerCase() === 'k' && (e.ctrlKey || e.metaKey)) || (e.key === '/' && !document.querySelector('dialog[open]') && !/INPUT|TEXTAREA|SELECT/.test(document.activeElement.tagName)))) { e.preventDefault(); return L.ouvrirRecherche(); }
   if (e.key.toLowerCase() === 'n' && S.session && !document.querySelector('dialog[open]') && !/INPUT|TEXTAREA|SELECT/.test(document.activeElement.tagName)) { e.preventDefault(); ouvrirCapture(); }
 });
 document.addEventListener('visibilitychange', () => { if (!document.hidden && S.session && !document.querySelector('dialog[open]')) rafraichir().catch(() => {}); });

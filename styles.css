@@ -26,7 +26,7 @@ a { color: var(--orange-pale); }
 
 /* ---------- Bandeau ---------- */
 .bandeau {
-  display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 16px;
+  display: grid; grid-template-columns: auto 1fr auto auto; align-items: center; gap: 16px;
   padding: 10px 20px; background: #081822;
   border-bottom: 3px solid var(--orange);
   position: sticky; top: 0; z-index: 20;
@@ -213,7 +213,7 @@ fieldset legend { font: 700 13px var(--mono); color: var(--brume); padding: 0 8p
 }
 @media (max-width: 760px) {
   body { font-size: 15px; }
-  .bandeau { grid-template-columns: auto 1fr; padding: 10px 16px; padding-top: max(10px, env(safe-area-inset-top)); }
+  .bandeau { grid-template-columns: auto 1fr auto; gap: 10px; padding: 10px 16px; padding-top: max(10px, env(safe-area-inset-top)); }
   .devise { display: none; }
   .horloge { font-size: 18px; }
   .horloge .meteo { margin-left: 8px; padding-left: 8px; }
@@ -374,3 +374,62 @@ a.lien-jira { color: #7FB3FF; text-decoration: none; font-family: var(--mono); f
 .plus-tard[open] > summary::before { content: '▾'; }
 .plus-tard > summary:hover { color: var(--craie); }
 .plus-tard .jour-evt { border-top: 1px solid var(--acier); }
+
+/* ---------- Lot 5 ---------- */
+/* Charge du jour */
+.charge { padding: 10px 16px 12px; border-bottom: 1px solid var(--acier); }
+.charge-texte { font-size: 13px; color: var(--brume); }
+.charge-texte b { color: var(--craie); font-family: var(--mono); }
+.charge-barre { position: relative; height: 10px; margin-top: 8px; background: var(--nuit); border: 1px solid var(--acier); }
+.charge-barre i { position: absolute; top: 0; bottom: 0; background: color-mix(in srgb, var(--orange) 70%, transparent); }
+.charge-barre b { position: absolute; top: -4px; bottom: -4px; width: 2px; background: var(--craie); }
+.charge-graduations { display: flex; justify-content: space-between; font: 10px var(--mono); color: var(--brume); margin-top: 3px; }
+/* Conflits */
+.ligne-conflit select { max-width: 150px; }
+/* Pneus */
+.alerte-pneus { border: 1px solid var(--orange); border-left-width: 4px; background: color-mix(in srgb, var(--orange) 10%, var(--coque)); padding: 12px 16px; margin-bottom: 22px; cursor: pointer; font-size: 14px; }
+.alerte-pneus b { color: var(--orange-pale); font-family: var(--mono); }
+.alerte-pneus span { display: block; color: var(--brume); font-size: 13px; margin-top: 4px; }
+/* Ligne de temps */
+.ligne-temps { padding: 22px 22px 8px; }
+.lt-axe { position: relative; height: 6px; background: var(--acier); }
+.lt-ecoule { position: absolute; left: 0; top: 0; bottom: 0; background: var(--brume); opacity: .55; }
+.lt-jalon { position: absolute; top: 50%; width: 22px; height: 22px; transform: translate(-50%, -50%); display: grid; place-items: center; font: 700 10px var(--mono); background: var(--coque); border: 2px solid var(--brume); color: var(--craie); }
+.lt-jalon.avenir { border-color: var(--orange); }
+.lt-jalon.fait { background: var(--vert, #4FB286); border-color: var(--vert, #4FB286); color: var(--nuit); }
+.lt-jalon.retard { border-color: var(--rouge); color: var(--rouge); }
+.lt-auj { position: absolute; top: -10px; bottom: -10px; width: 2px; background: var(--orange); }
+.lt-auj em { position: absolute; top: -16px; left: 50%; transform: translateX(-50%); font: 10px var(--mono); font-style: normal; color: var(--orange-pale); }
+.lt-bornes { display: flex; justify-content: space-between; font: 11px var(--mono); color: var(--brume); margin-top: 14px; }
+.lt-ligne { grid-template-columns: 26px minmax(0, 1fr); }
+.lt-num { width: 22px; height: 22px; display: grid; place-items: center; font: 700 10px var(--mono); border: 2px solid var(--orange); }
+.lt-ligne.fait .lt-num { background: var(--vert, #4FB286); border-color: var(--vert, #4FB286); color: var(--nuit); }
+.lt-ligne.retard .lt-num { border-color: var(--rouge); color: var(--rouge); }
+.lt-ligne.fait .titre { color: var(--brume); }
+/* Note : tâches */
+.pied-note { display: flex; flex-wrap: wrap; gap: 8px 14px; align-items: center; }
+.facture input[type=file] { color: var(--brume); font-size: 13px; }
+/* Recherche */
+.btn-recherche { display: flex; align-items: center; gap: 8px; margin-left: auto; margin-right: 18px; background: var(--nuit); border: 1px solid var(--acier); color: var(--brume); font: 13px var(--mono); padding: 7px 10px; border-radius: var(--r); cursor: pointer; }
+.btn-recherche:hover { border-color: var(--orange); color: var(--craie); }
+.btn-recherche svg { width: 16px; height: 16px; }
+.btn-recherche kbd { font: 11px var(--mono); border: 1px solid var(--acier); padding: 1px 5px; color: var(--brume); }
+dialog.recherche { width: min(680px, calc(100vw - 16px)); max-width: none; margin: 8vh auto auto; inset-inline: 0; }
+dialog.recherche input[type=search]::-webkit-search-cancel-button { display: none; }
+dialog.recherche .tete-d input { flex: 1; font-size: 17px; background: transparent; border: 0; outline: 0; color: var(--craie); padding: 4px 0; }
+dialog.recherche .resultats { max-height: 60vh; overflow: auto; display: block; padding-top: 4px; }
+.groupe-res h3 { font: 700 11px var(--mono); letter-spacing: .06em; text-transform: uppercase; color: var(--brume); margin: 14px 0 6px; }
+.res { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; width: 100%; text-align: left; background: none; border: 0; border-left: 2px solid transparent; padding: 8px 10px; color: var(--craie); cursor: pointer; }
+.res:hover, .res:focus { background: var(--coque); border-left-color: var(--orange); outline: 0; }
+.res .titre { font-weight: 600; }
+.res .meta { font-size: 12px; color: var(--brume); }
+.res mark { background: color-mix(in srgb, var(--orange) 35%, transparent); color: inherit; }
+@media (max-width: 760px) {
+  .btn-recherche { margin-right: 0; padding: 7px; }
+  .btn-recherche span, .btn-recherche kbd { display: none; }
+  .ligne-conflit { grid-template-columns: minmax(0, 1fr) !important; }
+  .ligne-conflit select { max-width: none; }
+  .ligne-temps { padding: 22px 16px 8px; }
+  dialog.recherche { margin-top: 8px; }
+  .ligne-conflit + .ligne-conflit, .bloc.signal header .btn { }
+}
