@@ -203,9 +203,48 @@ function rendre() {
 function horloge() {
   const el = $('#horloge'); if (!el) return;
   const n = new Date();
-  el.innerHTML = `${fmtHeure.format(n)}<small>${fmtJourLong.format(n)}</small>`;
+  const m = METEO.donnees;
+  const temp = m ? `<span class="meteo" title="${esc(`${m.lieu} · ${CIEL[m.code] || ''} · ressenti ${Math.round(m.ressenti)}° · ${fmtHeure.format(new Date(m.le))}`)}">${Math.round(m.t)}°</span>` : '';
+  el.innerHTML = `${fmtHeure.format(n)}${temp}<small>${fmtJourLong.format(n)}</small>`;
+  const t = el.querySelector('.meteo'); if (t) t.onclick = () => toast(t.title);
 }
 setInterval(horloge, 15000);
+
+/* ---------- Météo du bandeau (Open-Meteo, sans clé) ---------- */
+const CIEL = { 0: 'Dégagé', 1: 'Peu nuageux', 2: 'Partiellement nuageux', 3: 'Couvert', 45: 'Brouillard', 48: 'Brouillard givrant', 51: 'Bruine', 53: 'Bruine', 55: 'Bruine forte',
+  56: 'Bruine verglaçante', 57: 'Bruine verglaçante', 61: 'Pluie faible', 63: 'Pluie', 65: 'Pluie forte', 66: 'Pluie verglaçante', 67: 'Pluie verglaçante',
+  71: 'Neige faible', 73: 'Neige', 75: 'Neige forte', 77: 'Grésil', 80: 'Averses', 81: 'Averses', 82: 'Averses fortes', 85: 'Averses de neige', 86: 'Averses de neige fortes',
+  95: 'Orage', 96: 'Orage et grêle', 99: 'Orage et grêle' };
+const METEO = { donnees: null };
+try { METEO.donnees = JSON.parse(localStorage.getItem('orbite-meteo') || 'null'); } catch { }
+const QUEBEC = { lat: 46.81, lon: -71.21 };
+function position() {
+  return new Promise(ok => {
+    if (!navigator.geolocation) return ok(null);
+    navigator.geolocation.getCurrentPosition(p => ok({ lat: p.coords.latitude, lon: p.coords.longitude }), () => ok(null),
+      { enableHighAccuracy: false, maximumAge: 30 * 60e3, timeout: 15e3 });
+  });
+}
+async function majMeteo() {
+  if (!navigator.onLine) return;
+  const ici = await position();
+  const pos = ici || (METEO.donnees?.lat != null ? METEO.donnees : QUEBEC);
+  // Coordonnées arrondies (environ 1 km) : assez pour la météo, sans transmettre l'adresse exacte.
+  const lat = (+pos.lat).toFixed(2), lon = (+pos.lon).toFixed(2);
+  try {
+    const r = await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current=temperature_2m,apparent_temperature,weather_code&timezone=America%2FToronto`);
+    if (!r.ok) return;
+    const c = (await r.json()).current;
+    METEO.donnees = { t: c.temperature_2m, ressenti: c.apparent_temperature, code: c.weather_code, le: new Date().toISOString(), lat, lon,
+      lieu: ici ? 'Ta position' : METEO.donnees?.lieu === 'Ta position' ? 'Dernière position connue' : 'Québec (position non autorisée)' };
+    try { localStorage.setItem('orbite-meteo', JSON.stringify(METEO.donnees)); } catch { }
+    horloge();
+  } catch { }
+}
+setInterval(majMeteo, 20 * 60e3);
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible' && (!METEO.donnees || Date.now() - new Date(METEO.donnees.le) > 20 * 60e3)) majMeteo();
+});
 
 /* ---------- Ligne d'action réutilisable ---------- */
 function ligne(a, { montrerProjet = true } = {}) {
@@ -760,6 +799,7 @@ async function demarrer(session) {
   S.session = session;
   const h = location.hash.slice(1); if (MODULES.some(m => m.k === h)) S.vue = h;
   $('#app').innerHTML = '<div class="connexion"><p style="color:var(--brume);font-family:var(--mono)">Chargement…</p></div>';
+  majMeteo();
   try { await charger(); rendre(); X.viderFile(); } catch (e) { $('#app').innerHTML = `<div class="connexion"><p class="erreur">Impossible de charger les données : ${esc(e.message)}</p></div>`; }
 }
 
