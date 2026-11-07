@@ -37,6 +37,7 @@ Données importées de Notion le 6 novembre 2026 (colonne `notion_id` pour la tr
 
 | Tâche programmée | Quand (heure de Toronto) | Fonction |
 | --- | --- | --- |
+| Événements passés → Terminé | Aux 15 minutes (et à l'ouverture de l'app) | `prive.terminer_evenements_passes()` |
 | Semaine type des transports | Dimanche soir | `prive.generer_semaine_type()` |
 | Notifications (matin, soir, rendez-vous) | Chaque heure à :15 | Edge Function `rappels` |
 | Import du calendrier Outlook publié | Chaque heure à :45 | Edge Function `outlook` |

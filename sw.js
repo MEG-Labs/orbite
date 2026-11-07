@@ -1,5 +1,5 @@
 // ORBITE : coquille hors ligne, notifications.
-const CACHE = 'orbite-v4';
+const CACHE = 'orbite-v5';
 const COQUILLE = ['./', 'index.html', 'styles.css', 'app.js', 'modules.js', 'extras.js', 'config.js', 'icon.svg', 'icon-192.png', 'manifest.webmanifest'];
 const LIBS = 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/+esm';
 

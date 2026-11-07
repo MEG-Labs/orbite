@@ -146,6 +146,16 @@ async function charger() {
   }
   cles.forEach((k, i) => { S[k] = res[i].data; });
   S.horsLigne = null;
+  // Événements passés : terminés automatiquement (aussi fait côté serveur aux 15 minutes).
+  const maintenant = new Date(), auj = cleJour(maintenant);
+  const passes = S.actions.filter(a => a.type === 'Événement' && !['Terminé', 'Annulé'].includes(a.statut) && (
+    !a.planifie_debut ? a.echeance && a.echeance < auj
+      : a.journee_entiere ? cleJour(a.planifie_fin || a.planifie_debut) < auj
+      : new Date(a.planifie_fin || a.planifie_debut) < maintenant));
+  if (passes.length) {
+    const { error } = await sb.from('actions').update({ statut: 'Terminé' }).in('id', passes.map(a => a.id));
+    if (!error) passes.forEach(a => { a.statut = 'Terminé'; });
+  }
   try { localStorage.setItem('orbite-cache', JSON.stringify({ le: new Date().toISOString(), donnees: Object.fromEntries(cles.map(k => [k, S[k]])) })); } catch { }
 }
 async function rafraichir() { await charger(); rendre(); }
