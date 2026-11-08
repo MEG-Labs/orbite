@@ -699,10 +699,31 @@ export function installerModules(c) {
   }
 
   /* ================= Plus (menu mobile) ================= */
-  function vuePlus(v) {
-    v.innerHTML = entete('Tous les espaces', 'Choisis un module.') + `<div class="grille-modules">${c.MODULES.filter(m => !m.principal).map(m => `<button class="tuile" data-vue="${m.k}">${c.ico(m.k)}<span>${m.l}</span></button>`).join('')}</div>`;
-    v.querySelectorAll('.tuile').forEach(b => b.onclick = () => { S.vue = b.dataset.vue; S.filtres = {}; c.rendre(); });
+  // Thèmes : la préférence suit le compte (réglage « theme ») et est copiée sur l’appareil pour s’appliquer sans flash.
+  const THEMES = [
+    { k: 'classique', l: 'ORBITE', d: 'Anthracite et orange', c: ['#0B1F2A', '#F26B21', '#E6EDF2'] },
+    { k: 'cyberpunk', l: 'Cyberpunk', d: 'Néon magenta et cyan', c: ['#07060D', '#FF2E88', '#00E5FF'] },
+  ];
+  function appliquerTheme(k) {
+    const lien = document.getElementById('themeCss');
+    if (lien) lien.media = k === 'cyberpunk' ? 'all' : 'not all';
+    document.documentElement.dataset.theme = k;
+    const meta = document.querySelector('meta[name=theme-color]'); if (meta) meta.content = k === 'cyberpunk' ? '#07060D' : '#0B1F2A';
+    try { localStorage.setItem('orbite-theme', k); } catch { }
   }
+  const themeActuel = () => { try { return localStorage.getItem('orbite-theme') || 'classique'; } catch { return 'classique'; } };
+  function vuePlus(v) {
+    const actuel = themeActuel();
+    v.innerHTML = entete('Tous les espaces', 'Choisis un module.') + `<section class="bloc choix-theme"><header><h2>Thème</h2></header><div class="themes" role="radiogroup" aria-label="Thème">${THEMES.map(t => `<button class="theme ${t.k === actuel ? 'choisi' : ''}" role="radio" aria-checked="${t.k === actuel}" data-theme="${t.k}"><span class="nuances">${t.c.map(x => `<i style="background:${x}"></i>`).join('')}</span><b>${t.l}</b><small>${t.d}</small></button>`).join('')}</div></section><div class="grille-modules">${c.MODULES.filter(m => !m.principal).map(m => `<button class="tuile" data-vue="${m.k}">${c.ico(m.k)}<span>${m.l}</span></button>`).join('')}</div>`;
+    v.querySelectorAll('.tuile').forEach(b => b.onclick = () => { S.vue = b.dataset.vue; S.filtres = {}; c.rendre(); });
+    v.querySelectorAll('[data-theme]').forEach(b => b.onclick = async () => {
+      const k = b.dataset.theme; appliquerTheme(k); vuePlus(v);
+      const { error } = await sb.from('reglages').upsert({ cle: 'theme', valeur: k });
+      if (!error) { const r = S.reglages.find(x => x.cle === 'theme'); if (r) r.valeur = k; else S.reglages.push({ cle: 'theme', valeur: k }); }
+    });
+  }
+  // Au chargement : le thème du compte l’emporte (choix fait sur un autre appareil).
+  function synchroTheme() { const k = S.reglages.find(x => x.cle === 'theme')?.valeur; if (k && k !== themeActuel()) appliquerTheme(k); }
 
   /* ================= Encarts de l'accueil ================= */
   function encartsAccueil() {
@@ -801,6 +822,7 @@ export function installerModules(c) {
   }
 
   return {
+    synchroTheme,
     vues: { vehicules: vueVehicules, achats: vueAchats, abonnements: vueAbonnements, transports: vueTransports, bibliotheque: vueBibliotheque, carnet: vueCarnet, routines: vueRoutines, revue: vueRevue, organigramme: vueOrganigramme, plus: vuePlus },
     encartsAccueil, complementsProjet, brancherProjet, ficheAchat, ficheNote,
   };

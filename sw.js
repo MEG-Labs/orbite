@@ -1,6 +1,6 @@
 // ORBITE : coquille hors ligne, notifications.
-const CACHE = 'orbite-v19';
-const COQUILLE = ['./', 'index.html', 'styles.css', 'app.js', 'modules.js', 'extras.js', 'lot5.js', 'lot6.js', 'config.js', 'icon.svg', 'icon-192.png', 'manifest.webmanifest'];
+const CACHE = 'orbite-v20';
+const COQUILLE = ['./', 'index.html', 'styles.css', 'app.js', 'modules.js', 'extras.js', 'lot5.js', 'lot6.js', 'theme-cyberpunk.css', 'config.js', 'icon.svg', 'icon-192.png', 'manifest.webmanifest'];
 const LIBS = 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/+esm';
 
 self.addEventListener('install', e => {

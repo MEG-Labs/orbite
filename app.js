@@ -861,7 +861,7 @@ async function demarrer(session) {
   const h = location.hash.slice(1); if (MODULES.some(m => m.k === h)) S.vue = h;
   $('#app').innerHTML = '<div class="connexion"><p style="color:var(--brume);font-family:var(--mono)">Chargement…</p></div>';
   majMeteo();
-  try { await charger(); rendre(); X.viderFile(); if (h === 'fermer') { history.replaceState(null, '', location.pathname); L6.ouvrirFermeture(); } } catch (e) { $('#app').innerHTML = `<div class="connexion"><p class="erreur">Impossible de charger les données : ${esc(e.message)}</p></div>`; }
+  try { await charger(); M.synchroTheme(); rendre(); X.viderFile(); if (h === 'fermer') { history.replaceState(null, '', location.pathname); L6.ouvrirFermeture(); } } catch (e) { $('#app').innerHTML = `<div class="connexion"><p class="erreur">Impossible de charger les données : ${esc(e.message)}</p></div>`; }
 }
 
 M = installerModules({ sb, S, $, esc, toast, parId, aujourdhui, plusJours, jourDate, jourLong, cleJour, fmtHeure, versLocal, depuisLocal,

@@ -1,0 +1,103 @@
+/* ORBITE — thème Cyberpunk (optionnel, choisi dans Plus). Se charge APRÈS styles.css. */
+@import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@600;800&family=JetBrains+Mono:wght@400;700&display=swap');
+:root {
+  --nuit: #07060D;
+  --coque: #0E0B1A;
+  --coque-2: #161029;
+  --acier: #2A1E4A;
+  --craie: #EDE7FF;
+  --brume: #8C7FB3;
+  --orange: #FF2E88;        /* magenta néon : accent principal */
+  --orange-pale: #FF7AB8;
+  --vert: #00F0C8;          /* cyan-menthe : ok / fait */
+  --rouge: #FF3355;
+  --jaune: #F5E50A;         /* jaune signalisation */
+  --cyan: #00E5FF;
+  --mono: "JetBrains Mono", Consolas, ui-monospace, monospace;
+  --titre: "Orbitron", var(--mono);
+  --trait: rgba(0, 229, 255, .16);
+  --trait-fort: rgba(0, 229, 255, .32);
+  --ombre: 0 0 0 1px rgba(255, 46, 136, .06), 0 8px 24px rgba(0, 0, 0, .5);
+  --lueur-m: 0 0 6px rgba(255, 46, 136, .7), 0 0 18px rgba(255, 46, 136, .35);
+  --lueur-c: 0 0 6px rgba(0, 229, 255, .7), 0 0 18px rgba(0, 229, 255, .3);
+}
+/* Fond : grille de perspective discrète + lignes de balayage */
+html, body { background:
+  linear-gradient(rgba(0, 229, 255, .035) 1px, transparent 1px) 0 0 / 100% 28px,
+  linear-gradient(90deg, rgba(255, 46, 136, .03) 1px, transparent 1px) 0 0 / 28px 100%,
+  radial-gradient(ellipse 120% 60% at 50% 0%, #1A0E33 0%, var(--nuit) 60%); background-attachment: fixed; }
+body::after { content: ""; position: fixed; inset: 0; pointer-events: none; z-index: 999;
+  background: repeating-linear-gradient(0deg, rgba(0, 0, 0, .18) 0 1px, transparent 1px 3px); mix-blend-mode: multiply; }
+
+/* Bandeau */
+.bandeau { background: rgba(7, 6, 13, .88); backdrop-filter: blur(6px); border-bottom: 1px solid var(--orange); box-shadow: 0 1px 0 var(--orange), 0 0 22px rgba(255, 46, 136, .35); }
+.marque { font-family: var(--titre); font-weight: 800; letter-spacing: .32em; color: var(--craie); text-shadow: var(--lueur-c); }
+.marque svg ellipse { stroke: var(--orange); filter: drop-shadow(0 0 3px var(--orange)); }
+.horloge { font-family: var(--titre); color: var(--cyan); text-shadow: var(--lueur-c); }
+.horloge small { font-family: var(--mono); color: var(--brume); text-shadow: none; }
+.meteo { color: var(--jaune); text-shadow: 0 0 8px rgba(245, 229, 10, .6); }
+
+/* Blocs : coins biseautés façon HUD */
+.bloc, .compteur, .compteur:nth-child(n) { border-radius: 0; border: 1px solid var(--trait);
+  background: linear-gradient(180deg, rgba(22, 16, 41, .92), rgba(14, 11, 26, .92));
+  clip-path: polygon(0 0, calc(100% - 14px) 0, 100% 14px, 100% 100%, 14px 100%, 0 calc(100% - 14px)); }
+.bloc-evenements, .bloc.plan-du-jour { box-shadow: inset 0 2px 0 var(--orange), inset 0 3px 12px rgba(255, 46, 136, .25); }
+.bloc > header h2 { font-family: var(--titre); font-weight: 600; letter-spacing: .08em; text-transform: uppercase; font-size: 15px; }
+.bloc > header h2::before { content: "// "; color: var(--orange); }
+.bloc > header .nb { color: var(--cyan); text-shadow: var(--lueur-c); }
+
+/* Compteurs */
+.compteur b { font-family: var(--titre); font-weight: 800; color: var(--cyan); text-shadow: var(--lueur-c); }
+.compteur span { text-transform: uppercase; letter-spacing: .06em; font-size: 12px; font-family: var(--mono); }
+.compteur.alerte b { color: var(--orange); text-shadow: var(--lueur-m); }
+.compteur.attention b { color: var(--jaune); text-shadow: 0 0 8px rgba(245, 229, 10, .6); }
+
+/* Barre de charge */
+.charge-barre { background: rgba(0, 0, 0, .6); border: 1px solid var(--trait-fort); border-radius: 0; height: 10px; }
+.charge-barre i { background: linear-gradient(90deg, var(--orange), #B620E0); box-shadow: var(--lueur-m); border-radius: 0; }
+.charge-fds .charge-barre i { background: linear-gradient(90deg, var(--cyan), #6A5CFF); box-shadow: var(--lueur-c); }
+.charge-graduations { font-family: var(--mono); color: var(--brume); }
+
+/* Lignes */
+.ligne .titre { font-weight: 600; }
+.ligne:hover { background: rgba(0, 229, 255, .05); }
+.retard { color: var(--orange) !important; text-shadow: 0 0 6px rgba(255, 46, 136, .5); }
+.pastille, a.lien-jira { border-radius: 0; border-color: var(--trait-fort); color: var(--cyan); font-family: var(--mono); font-size: 11.5px; }
+.coche { border-radius: 0; border-color: var(--cyan); box-shadow: inset 0 0 6px rgba(0, 229, 255, .3); }
+
+/* Boutons */
+.btn { border-radius: 0; font-family: var(--mono); text-transform: uppercase; letter-spacing: .06em; font-size: 12.5px; border-color: var(--cyan); color: var(--cyan); background: transparent; }
+.btn:hover { background: rgba(0, 229, 255, .1); box-shadow: var(--lueur-c); }
+.btn.discret { border-color: transparent; color: var(--brume); }
+.btn.primaire { background: var(--orange); border-color: var(--orange); color: #0A0010; box-shadow: var(--lueur-m); }
+.btn-recherche { border-radius: 0; border-color: var(--trait-fort); color: var(--cyan); }
+.fab { border-radius: 0; background: var(--orange); color: #0A0010; box-shadow: var(--lueur-m), 0 0 40px rgba(255, 46, 136, .35);
+  clip-path: polygon(0 0, calc(100% - 12px) 0, 100% 12px, 100% 100%, 12px 100%, 0 calc(100% - 12px)); }
+
+/* Navigation */
+.nav { background: rgba(7, 6, 13, .92); border-color: var(--orange) !important; box-shadow: 0 -1px 0 var(--orange), 0 0 22px rgba(255, 46, 136, .25); backdrop-filter: blur(6px); }
+.nav button { font-family: var(--mono); text-transform: uppercase; letter-spacing: .05em; font-size: 11px; border-radius: 0 !important; }
+.nav button[aria-current="page"] { color: var(--cyan) !important; background: rgba(0, 229, 255, .08) !important; box-shadow: inset 0 -2px 0 var(--cyan), var(--lueur-c) !important; text-shadow: var(--lueur-c); }
+
+/* Signal visuel « glitch » au survol des titres de bloc */
+@media (prefers-reduced-motion: no-preference) {
+  .bloc > header h2:hover { animation: glitch .3s steps(2) 2; }
+  @keyframes glitch { 0% { text-shadow: 2px 0 var(--orange), -2px 0 var(--cyan); } 50% { text-shadow: -2px 0 var(--orange), 2px 0 var(--cyan); transform: translateX(1px); } 100% { text-shadow: none; } }
+}
+.fab { font-size: 34px; font-weight: 700; }
+
+/* Panneaux, champs, toast */
+dialog { border-radius: 0; border: 1px solid var(--orange); background: var(--coque); box-shadow: var(--lueur-m), 0 20px 60px rgba(0, 0, 0, .7); }
+dialog .tete-d h2 { font-family: var(--titre); letter-spacing: .08em; text-transform: uppercase; font-size: 16px; }
+input, select, textarea { border-radius: 0; background: rgba(0, 0, 0, .45); border-color: var(--trait-fort); color: var(--craie); }
+input:focus, select:focus, textarea:focus { border-color: var(--cyan); box-shadow: var(--lueur-c); outline: none; }
+#toast { border-radius: 0; border: 1px solid var(--cyan); background: #0A0815; color: var(--cyan); box-shadow: var(--lueur-c); font-family: var(--mono); }
+.tuile { border-radius: 0; }
+.tuile:hover { box-shadow: var(--lueur-c); border-color: var(--cyan); }
+.energie span { border-radius: 0; }
+.energie input:checked + span { border-color: var(--orange); box-shadow: var(--lueur-m); }
+.bandeau-mode, .fermee { border-radius: 0; }
+.bandeau-mode.hors b { color: var(--vert); text-shadow: 0 0 6px rgba(0, 240, 200, .6); }
+.a-agenda { color: var(--vert); }
+:focus-visible { outline-color: var(--cyan); }
+.entete-vue h1 { font-family: var(--titre); letter-spacing: .06em; text-transform: uppercase; text-shadow: var(--lueur-c); }

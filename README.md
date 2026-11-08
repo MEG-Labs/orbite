@@ -39,6 +39,8 @@ L'accueil commence par les **événements du jour** (avec la charge de 8 h à 17
 
 **Trajets et agenda** : un événement qui chevauche un trajet et nomme un enfant ou un geste de transport (pick-up, récupérer, déposer…) est reconnu comme ce trajet. Ce n'est pas un conflit, il s'affiche « À l'agenda » (avec « C'est moi » si personne n'est inscrit), et le rappel de 15 minutes n'est envoyé qu'une fois.
 
+**Thèmes** : dans Plus, choix entre ORBITE (anthracite et orange) et Cyberpunk (néon magenta et cyan, fichier `theme-cyberpunk.css` chargé par-dessus `styles.css`). Le choix est gardé dans le réglage `theme` et suit le compte sur tous les appareils.
+
 Autres outils :
 - **Recherche globale** : Ctrl+K ou / sur ordinateur, loupe dans le bandeau sur téléphone.
 - **Compte rendu** depuis un événement : note liée au projet; les lignes « - [ ] … » deviennent des tâches.

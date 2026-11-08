@@ -10,6 +10,13 @@
 <link rel="icon" href="icon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="icon-192.png">
 <link rel="stylesheet" href="styles.css">
+<link rel="stylesheet" href="theme-cyberpunk.css" id="themeCss" media="not all">
+<script>
+// Thème choisi sur cet appareil, appliqué avant l’affichage pour éviter un flash.
+(function () { var t = 'classique'; try { t = localStorage.getItem('orbite-theme') || t; } catch (e) {}
+  if (t === 'cyberpunk') { document.getElementById('themeCss').media = 'all'; document.documentElement.dataset.theme = t;
+    document.querySelector('meta[name=theme-color]').content = '#07060D'; } })();
+</script>
 </head>
 <body>
 <div id="app" aria-live="polite"></div>
