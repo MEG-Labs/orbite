@@ -1,5 +1,5 @@
 // ORBITE : coquille hors ligne, notifications.
-const CACHE = 'orbite-v18';
+const CACHE = 'orbite-v19';
 const COQUILLE = ['./', 'index.html', 'styles.css', 'app.js', 'modules.js', 'extras.js', 'lot5.js', 'lot6.js', 'config.js', 'icon.svg', 'icon-192.png', 'manifest.webmanifest'];
 const LIBS = 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/+esm';
 
@@ -31,7 +31,7 @@ self.addEventListener('push', e => {
   let d = {};
   try { d = e.data.json(); } catch { d = { title: 'ORBITE', body: e.data ? e.data.text() : '' }; }
   e.waitUntil(self.registration.showNotification(d.title || 'ORBITE', {
-    body: d.body || '', tag: d.tag, renotify: !!d.tag, icon: 'icon-192.png', badge: 'icon-192.png', lang: 'fr-CA', data: { url: d.url || './' },
+    body: d.body || '', tag: d.tag, renotify: !!d.tag, icon: 'icon-192.png', badge: 'badge-96.png', lang: 'fr-CA', data: { url: d.url || './' },
   }));
 });
 self.addEventListener('notificationclick', e => {
