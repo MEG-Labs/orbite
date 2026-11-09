@@ -314,6 +314,61 @@ function ligne(a, { montrerProjet = true, heureSeule = false } = {}) {
 function liste(items, vide, opts) {
   return items.length ? `<ul class="lignes">${items.map(a => ligne(a, opts)).join('')}</ul>` : `<div class="vide">${vide}</div>`;
 }
+/* ---------- Glisser-déposer vers « En cours » (accueil) ---------- */
+// Souris : on glisse dès 6 px de mouvement. Tactile : appui long (350 ms) puis on glisse; un mouvement avant défile normalement.
+let glisseEnCours = null;
+document.addEventListener('touchmove', e => { if (glisseEnCours?.actif) e.preventDefault(); }, { passive: false });
+function brancherGlisser(v) {
+  const depot = v.querySelector('[data-depot="en-cours"]');
+  if (!depot) return;
+  v.querySelectorAll('[data-glisser] .ligne[data-id]').forEach(li => {
+    const a = parId(S.actions, li.dataset.id);
+    if (!a || a.type === 'Événement' || !ouvert(a) || a.statut === 'En cours') return;
+    li.classList.add('glissable');
+    li.addEventListener('pointerdown', e => {
+      if (e.button !== 0 || e.target.closest('button, a, input, select')) return;
+      const g = glisseEnCours = { li, a, x: e.clientX, y: e.clientY, id: e.pointerId, actif: false, tactile: e.pointerType !== 'mouse', minuterie: null };
+      const demarrer = () => {
+        g.actif = true; li.setPointerCapture(g.id);
+        const r = li.getBoundingClientRect();
+        g.fantome = li.cloneNode(true); g.fantome.classList.add('fantome-glisse');
+        Object.assign(g.fantome.style, { width: r.width + 'px', left: r.left + 'px', top: r.top + 'px' });
+        g.dx = g.x - r.left; g.dy = g.y - r.top;
+        document.body.appendChild(g.fantome); li.classList.add('en-glisse'); depot.classList.add('cible-depot');
+        if (g.tactile && navigator.vibrate) navigator.vibrate(15);
+      };
+      if (g.tactile) g.minuterie = setTimeout(demarrer, 350);
+      g.demarrer = demarrer;
+    });
+    li.addEventListener('pointermove', e => {
+      const g = glisseEnCours; if (!g || g.li !== li) return;
+      const d = Math.hypot(e.clientX - g.x, e.clientY - g.y);
+      if (!g.actif) {
+        if (g.tactile) { if (d > 8) { clearTimeout(g.minuterie); glisseEnCours = null; } return; }
+        if (d > 6) g.demarrer(); else return;
+      }
+      g.fantome.style.left = e.clientX - g.dx + 'px'; g.fantome.style.top = e.clientY - g.dy + 'px';
+      const r = depot.getBoundingClientRect();
+      g.dessus = e.clientX >= r.left && e.clientX <= r.right && e.clientY >= r.top && e.clientY <= r.bottom;
+      depot.classList.toggle('survol-depot', g.dessus);
+      // Défilement automatique près des bords.
+      if (e.clientY < 70) window.scrollBy(0, -12); else if (e.clientY > innerHeight - 90) window.scrollBy(0, 12);
+    });
+    const finir = async () => {
+      const g = glisseEnCours; if (!g || g.li !== li) return;
+      clearTimeout(g.minuterie); glisseEnCours = null;
+      if (!g.actif) return;
+      g.fantome.remove(); li.classList.remove('en-glisse'); depot.classList.remove('cible-depot', 'survol-depot');
+      li.addEventListener('click', ev => ev.stopImmediatePropagation(), { capture: true, once: true });
+      if (!g.dessus) return;
+      if (await majAction(g.a.id, { statut: 'En cours' })) { toast(`« ${g.a.titre} » en cours`); rafraichir(); }
+    };
+    li.addEventListener('pointerup', finir);
+    li.addEventListener('pointercancel', finir);
+    li.addEventListener('contextmenu', e => { if (glisseEnCours?.li === li) e.preventDefault(); });
+  });
+}
+
 function brancherLignes(racine) {
   racine.querySelectorAll('[data-coche]').forEach(b => b.onclick = async e => {
     e.stopPropagation();
@@ -382,9 +437,9 @@ function vueAccueil(v) {
     <div class="grille">
       <div class="colonne">
         ${X.blocPlan()}
-        <section class="bloc"><header><h2>En cours <span class="nb">${enCours.length}</span></h2></header>${L6.avertEnCours(enCours.length)}
+        <section class="bloc" data-depot="en-cours"><header><h2>En cours <span class="nb">${enCours.length}</span></h2></header>${L6.avertEnCours(enCours.length)}
           ${liste(enCours, 'Rien en cours. Passe une tâche du backlog à « En cours » pour la retrouver ici.')}</section>
-        <section class="bloc"><header><h2>Tâches planifiées · 7 jours <span class="nb">${semaine.length}</span></h2><button class="btn discret" data-aller="agenda">Agenda</button></header>
+        <section class="bloc" data-glisser><header><h2>Tâches planifiées · 7 jours <span class="nb">${semaine.length}</span></h2><button class="btn discret" data-aller="agenda">Agenda</button></header>
           ${liste(semaine, 'Aucune tâche planifiée cette semaine.')}</section>
         ${aCompleter.length ? `<section class="bloc"><header><h2>À compléter <span class="nb">${aCompleter.length}</span></h2></header>${liste(aCompleter.slice(0, 8), '')}</section>` : ''}
         <section class="bloc"><header><h2>Backlog et engagements <span class="nb">${backlog.length}</span></h2></header>
@@ -400,6 +455,8 @@ function vueAccueil(v) {
   v.querySelectorAll('[data-aller]').forEach(b => b.onclick = () => { S.vue = b.dataset.aller; rendre(); });
   L.brancherConflits(v);
   L6.brancher(v);
+  v.querySelector('.bloc.plan-du-jour')?.setAttribute('data-glisser', '');
+  brancherGlisser(v);
   const pt = v.querySelector('details.plus-tard'); if (pt) pt.ontoggle = () => { S.evtOuverts = pt.open; };
   const cp = v.querySelector('#choisirPlan'); if (cp) cp.onclick = () => X.choisirPlan();
   v.querySelectorAll('[data-cible]').forEach(b => b.onclick = () => {

@@ -650,3 +650,11 @@ dialog { border: 1px solid var(--trait); border-radius: var(--r-carte); box-shad
 .pastille-cahier::before { content: ""; display: inline-block; width: 7px; height: 7px; margin-right: 5px; border-radius: 2px; background: var(--cahier); }
 .liens-cahier { margin: -6px 0 12px; }
 .notes-liees .bloc { margin: 0; box-shadow: none; }
+
+/* Glisser-déposer vers En cours */
+.ligne.glissable { cursor: grab; -webkit-touch-callout: none; -webkit-user-select: none; user-select: none; }
+.ligne.en-glisse { opacity: .35; }
+.fantome-glisse { position: fixed; z-index: 1000; pointer-events: none; list-style: none; background: var(--coque-2); border: 1px solid var(--orange);
+  border-radius: var(--r); box-shadow: 0 12px 32px rgba(0, 0, 0, .5); transform: rotate(-1.5deg); opacity: .95; cursor: grabbing; }
+.bloc.cible-depot { outline: 1px dashed color-mix(in srgb, var(--orange) 60%, transparent); outline-offset: 3px; }
+.bloc.survol-depot { outline: 2px solid var(--orange); background: color-mix(in srgb, var(--orange) 7%, var(--coque)); }
