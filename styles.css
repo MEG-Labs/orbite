@@ -690,3 +690,5 @@ dialog { border: 1px solid var(--trait); border-radius: var(--r-carte); box-shad
 .habitude.faite .case-h { background: var(--vert); border-color: var(--vert); }
 .habitude.faite .nom-h { color: var(--brume); }
 .habitude:disabled { opacity: .6; }
+.victoires li.victoire-evt > span { color: var(--craie); }
+.v-evt { display: inline-block; min-width: 58px; font: 12px var(--mono); color: var(--orange-pale); }

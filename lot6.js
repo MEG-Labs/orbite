@@ -69,7 +69,12 @@ export function installerLot6(c) {
   const classeEnCours = n => n > limiteEnCours() ? 'attention' : 'calme';
 
   /* ================= Rituel de fermeture ================= */
-  const victoiresDu = j => S.actions.filter(a => a.type !== 'Événement' && a.statut === 'Terminé' && a.realisee_le && cleJour(a.realisee_le) === j);
+  // Victoires : tâches terminées ce jour-là, plus les événements du jour qui ont eu lieu (passés ou terminés, non annulés).
+  const evtFait = (a, j) => a.type === 'Événement' && a.statut !== 'Annulé' && a.planifie_debut && cleJour(a.planifie_debut) === j
+    && (a.statut === 'Terminé' || (a.journee_entiere ? j < aujourdhui() || j === aujourdhui() : new Date(a.planifie_fin || a.planifie_debut) <= new Date()));
+  const victoiresDu = j => S.actions.filter(a => (a.type !== 'Événement' && a.statut === 'Terminé' && a.realisee_le && cleJour(a.realisee_le) === j) || evtFait(a, j))
+    .sort((x, y) => (x.type === 'Événement' ? x.planifie_debut : x.realisee_le).localeCompare(y.type === 'Événement' ? y.planifie_debut : y.realisee_le));
+  const iconeVictoire = a => a.type === 'Événement' ? `<span class="v-evt">${a.journee_entiere ? 'Journée' : esc(fmtHeure.format(new Date(a.planifie_debut)))}</span>` : a.sur_le_fly ? '⚡' : '✓';
   function restants() {
     const auj = aujourdhui();
     const vus = new Set();
@@ -97,7 +102,7 @@ export function installerLot6(c) {
     const d = dialogue(`<form><div class="tete-d"><h2>${fds ? 'Ma journée' : 'Fermer ma journée'}</h2><button type="button" class="btn discret" data-fermer aria-label="Fermer">✕</button></div>
       <div class="corps rituel" style="grid-template-columns:1fr">
         <section><h3>Tes victoires <span class="nb">${vict.length}</span></h3>
-          ${vict.length ? `<ul class="victoires">${vict.map(a => `<li><span>${a.sur_le_fly ? '⚡' : '✓'} ${esc(a.titre)}</span>${a.duree_min ? `<label class="reel"><input type="number" min="0" step="1" name="reel_${a.id}" value="${a.duree_reelle_min ?? ''}" placeholder="${a.duree_min}" aria-label="Durée réelle en minutes"><small>min réelles · prévu ${a.duree_min}</small></label>` : ''}</li>`).join('')}</ul>`
+          ${vict.length ? `<ul class="victoires">${vict.map(a => `<li class="${a.type === 'Événement' ? 'victoire-evt' : ''}"><span>${iconeVictoire(a)} ${esc(a.titre)}</span>${a.duree_min && a.type !== 'Événement' ? `<label class="reel"><input type="number" min="0" step="1" name="reel_${a.id}" value="${a.duree_reelle_min ?? ''}" placeholder="${a.duree_min}" aria-label="Durée réelle en minutes"><small>min réelles · prévu ${a.duree_min}</small></label>` : ''}</li>`).join('')}</ul>`
             : '<p class="aide">Rien de coché aujourd’hui. Avancer compte aussi : note-le plus bas.</p>'}
         </section>
         ${reste.length ? `<section><h3>Ce qui reste <span class="nb">${reste.length}</span></h3>
