@@ -95,17 +95,17 @@ export function installerLot5(c) {
   }
   const hhmm = m => `${Math.floor(m / 60)} h${m % 60 ? ' ' + String(m % 60).padStart(2, '0') : ''}`;
   function blocCharge() {
-    const { occ, blocs, pris, libres, maintenant } = chargeDuJour();
+    const { occ, evts, blocs, pris, libres, maintenant } = chargeDuJour();
     const pct = m => ((m - JOUR_DE) / (JOUR_A - JOUR_DE) * 100).toFixed(2);
     const fini = maintenant >= JOUR_A;
     const jourSem = new Date(aujourdhui() + 'T12:00:00').getDay();
     const finDeSemaine = jourSem === 0 || jourSem === 6;
     const texteLibre = finDeSemaine ? 'Fin de semaine' : fini ? 'Journée de travail terminée' : libres.length ? 'Libre : ' + libres.slice(0, 4).map(([d, f]) => `${hhmm(d)}–${hhmm(f)}`).join(' · ') : 'Aucune plage libre de 30 min d’ici 17 h';
     return `<div class="charge${finDeSemaine ? ' charge-fds' : ''}" title="${finDeSemaine ? 'Fin de semaine' : 'Plage de travail 8 h – 17 h'}">
-      <div class="charge-texte"><b>${pris ? duree(pris) : '0 h'}</b> ${finDeSemaine ? 'd’événements (8 h–17 h)' : 'en rendez-vous (8 h–17 h)'} · <span>${esc(texteLibre)}</span>${blocs.length ? ` · <span>${blocs.length} bloc${blocs.length > 1 ? 's' : ''} planifié${blocs.length > 1 ? 's' : ''}</span>` : ''}</div>
-      <div class="charge-barre" aria-hidden="true">${blocs.map(([d, f, a]) => `<i class="t${a.statut === 'Terminé' ? ' fait' : ''}" style="left:${pct(d)}%;width:${(pct(f) - pct(d)).toFixed(2)}%"></i>`).join('')}${occ.map(([d, f]) => `<i style="left:${pct(d)}%;width:${(pct(f) - pct(d)).toFixed(2)}%"></i>`).join('')}
+      <div class="charge-texte"><b>${pris ? duree(pris) : '0 h'}</b> ${finDeSemaine ? 'd’événements (8 h–17 h)' : 'en rendez-vous (8 h–17 h)'} · <span>${esc(texteLibre)}</span>${blocs.length ? ` · <span class="leg-t">${blocs.length} tâche${blocs.length > 1 ? 's' : ''} placée${blocs.length > 1 ? 's' : ''}</span>` : ''}</div>
+      <div class="charge-barre" aria-hidden="true">${Array.from({ length: (JOUR_A - JOUR_DE) / 60 - 1 }, (_, k) => `<u style="left:${pct(JOUR_DE + (k + 1) * 60)}%"></u>`).join('')}${blocs.map(([d, f, a]) => `<i class="t${a.statut === 'Terminé' ? ' fait' : ''}" style="left:${pct(d)}%;width:${(pct(f) - pct(d)).toFixed(2)}%" title="Tâche placée · ${hhmm(d)}–${hhmm(f)} · ${esc(a.titre)}"></i>`).join('')}${occ.map(([d, f]) => `<i style="left:${pct(d)}%;width:${(pct(f) - pct(d)).toFixed(2)}%" title="${hhmm(d)}–${hhmm(f)} · ${esc(evts.filter(([a, b]) => a < f && b > d).map(([, , e]) => e.titre).join(', '))}"></i>`).join('')}
         ${maintenant > JOUR_DE && maintenant < JOUR_A ? `<b style="left:${pct(maintenant)}%"></b>` : ''}</div>
-      <div class="charge-graduations" aria-hidden="true"><span>8 h</span><span>10 h</span><span>12 h</span><span>14 h</span><span>17 h</span></div></div>`;
+      <div class="charge-graduations" aria-hidden="true">${Array.from({ length: (JOUR_A - JOUR_DE) / 60 + 1 }, (_, k) => `<span style="left:${pct(JOUR_DE + k * 60)}%">${JOUR_DE / 60 + k} h</span>`).join('')}</div></div>`;
   }
 
   /* ================= 4. Compte rendu depuis un événement ================= */

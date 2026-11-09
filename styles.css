@@ -617,3 +617,14 @@ dialog { border: 1px solid var(--trait); border-radius: var(--r-carte); box-shad
 .oc ul.oc-pile .oc-boite { max-width: 240px; }
 @media (max-width: 760px) { .oc-zone { max-height: none; } }
 .oc-zone.glisse { cursor: grabbing; user-select: none; }
+
+/* Barre de charge : une graduation par heure, positionnée à l'heure exacte */
+.charge-graduations { position: relative; display: block; height: 13px; }
+.charge-graduations span { position: absolute; top: 0; transform: translateX(-50%); white-space: nowrap; }
+.charge-graduations span:first-child { transform: none; }
+.charge-graduations span:last-child { transform: translateX(-100%); }
+.charge-barre u { position: absolute; top: 0; bottom: 0; width: 1px; background: color-mix(in srgb, var(--brume) 22%, transparent); text-decoration: none; }
+.charge-barre i { cursor: help; }
+.charge-texte .leg-t::before { content: ""; display: inline-block; width: 14px; height: 8px; margin-right: 5px; vertical-align: 0;
+  background: repeating-linear-gradient(135deg, color-mix(in srgb, var(--craie) 45%, transparent) 0 3px, color-mix(in srgb, var(--craie) 20%, transparent) 3px 6px); }
+@media (max-width: 760px) { .charge-graduations span:nth-child(even) { display: none; } }
