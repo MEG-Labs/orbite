@@ -75,7 +75,7 @@ function manquants(a) {
   if (!ouvert(a) || a.type === 'Événement') return [];
   const m = [];
   if (!a.type) m.push('type');
-  if (!a.domaine_id) m.push('domaine');
+  if (!a.domaine_id && !domaineProjet(a.projet_id)) m.push('domaine');
   if (!a.projet_id && !a.hors_projet) m.push('projet ou hors projet');
   if (a.dans_perimetre === false && !a.delegue_a_id) m.push('délégué à');
   return m;
@@ -697,6 +697,14 @@ function dialogue(html, onsubmit) {
   return d;
 }
 
+/* ---------- Domaine hérité du projet ---------- */
+// Le domaine d’une tâche liée à un projet est celui du projet (ou du premier projet parent qui en a un).
+function domaineProjet(pid) {
+  let p = pid && parId(S.projets, pid), n = 0;
+  while (p && !p.domaine_id && p.parent_id && n++ < 10) p = parId(S.projets, p.parent_id);
+  return p?.domaine_id || null;
+}
+
 /* ---------- Date avec heure facultative ---------- */
 // Une date seule = journée entière (sans heure). Une date + heure = moment précis; l’heure de fin est facultative.
 function planif(jour, debut, fin, jourFin) {
@@ -728,7 +736,7 @@ function ouvrirCapture() {
       toast(fd.get('type') === 'Achat' ? 'Ajouté aux achats' : 'Note créée'); return rafraichir();
     }
     const ligne = { titre: fd.get('titre').trim(), type: fd.get('type'), statut: fd.get('type') === 'Événement' ? 'À faire' : 'À traiter',
-      ...planif(fd.get('quand_jour'), fd.get('quand_heure')), projet_id: projet?.id || null, domaine_id: projet?.domaine_id || null };
+      ...planif(fd.get('quand_jour'), fd.get('quand_heure')), projet_id: projet?.id || null, domaine_id: domaineProjet(projet?.id) };
     if (!navigator.onLine) { X.mettreEnFile('actions', ligne); return; }
     const { error } = await sb.from('actions').insert(ligne);
     if (error) { if (/fetch|network/i.test(error.message)) { X.mettreEnFile('actions', ligne); return; } toast('Échec : ' + error.message); return false; }
@@ -752,7 +760,7 @@ function ouvrirSurLeFly() {
       <label class="champ large"><span>Qu’as-tu fait?</span><input name="titre" class="titre-saisie" required autofocus autocomplete="off" placeholder="Ex. Débloqué une commande avec la réception"></label>
       <div class="champ large"><span>Temps passé</span><div class="types-rapides" role="radiogroup" aria-label="Temps passé">${DUREES.map(d => `<label><input type="radio" name="duree" value="${d}" ${d === 15 ? 'checked' : ''}><span>${d < 60 ? d + ' min' : '1 h'}</span></label>`).join('')}<label><input type="radio" name="duree" value="autre"><span>Autre</span></label></div>
         <input type="number" name="duree_autre" min="1" step="1" placeholder="Minutes" class="duree-autre" aria-label="Autre durée en minutes"></div>
-      <label class="champ"><span>Domaine</span><select name="domaine_id">${domaines.map(d => `<option value="${d.id}" ${d.id === defaut ? 'selected' : ''}>${esc(d.nom)}</option>`).join('')}</select></label>
+      <label class="champ domaine-fly"><span>Domaine</span><select name="domaine_id">${domaines.map(d => `<option value="${d.id}" ${d.id === defaut ? 'selected' : ''}>${esc(d.nom)}</option>`).join('')}</select></label>
       <label class="champ"><span>Projet (facultatif)</span><select name="projet_id">${opts(S.projets.filter(p => p.statut === 'Actif'), null, { vide: 'Hors projet', lib: 'titre' })}</select></label>
       <label class="champ"><span>Terminé à</span><input type="datetime-local" name="quand" value="${esc(maintenant)}"></label>
       <label class="champ large"><span>Pour qui / notes (facultatif)</span><input name="notes" autocomplete="off" placeholder="Ex. demande de Rémi"></label>
@@ -763,7 +771,7 @@ function ouvrirSurLeFly() {
     const duree = fd.get('duree') === 'autre' ? (+fd.get('duree_autre') || null) : +fd.get('duree');
     const fin = depuisLocal(fd.get('quand')) || new Date().toISOString();
     const ligne = { titre: fd.get('titre').trim(), type: 'Tâche', statut: 'Terminé', sur_le_fly: true, realisee_le: fin,
-      duree_reelle_min: duree, domaine_id: projet?.domaine_id || fd.get('domaine_id') || null, projet_id: projet?.id || null, hors_projet: !projet,
+      duree_reelle_min: duree, domaine_id: domaineProjet(projet?.id) || fd.get('domaine_id') || null, projet_id: projet?.id || null, hors_projet: !projet,
       notes: (fd.get('notes') || '').trim() || null };
     if (!navigator.onLine) { X.mettreEnFile('actions', ligne); return; }
     const { error } = await sb.from('actions').insert(ligne);
@@ -771,6 +779,8 @@ function ouvrirSurLeFly() {
     toast('Consigné ⚡'); rafraichir();
   });
   d.querySelector('#histFly').onclick = () => { d.close(); S.vue = 'actions'; S.filtres = { type: 'fly' }; history.replaceState(null, '', '#actions'); rendre(); window.scrollTo(0, 0); };
+  const selPF = d.querySelector('[name=projet_id]'), champDF = d.querySelector('.domaine-fly');
+  selPF.addEventListener('change', () => { champDF.hidden = !!domaineProjet(selPF.value); });
   const autre = d.querySelector('.duree-autre');
   autre.hidden = true;
   d.querySelectorAll('input[name=duree]').forEach(r => r.onchange = () => { autre.hidden = d.querySelector('input[name=duree]:checked').value !== 'autre'; if (!autre.hidden) autre.focus(); });
@@ -808,7 +818,8 @@ function ouvrirAction(a) {
 
       <fieldset><legend>Relier</legend>
         <label class="champ"><span>Projet</span><select name="projet_id">${opts(S.projets, a.projet_id, { lib: 'titre' })}</select></label>
-        <label class="champ"><span>Domaine</span><select name="domaine_id">${opts(S.domaines, a.domaine_id)}</select></label>
+        <label class="champ domaine-tache"><span>Domaine</span><select name="domaine_id">${opts(S.domaines, a.domaine_id)}</select></label>
+        <p class="aide domaine-herite" hidden></p>
         <label class="champ case"><input type="checkbox" name="hors_projet" ${a.hors_projet ? 'checked' : ''}><span>Hors projet (volontairement)</span></label>
         <label class="champ"><span>Dans mon périmètre?</span><select name="dans_perimetre"><option value="">—</option><option value="true" ${a.dans_perimetre === true ? 'selected' : ''}>Oui</option><option value="false" ${a.dans_perimetre === false ? 'selected' : ''}>Non, je délègue</option></select></label>
         <label class="champ"><span>Délégué à</span><select name="delegue_a_id">${opts(S.personnes, a.delegue_a_id)}</select></label>
@@ -849,7 +860,7 @@ function ouvrirAction(a) {
       echeance: vide('echeance'), relance: vide('relance'), priorite: fd.get('priorite') ? +fd.get('priorite') : null,
       duree_min: fd.get('duree_min') ? +fd.get('duree_min') : null,
       duree_reelle_min: fd.get('duree_reelle_min') ? +fd.get('duree_reelle_min') : null,
-      projet_id: vide('projet_id'), domaine_id: vide('domaine_id'), hors_projet: fd.get('hors_projet') === 'on',
+      projet_id: vide('projet_id'), domaine_id: domaineProjet(vide('projet_id')) || vide('domaine_id'), hors_projet: fd.get('hors_projet') === 'on',
       dans_perimetre: fd.get('dans_perimetre') === '' ? null : fd.get('dans_perimetre') === 'true',
       delegue_a_id: vide('delegue_a_id'), en_attente_de_id: vide('en_attente_de_id'), motif_blocage: vide('motif_blocage'),
       contexte: fd.getAll('contexte'), lieu: vide('lieu'), reference_externe: vide('reference_externe'), notes: vide('notes'),
@@ -861,6 +872,14 @@ function ouvrirAction(a) {
     if (error) { toast('Échec : ' + error.message); return false; }
     toast(nouveau ? 'Action ajoutée' : 'Enregistré'); rafraichir();
   });
+  // Avec un projet, le domaine vient du projet : le champ est masqué et remplacé par une mention.
+  const selP = d.querySelector('[name=projet_id]'), champD = d.querySelector('.domaine-tache'), mention = d.querySelector('.domaine-herite');
+  const majDomaine = () => {
+    const dom = domaineProjet(selP.value), nomD = dom && parId(S.domaines, dom)?.nom;
+    champD.hidden = !!dom; mention.hidden = !dom;
+    if (dom) { mention.textContent = `Domaine : ${nomD} (selon le projet)`; d.querySelector('[name=domaine_id]').value = dom; }
+  };
+  selP.addEventListener('change', majDomaine); majDomaine();
   // Sans date, les heures n’ont pas de sens : on les désactive.
   const jIn = d.querySelector('[name=jour]'), hIns = d.querySelectorAll('[name=heure_debut], [name=heure_fin]');
   const majHeures = () => hIns.forEach(h => { h.disabled = !jIn.value; });

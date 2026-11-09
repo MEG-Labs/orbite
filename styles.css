@@ -674,3 +674,5 @@ dialog { border: 1px solid var(--trait); border-radius: var(--r-carte); box-shad
 .crochet-fait { display: block; color: var(--vert); font: 700 15px var(--mono); line-height: 1; margin-bottom: 2px; }
 .date-heure { display: grid; grid-template-columns: 1fr 120px; gap: 6px; }
 .quand-capture > span { display: block; }
+[hidden] { display: none !important; }
+.domaine-herite { margin: 0; align-self: end; padding-bottom: 8px; }
