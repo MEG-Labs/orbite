@@ -708,9 +708,22 @@ export function installerModules(c) {
       if (!S.filtres.orgZoom) { ajuster(); oc.style.zoom = S.filtres.orgZoom; v.querySelector('.oc-zoom span').textContent = Math.round(S.filtres.orgZoom * 100) + ' %'; }
       v.querySelectorAll('[data-zoom]').forEach(b => b.onclick = () => {
         const d = +b.dataset.zoom;
-        if (d === 0) ajuster(); else S.filtres.orgZoom = Math.max(.4, Math.min(1.5, Math.round(((S.filtres.orgZoom || 1) + d * .1) * 10) / 10));
+        if (d === 0) ajuster(); else S.filtres.orgZoom = Math.max(.25, Math.min(2, Math.round(((S.filtres.orgZoom || 1) + d * .1) * 10) / 10));
         c.rendre();
       });
+      // Roulette (ou pincement sur pavé tactile) : zoom centré sur le pointeur, sans redessiner.
+      const etiquette = v.querySelector('.oc-zoom span');
+      zone.addEventListener('wheel', e => {
+        e.preventDefault();
+        const z0 = S.filtres.orgZoom || 1;
+        const z1 = Math.max(.25, Math.min(2, z0 * Math.exp(-e.deltaY * (e.deltaMode === 1 ? .05 : .0015))));
+        if (z1 === z0) return;
+        const r = zone.getBoundingClientRect(), mx = e.clientX - r.left, my = e.clientY - r.top;
+        const px = (zone.scrollLeft + mx) / z0, py = (zone.scrollTop + my) / z0;
+        oc.style.zoom = z1; S.filtres.orgZoom = z1;
+        zone.scrollLeft = px * z1 - mx; zone.scrollTop = py * z1 - my;
+        etiquette.textContent = Math.round(z1 * 100) + ' %';
+      }, { passive: false });
       // Glisser pour se déplacer dans le diagramme (souris); le tactile défile nativement.
       let glisse = null;
       zone.onpointerdown = e => { if (e.pointerType !== 'mouse' || e.button !== 0) return; glisse = { x: e.clientX, y: e.clientY, l: zone.scrollLeft, t: zone.scrollTop, bouge: false }; };
