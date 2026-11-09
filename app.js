@@ -314,36 +314,45 @@ function ligne(a, { montrerProjet = true, heureSeule = false } = {}) {
 function liste(items, vide, opts) {
   return items.length ? `<ul class="lignes">${items.map(a => ligne(a, opts)).join('')}</ul>` : `<div class="vide">${vide}</div>`;
 }
-/* ---------- Glisser-déposer vers « En cours » (accueil) ---------- */
+/* ---------- Glisser-déposer (accueil) ---------- */
+// Toute tâche ouverte de l’accueil peut être glissée : sur « En cours » pour la commencer,
+// ou sur la zone « Terminer » qui apparaît en bas de l’écran pendant le glissement.
 // Souris : on glisse dès 6 px de mouvement. Tactile : appui long (350 ms) puis on glisse; un mouvement avant défile normalement.
 let glisseEnCours = null;
 document.addEventListener('touchmove', e => { if (glisseEnCours?.actif) e.preventDefault(); }, { passive: false });
 function brancherGlisser(v) {
-  const depot = v.querySelector('[data-depot="en-cours"]');
-  if (!depot) return;
-  v.querySelectorAll('[data-glisser] .ligne[data-id]').forEach(li => {
+  const blocEnCours = v.querySelector('[data-depot="en-cours"]');
+  const vus = new Set();
+  v.querySelectorAll('.ligne[data-id]').forEach(li => {
     const a = parId(S.actions, li.dataset.id);
-    if (!a || a.type === 'Événement' || !ouvert(a) || a.statut === 'En cours') return;
+    if (!a || a.type === 'Événement' || !ouvert(a) || li.closest('dialog')) return;
     li.classList.add('glissable');
-    li.title = 'Glisser vers « En cours »';
+    li.title = a.statut === 'En cours' ? 'Glisser vers « Terminer »' : 'Glisser vers « En cours » ou « Terminer »';
     // Empêche la sélection de texte de démarrer quand on attrape la ligne à la souris.
     li.addEventListener('mousedown', e => { if (!e.target.closest('button, a, input, select')) e.preventDefault(); });
     li.addEventListener('selectstart', e => e.preventDefault());
     li.addEventListener('dragstart', e => e.preventDefault());
     li.addEventListener('pointerdown', e => {
       if (e.button !== 0 || e.target.closest('button, a, input, select')) return;
-      const g = glisseEnCours = { li, a, x: e.clientX, y: e.clientY, id: e.pointerId, actif: false, tactile: e.pointerType !== 'mouse', minuterie: null };
-      const demarrer = () => {
+      const g = glisseEnCours = { li, a, x: e.clientX, y: e.clientY, id: e.pointerId, actif: false, tactile: e.pointerType !== 'mouse', minuterie: null, cible: null };
+      g.demarrer = () => {
         g.actif = true; li.setPointerCapture(g.id);
         const r = li.getBoundingClientRect();
-        g.fantome = li.cloneNode(true); g.fantome.classList.add('fantome-glisse');
+        g.fantome = li.cloneNode(true); g.fantome.classList.add('fantome-glisse'); g.fantome.removeAttribute('title');
         Object.assign(g.fantome.style, { width: r.width + 'px', left: r.left + 'px', top: r.top + 'px' });
         g.dx = g.x - r.left; g.dy = g.y - r.top;
-        document.body.appendChild(g.fantome); li.classList.add('en-glisse'); depot.classList.add('cible-depot');
+        document.body.appendChild(g.fantome); li.classList.add('en-glisse');
+        // Cibles : En cours (si la tâche n’y est pas déjà) et la zone Terminer.
+        g.terminer = document.createElement('div');
+        g.terminer.className = 'zone-terminer';
+        g.terminer.innerHTML = '<span>✓</span> Déposer ici pour terminer';
+        document.body.appendChild(g.terminer);
+        requestAnimationFrame(() => g.terminer.classList.add('visible'));
+        g.cibles = [{ el: g.terminer, quoi: 'terminer' }];
+        if (blocEnCours && a.statut !== 'En cours') { g.cibles.push({ el: blocEnCours, quoi: 'en-cours' }); blocEnCours.classList.add('cible-depot'); }
         if (g.tactile && navigator.vibrate) navigator.vibrate(15);
       };
-      if (g.tactile) g.minuterie = setTimeout(demarrer, 350);
-      g.demarrer = demarrer;
+      if (g.tactile) g.minuterie = setTimeout(g.demarrer, 350);
     });
     li.addEventListener('pointermove', e => {
       const g = glisseEnCours; if (!g || g.li !== li) return;
@@ -353,20 +362,29 @@ function brancherGlisser(v) {
         if (d > 6) g.demarrer(); else return;
       }
       g.fantome.style.left = e.clientX - g.dx + 'px'; g.fantome.style.top = e.clientY - g.dy + 'px';
-      const r = depot.getBoundingClientRect();
-      g.dessus = e.clientX >= r.left && e.clientX <= r.right && e.clientY >= r.top && e.clientY <= r.bottom;
-      depot.classList.toggle('survol-depot', g.dessus);
-      // Défilement automatique près des bords.
-      if (e.clientY < 70) window.scrollBy(0, -12); else if (e.clientY > innerHeight - 90) window.scrollBy(0, 12);
+      g.cible = null;
+      for (const c of g.cibles) {
+        const r = c.el.getBoundingClientRect();
+        const dessus = e.clientX >= r.left && e.clientX <= r.right && e.clientY >= r.top && e.clientY <= r.bottom;
+        c.el.classList.toggle('survol-depot', dessus && !g.cible);
+        if (dessus && !g.cible) g.cible = c.quoi;
+      }
+      // Défilement automatique près des bords (sauf au-dessus de la zone Terminer).
+      if (e.clientY < 70) window.scrollBy(0, -12);
+      else if (e.clientY > innerHeight - 90 && g.cible !== 'terminer') window.scrollBy(0, 12);
     });
     const finir = async () => {
       const g = glisseEnCours; if (!g || g.li !== li) return;
       clearTimeout(g.minuterie); glisseEnCours = null;
       if (!g.actif) return;
-      g.fantome.remove(); li.classList.remove('en-glisse'); depot.classList.remove('cible-depot', 'survol-depot');
+      g.fantome.remove(); g.terminer.remove(); li.classList.remove('en-glisse');
+      blocEnCours?.classList.remove('cible-depot', 'survol-depot');
       li.addEventListener('click', ev => ev.stopImmediatePropagation(), { capture: true, once: true });
-      if (!g.dessus) return;
-      if (await majAction(g.a.id, { statut: 'En cours' })) { toast(`« ${g.a.titre} » en cours`); rafraichir(); }
+      if (g.cible === 'en-cours') {
+        if (await majAction(g.a.id, { statut: 'En cours' })) { toast(`« ${g.a.titre} » en cours`); rafraichir(); }
+      } else if (g.cible === 'terminer') {
+        if (await majAction(g.a.id, { statut: 'Terminé', realisee_le: new Date().toISOString() })) { toast(`✓ « ${g.a.titre} » terminée`); rafraichir(); }
+      }
     };
     li.addEventListener('pointerup', finir);
     li.addEventListener('pointercancel', finir);

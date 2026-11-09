@@ -658,3 +658,12 @@ dialog { border: 1px solid var(--trait); border-radius: var(--r-carte); box-shad
   border-radius: var(--r); box-shadow: 0 12px 32px rgba(0, 0, 0, .5); transform: rotate(-1.5deg); opacity: .95; cursor: grabbing; }
 .bloc.cible-depot { outline: 1px dashed color-mix(in srgb, var(--orange) 60%, transparent); outline-offset: 3px; }
 .bloc.survol-depot { outline: 2px solid var(--orange); background: color-mix(in srgb, var(--orange) 7%, var(--coque)); }
+/* Zone « Terminer » pendant un glissement */
+.zone-terminer { position: fixed; left: 50%; bottom: 24px; z-index: 999; transform: translate(-50%, 30px); opacity: 0; transition: transform .15s, opacity .15s;
+  display: flex; align-items: center; gap: 10px; padding: 18px 34px; min-width: min(420px, calc(100vw - 32px)); justify-content: center;
+  font: 600 14px var(--mono); color: var(--vert); background: color-mix(in srgb, var(--vert) 10%, var(--coque)); border: 2px dashed color-mix(in srgb, var(--vert) 60%, transparent);
+  border-radius: var(--r-carte); box-shadow: 0 12px 40px rgba(0, 0, 0, .5); pointer-events: none; }
+.zone-terminer.visible { transform: translate(-50%, 0); opacity: 1; }
+.zone-terminer span { font-size: 20px; }
+.zone-terminer.survol-depot { border-style: solid; border-color: var(--vert); background: color-mix(in srgb, var(--vert) 22%, var(--coque)); color: var(--craie); }
+@media (max-width: 760px) { .zone-terminer { bottom: calc(var(--nav-h) + 14px + env(safe-area-inset-bottom)); } }
