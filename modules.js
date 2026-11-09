@@ -632,6 +632,35 @@ export function installerModules(c) {
     const depuis = plusJours(aujourdhui(), -6);
     return S.actions.filter(a => a.routine_id === r.id && a.statut === 'Terminé' && a.realisee_le && cleJour(a.realisee_le) >= depuis).length;
   }
+  /* Habitudes du jour (accueil) : routines actives prévues aujourd’hui, cochables en un toucher. */
+  const faiteAujourdhui = r => S.actions.find(a => a.routine_id === r.id && a.statut === 'Terminé' && a.realisee_le && cleJour(a.realisee_le) === aujourdhui());
+  function habitudesDuJour() {
+    const jour = JOURS_SEM[(new Date(aujourdhui() + 'T12:00:00').getDay() + 6) % 7];
+    // Sans jours précisés, une routine quotidienne compte chaque jour; les autres n’apparaissent que leurs jours.
+    return S.routines.filter(r => r.active && (r.jours?.length ? r.jours.includes(jour) : r.frequence === 'Quotidienne'))
+      .sort((a, b) => (a.horaire || '').localeCompare(b.horaire || '') || a.nom.localeCompare(b.nom));
+  }
+  function blocHabitudes() {
+    const H = habitudesDuJour();
+    if (!H.length) return '';
+    const faites = H.filter(faiteAujourdhui).length;
+    return `<section class="bloc habitudes"><header><h2>Habitudes du jour <span class="nb">${faites}/${H.length}</span></h2><button class="btn discret" data-aller="routines">Toutes</button></header>
+      <ul class="habitudes-liste">${H.map(r => {
+        const f = faiteAujourdhui(r), n = realisations7j(r);
+        return `<li><button class="habitude ${f ? 'faite' : ''}" data-habitude="${r.id}" aria-pressed="${!!f}" title="${f ? 'Fait — toucher pour annuler' : 'Marquer comme fait'}">
+          <span class="case-h" aria-hidden="true">${f ? '✓' : ''}</span><span class="nom-h">${esc(r.nom)}</span>${r.horaire ? `<small>${esc(r.horaire)}</small>` : ''}
+          <small class="serie-h">${n}${r.cible_7j ? '/' + r.cible_7j : ''} · 7 j</small></button></li>`; }).join('')}</ul></section>`;
+  }
+  function brancherHabitudes(v) {
+    v.querySelectorAll('[data-habitude]').forEach(b => b.onclick = async e => {
+      e.stopPropagation(); b.disabled = true;
+      const r = parId(S.routines, b.dataset.habitude), f = faiteAujourdhui(r);
+      const { error } = f ? await sb.from('actions').delete().eq('id', f.id)
+        : await sb.from('actions').insert({ titre: r.nom, type: 'Routine', statut: 'Terminé', routine_id: r.id, realisee_le: new Date().toISOString(), planifie_debut: depuisLocal(aujourdhui() + 'T00:00'), journee_entiere: true, domaine_id: r.domaine_id, hors_projet: true });
+      if (error) { b.disabled = false; return toast('Échec : ' + error.message); }
+      toast(f ? 'Annulé : ' + r.nom : 'Bravo : ' + r.nom); rafraichir();
+    });
+  }
   function vueRoutines(v) {
     const R = S.routines.slice().sort((a, b) => b.active - a.active || a.nom.localeCompare(b.nom));
     v.innerHTML = entete('Routines et équilibre', 'Tes habitudes et leur rythme sur les sept derniers jours.', '<button class="btn primaire" id="ajRout">Nouvelle routine</button>') +
@@ -1001,6 +1030,6 @@ export function installerModules(c) {
   return {
     synchroTheme,
     vues: { vehicules: vueVehicules, achats: vueAchats, abonnements: vueAbonnements, transports: vueTransports, bibliotheque: vueBibliotheque, carnet: vueCarnet, routines: vueRoutines, revue: vueRevue, organigramme: vueOrganigramme, plus: vuePlus },
-    encartsAccueil, complementsProjet, brancherProjet, ficheAchat, ficheNote, ficheCahier, blocNotesLiees, brancherNotesLiees,
+    encartsAccueil, blocHabitudes, brancherHabitudes, complementsProjet, brancherProjet, ficheAchat, ficheNote, ficheCahier, blocNotesLiees, brancherNotesLiees,
   };
 }

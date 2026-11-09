@@ -460,6 +460,7 @@ function vueAccueil(v) {
     <div class="grille">
       <div class="colonne">
         ${X.blocPlan()}
+        ${M.blocHabitudes()}
         <section class="bloc" data-depot="en-cours"><header><h2>En cours <span class="nb">${enCours.length}</span></h2></header>${L6.avertEnCours(enCours.length)}
           ${liste(enCours, 'Rien en cours. Passe une tâche du backlog à « En cours » pour la retrouver ici.')}</section>
         <section class="bloc" data-glisser><header><h2>Tâches planifiées · 7 jours <span class="nb">${semaine.length}</span></h2><button class="btn discret" data-aller="agenda">Agenda</button></header>
@@ -480,6 +481,7 @@ function vueAccueil(v) {
   L6.brancher(v);
   v.querySelector('.bloc.plan-du-jour')?.setAttribute('data-glisser', '');
   brancherGlisser(v);
+  M.brancherHabitudes(v);
   const pt = v.querySelector('details.plus-tard'); if (pt) pt.ontoggle = () => { S.evtOuverts = pt.open; };
   const cp = v.querySelector('#choisirPlan'); if (cp) cp.onclick = () => X.choisirPlan();
   v.querySelectorAll('[data-cible]').forEach(b => b.onclick = () => {

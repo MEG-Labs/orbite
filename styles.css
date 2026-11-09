@@ -676,3 +676,17 @@ dialog { border: 1px solid var(--trait); border-radius: var(--r-carte); box-shad
 .quand-capture > span { display: block; }
 [hidden] { display: none !important; }
 .domaine-herite { margin: 0; align-self: end; padding-bottom: 8px; }
+
+/* Habitudes du jour */
+.habitudes-liste { list-style: none; margin: 0; padding: 10px 12px 12px; display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 8px; }
+.habitude { width: 100%; display: grid; grid-template-columns: 26px minmax(0, 1fr) auto; grid-template-rows: auto auto; align-items: center; gap: 0 10px; padding: 9px 12px;
+  text-align: left; cursor: pointer; font: inherit; color: var(--craie); background: var(--coque-2); border: 1px solid var(--trait-fort, var(--acier)); border-radius: var(--r); }
+.habitude:hover { border-color: var(--vert); }
+.case-h { grid-row: 1 / 3; width: 22px; height: 22px; display: grid; place-items: center; border: 2px solid var(--brume); border-radius: 50%; font: 700 13px var(--mono); color: var(--nuit); }
+.nom-h { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.habitude small { color: var(--brume); font: 11.5px var(--mono); }
+.habitude .serie-h { grid-column: 3; grid-row: 1 / 3; }
+.habitude.faite { border-color: color-mix(in srgb, var(--vert) 55%, transparent); background: color-mix(in srgb, var(--vert) 9%, var(--coque-2)); }
+.habitude.faite .case-h { background: var(--vert); border-color: var(--vert); }
+.habitude.faite .nom-h { color: var(--brume); }
+.habitude:disabled { opacity: .6; }
