@@ -658,16 +658,70 @@ export function installerModules(c) {
       <div class="meta">${postes.map(p => `<span>${esc(p.titre)}${titulaires(p.id).length ? ' : ' + titulaires(p.id).map(x => esc(x.nom)).join(', ') : ''}</span>`).join('') || '<span>Aucun poste</span>'}</div></div>
       ${sous.length ? `<ul class="arbre">${sous.map(noeudUnite).join('')}</ul>` : ''}</li>`;
   }
+  /* ---------- Organigramme en diagramme ---------- */
+  // Arbre de haut en bas. Quand tous les enfants d’un nœud sont des feuilles, ils s’empilent en colonne pour rester compacts.
+  const MOI_NOTION = '3f7d3833158f817d866ad8dfd702076b';
+  const enfantsPoste = p => S.postes.filter(x => x.superieur_id === p.id).sort((a, b) => (a.niveau || 99) - (b.niveau || 99) || a.titre.localeCompare(b.titre));
+  const enfantsUnite = u => S.unites.filter(x => x.parent_id === u.id).sort((a, b) => a.nom.localeCompare(b.nom));
+  function boitePoste(p) {
+    const tit = titulaires(p.id), u = parId(S.unites, p.unite_id), moi = tit.some(x => x.notion_id === MOI_NOTION);
+    return `<div class="oc-boite ${moi ? 'moi' : ''} ${p.statut !== 'Pourvu' ? 'vacant' : ''}" data-poste="${p.id}" role="button" tabindex="0">
+      <b>${esc(p.titre)}</b>
+      <span class="oc-noms">${tit.length ? tit.map(x => `<a href="#" data-pers="${x.id}">${esc(x.nom)}</a>`).join(', ') : `<i>${esc(p.statut === 'Pourvu' ? 'Aucun titulaire' : p.statut)}</i>`}</span>
+      ${u ? `<small>${esc(u.nom)}</small>` : ''}</div>`;
+  }
+  function boiteUnite(u) {
+    const postes = S.postes.filter(p => p.unite_id === u.id);
+    return `<div class="oc-boite" data-unite="${u.id}" role="button" tabindex="0"><b>${esc(u.nom)}</b><small>${esc(u.categorie || '')}${postes.length ? ` · ${postes.length} poste${postes.length > 1 ? 's' : ''}` : ''}</small></div>`;
+  }
+  function noeudDiagramme(x, enfants, boite) {
+    const e = enfants(x);
+    const pile = e.length > 2 && e.every(y => !enfants(y).length);
+    return `<li>${boite(x)}${e.length ? `<ul class="${pile ? 'oc-pile' : ''}">${e.map(y => noeudDiagramme(y, enfants, boite)).join('')}</ul>` : ''}</li>`;
+  }
+  function diagramme(mode, racinesP, racinesU) {
+    const z = +(S.filtres.orgZoom || 1);
+    const arbre = mode === 'postes' ? racinesP.map(p => noeudDiagramme(p, enfantsPoste, boitePoste)).join('') : racinesU.map(u => noeudDiagramme(u, enfantsUnite, boiteUnite)).join('');
+    return `<section class="bloc oc-bloc"><header><h2>Diagramme</h2><div class="oc-zoom"><button class="btn discret" data-zoom="-1" aria-label="Réduire">−</button><span>${Math.round(z * 100)} %</span><button class="btn discret" data-zoom="1" aria-label="Agrandir">+</button><button class="btn discret" data-zoom="0">Ajuster</button></div></header>
+      <div class="oc-zone"><ul class="oc" style="zoom:${z}">${arbre}</ul></div></section>`;
+  }
+  const vueOrgMemo = () => { try { return localStorage.getItem('orbite-org-vue') || 'liste'; } catch { return 'liste'; } };
+
   function vueOrganigramme(v) {
     const mode = S.filtres.org || 'postes';
+    const affichage = S.filtres.orgVue || vueOrgMemo();
     const racines = S.postes.filter(p => !p.superieur_id).sort((a, b) => (a.niveau || 99) - (b.niveau || 99));
     const unitesRacines = S.unites.filter(u => !u.parent_id).sort((a, b) => (a.categorie !== 'Organisation') - (b.categorie !== 'Organisation') || a.nom.localeCompare(b.nom));
     const vacants = S.postes.filter(p => p.statut !== 'Pourvu').length;
     v.innerHTML = entete('Organigramme et structure', `${S.postes.length} postes, ${S.unites.length} unités${vacants ? `, ${vacants} poste(s) vacant(s) ou à renseigner` : ''}.`,
       `<button class="btn" id="ajUnite">Ajouter une unité</button><button class="btn primaire" id="ajPoste">Ajouter un poste</button>`) + `
-      <div class="outils"><div class="onglets"><button aria-pressed="${mode === 'postes'}" data-org="postes">Postes et hiérarchie</button><button aria-pressed="${mode === 'unites'}" data-org="unites">Unités</button></div></div>
-      <section class="bloc organigramme"><ul class="arbre racine">${mode === 'postes' ? racines.map(p => noeudPoste(p)).join('') : unitesRacines.map(noeudUnite).join('')}</ul></section>`;
+      <div class="outils"><div class="onglets"><button aria-pressed="${mode === 'postes'}" data-org="postes">Postes et hiérarchie</button><button aria-pressed="${mode === 'unites'}" data-org="unites">Unités</button></div>
+        <div class="onglets"><button aria-pressed="${affichage === 'liste'}" data-orgvue="liste">Liste</button><button aria-pressed="${affichage === 'diagramme'}" data-orgvue="diagramme">Diagramme</button></div></div>
+      ${affichage === 'diagramme' ? diagramme(mode, racines, unitesRacines)
+        : `<section class="bloc organigramme"><ul class="arbre racine">${mode === 'postes' ? racines.map(p => noeudPoste(p)).join('') : unitesRacines.map(noeudUnite).join('')}</ul></section>`}`;
     v.querySelectorAll('[data-org]').forEach(b => b.onclick = () => { S.filtres.org = b.dataset.org; c.rendre(); });
+    v.querySelectorAll('[data-orgvue]').forEach(b => b.onclick = () => { S.filtres.orgVue = b.dataset.orgvue; try { localStorage.setItem('orbite-org-vue', b.dataset.orgvue); } catch { } c.rendre(); });
+    const zone = v.querySelector('.oc-zone'), oc = v.querySelector('.oc');
+    if (zone && oc) {
+      // « Ajuster » : la plus grande échelle qui fait tenir tout l’arbre en largeur (entre 40 % et 100 %).
+      const ajuster = () => { oc.style.zoom = 1; const z = Math.max(.4, Math.min(1, (zone.clientWidth - 30) / oc.getBoundingClientRect().width)); S.filtres.orgZoom = Math.floor(z * 20) / 20; };
+      if (!S.filtres.orgZoom) { ajuster(); oc.style.zoom = S.filtres.orgZoom; v.querySelector('.oc-zoom span').textContent = Math.round(S.filtres.orgZoom * 100) + ' %'; }
+      v.querySelectorAll('[data-zoom]').forEach(b => b.onclick = () => {
+        const d = +b.dataset.zoom;
+        if (d === 0) ajuster(); else S.filtres.orgZoom = Math.max(.4, Math.min(1.5, Math.round(((S.filtres.orgZoom || 1) + d * .1) * 10) / 10));
+        c.rendre();
+      });
+      // Glisser pour se déplacer dans le diagramme (souris); le tactile défile nativement.
+      let glisse = null;
+      zone.onpointerdown = e => { if (e.pointerType !== 'mouse' || e.button !== 0) return; glisse = { x: e.clientX, y: e.clientY, l: zone.scrollLeft, t: zone.scrollTop, bouge: false }; };
+      zone.onpointermove = e => { if (!glisse) return; const dx = e.clientX - glisse.x, dy = e.clientY - glisse.y;
+        if (!glisse.bouge && Math.hypot(dx, dy) > 5) { glisse.bouge = true; zone.classList.add('glisse'); zone.setPointerCapture(e.pointerId); }
+        if (glisse.bouge) { zone.scrollLeft = glisse.l - dx; zone.scrollTop = glisse.t - dy; } };
+      zone.onpointerup = zone.onpointercancel = () => { if (glisse?.bouge) zone.addEventListener('click', ev => ev.stopPropagation(), { capture: true, once: true }); glisse = null; zone.classList.remove('glisse'); };
+      // Centrer sur mon poste.
+      const moi = oc.querySelector('.oc-boite.moi');
+      if (moi) requestAnimationFrame(() => { const r = moi.getBoundingClientRect(), rz = zone.getBoundingClientRect(); zone.scrollLeft += r.left - rz.left - zone.clientWidth / 2 + r.width / 2; });
+    }
     $('#ajPoste').onclick = () => fichePoste({ statut: 'Pourvu' });
     $('#ajUnite').onclick = () => ficheUnite({ categorie: 'Département', actif: true });
     v.querySelectorAll('[data-pers]').forEach(a => a.onclick = e => { e.preventDefault(); e.stopPropagation(); c.ouvrirPersonne(parId(S.personnes, a.dataset.pers)); });
