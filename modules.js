@@ -638,9 +638,33 @@ export function installerModules(c) {
 
   /* ================= Organigramme ================= */
   const NIVEAUX = { 1: 'Présidence / DG', 2: 'VP exécutive / principale', 3: 'Vice-présidence', 4: 'Direction principale', 5: 'Direction', 6: 'Direction adjointe', 7: 'Gestion / supervision', 8: 'Chef d’équipe', 9: 'Professionnel / spécialiste', 10: 'Technicien / soutien' };
-  const titulaires = pid => S.titulaires.filter(t => t.poste_id === pid).map(t => parId(S.personnes, t.personne_id)).filter(Boolean);
+  /* Périmètre de l’organigramme : toutes les compagnies, une compagnie ou une unité (et ses sous-unités). */
+  const sousUnites = id => { const r = new Set([id]); let ajout = true; while (ajout) { ajout = false; S.unites.forEach(u => { if (u.parent_id && r.has(u.parent_id) && !r.has(u.id)) { r.add(u.id); ajout = true; } }); } return r; };
+  const compagnieDe = id => { let u = parId(S.unites, id), garde = 0; while (u?.parent_id && garde++ < 20) u = parId(S.unites, u.parent_id); return u?.id || null; };
+  function perimetre() {
+    const id = S.filtres.orgUnite;
+    const u = id && parId(S.unites, id);
+    if (!u) return null;
+    const unites = sousUnites(u.id), cie = compagnieDe(u.id), estCie = !u.parent_id;
+    // Une personne est gardée si elle appartient à la compagnie (ou si sa compagnie n’est pas renseignée).
+    const garderPersonne = x => !x.compagnie_id || x.compagnie_id === cie;
+    const tousTit = pid => S.titulaires.filter(t => t.poste_id === pid).map(t => parId(S.personnes, t.personne_id)).filter(Boolean);
+    const postes = new Set(S.postes.filter(p => unites.has(p.unite_id) || (estCie && tousTit(p.id).some(x => x.compagnie_id === cie))).map(p => p.id));
+    return { postes, unites, garderPersonne };
+  }
+  const titulaires = pid => { const pr = perimetre(); return S.titulaires.filter(t => t.poste_id === pid).map(t => parId(S.personnes, t.personne_id)).filter(Boolean).filter(x => !pr || pr.garderPersonne(x)); };
+  const posteVisible = p => { const pr = perimetre(); return !pr || pr.postes.has(p.id); };
+  // Un poste est une racine s’il n’a pas de supérieur visible dans le périmètre.
+  const racinePoste = p => posteVisible(p) && (!p.superieur_id || !posteVisible(parId(S.postes, p.superieur_id) || {}));
+  function optionsUnites() {
+    const lignes = [];
+    const ajouter = (u, n) => { lignes.push(`<option value="${u.id}" ${S.filtres.orgUnite === u.id ? 'selected' : ''}>${'\u00a0\u00a0'.repeat(n)}${n ? '└ ' : ''}${esc(u.nom)}</option>`);
+      S.unites.filter(x => x.parent_id === u.id).sort((a, b) => a.nom.localeCompare(b.nom)).forEach(x => ajouter(x, n + 1)); };
+    S.unites.filter(u => !u.parent_id).sort((a, b) => (a.categorie !== 'Organisation') - (b.categorie !== 'Organisation') || a.nom.localeCompare(b.nom)).forEach(u => ajouter(u, 0));
+    return lignes.join('');
+  }
   function noeudPoste(p, profondeur = 0) {
-    const enfants = S.postes.filter(x => x.superieur_id === p.id).sort((a, b) => (a.niveau || 99) - (b.niveau || 99) || a.titre.localeCompare(b.titre));
+    const enfants = S.postes.filter(x => x.superieur_id === p.id && posteVisible(x)).sort((a, b) => (a.niveau || 99) - (b.niveau || 99) || a.titre.localeCompare(b.titre));
     const tit = titulaires(p.id); const u = parId(S.unites, p.unite_id);
     const moi = tit.some(x => x.notion_id === '3f7d3833158f817d866ad8dfd702076b');
     return `<li class="noeud ${moi ? 'moi' : ''}">
@@ -661,10 +685,11 @@ export function installerModules(c) {
   /* ---------- Organigramme en diagramme ---------- */
   // Arbre de haut en bas. Quand tous les enfants d’un nœud sont des feuilles, ils s’empilent en colonne pour rester compacts.
   const MOI_NOTION = '3f7d3833158f817d866ad8dfd702076b';
-  const enfantsPoste = p => S.postes.filter(x => x.superieur_id === p.id).sort((a, b) => (a.niveau || 99) - (b.niveau || 99) || a.titre.localeCompare(b.titre));
+  const enfantsPoste = p => S.postes.filter(x => x.superieur_id === p.id && posteVisible(x)).sort((a, b) => (a.niveau || 99) - (b.niveau || 99) || a.titre.localeCompare(b.titre));
   const enfantsUnite = u => S.unites.filter(x => x.parent_id === u.id).sort((a, b) => a.nom.localeCompare(b.nom));
   function boitePoste(p) {
-    const tit = titulaires(p.id), u = parId(S.unites, p.unite_id), moi = tit.some(x => x.notion_id === MOI_NOTION);
+    const pr = perimetre();
+    const tit = titulaires(p.id), u0 = parId(S.unites, p.unite_id), u = u0 && (!pr || pr.unites.has(u0.id)) ? u0 : null, moi = tit.some(x => x.notion_id === MOI_NOTION);
     return `<div class="oc-boite ${moi ? 'moi' : ''} ${p.statut !== 'Pourvu' ? 'vacant' : ''}" data-poste="${p.id}" role="button" tabindex="0">
       <b>${esc(p.titre)}</b>
       <span class="oc-noms">${tit.length ? tit.map(x => `<a href="#" data-pers="${x.id}">${esc(x.nom)}</a>`).join(', ') : `<i>${esc(p.statut === 'Pourvu' ? 'Aucun titulaire' : p.statut)}</i>`}</span>
@@ -688,18 +713,25 @@ export function installerModules(c) {
   const vueOrgMemo = () => { try { return localStorage.getItem('orbite-org-vue') || 'liste'; } catch { return 'liste'; } };
 
   function vueOrganigramme(v) {
+    if (S.filtres.orgUnite === undefined) { try { S.filtres.orgUnite = localStorage.getItem('orbite-org-unite') || ''; } catch { S.filtres.orgUnite = ''; } }
+    if (S.filtres.orgUnite && !parId(S.unites, S.filtres.orgUnite)) S.filtres.orgUnite = '';
     const mode = S.filtres.org || 'postes';
     const affichage = S.filtres.orgVue || vueOrgMemo();
-    const racines = S.postes.filter(p => !p.superieur_id).sort((a, b) => (a.niveau || 99) - (b.niveau || 99));
-    const unitesRacines = S.unites.filter(u => !u.parent_id).sort((a, b) => (a.categorie !== 'Organisation') - (b.categorie !== 'Organisation') || a.nom.localeCompare(b.nom));
-    const vacants = S.postes.filter(p => p.statut !== 'Pourvu').length;
-    v.innerHTML = entete('Organigramme et structure', `${S.postes.length} postes, ${S.unites.length} unités${vacants ? `, ${vacants} poste(s) vacant(s) ou à renseigner` : ''}.`,
+    const racines = S.postes.filter(racinePoste).sort((a, b) => (a.niveau || 99) - (b.niveau || 99) || a.titre.localeCompare(b.titre));
+    const uFiltre = S.filtres.orgUnite && parId(S.unites, S.filtres.orgUnite);
+    const unitesRacines = (uFiltre ? [uFiltre] : S.unites.filter(u => !u.parent_id)).sort((a, b) => (a.categorie !== 'Organisation') - (b.categorie !== 'Organisation') || a.nom.localeCompare(b.nom));
+    const pr = perimetre();
+    const postesVus = pr ? S.postes.filter(p => pr.postes.has(p.id)) : S.postes;
+    const vacants = postesVus.filter(p => p.statut !== 'Pourvu').length;
+    v.innerHTML = entete('Organigramme et structure', `${uFiltre ? esc(uFiltre.nom) + ' · ' : ''}${postesVus.length} postes, ${pr ? pr.unites.size : S.unites.length} unités${vacants ? `, ${vacants} poste(s) vacant(s) ou à renseigner` : ''}.`,
       `<button class="btn" id="ajUnite">Ajouter une unité</button><button class="btn primaire" id="ajPoste">Ajouter un poste</button>`) + `
       <div class="outils"><div class="onglets"><button aria-pressed="${mode === 'postes'}" data-org="postes">Postes et hiérarchie</button><button aria-pressed="${mode === 'unites'}" data-org="unites">Unités</button></div>
-        <div class="onglets"><button aria-pressed="${affichage === 'liste'}" data-orgvue="liste">Liste</button><button aria-pressed="${affichage === 'diagramme'}" data-orgvue="diagramme">Diagramme</button></div></div>
+        <div class="onglets"><button aria-pressed="${affichage === 'liste'}" data-orgvue="liste">Liste</button><button aria-pressed="${affichage === 'diagramme'}" data-orgvue="diagramme">Diagramme</button></div>
+        <select id="orgUnite" aria-label="Compagnie ou unité"><option value="">Toutes les compagnies</option>${optionsUnites()}</select></div>
       ${affichage === 'diagramme' ? diagramme(mode, racines, unitesRacines)
         : `<section class="bloc organigramme"><ul class="arbre racine">${mode === 'postes' ? racines.map(p => noeudPoste(p)).join('') : unitesRacines.map(noeudUnite).join('')}</ul></section>`}`;
     v.querySelectorAll('[data-org]').forEach(b => b.onclick = () => { S.filtres.org = b.dataset.org; c.rendre(); });
+    v.querySelector('#orgUnite').onchange = e => { S.filtres.orgUnite = e.target.value; S.filtres.orgZoom = 0; try { localStorage.setItem('orbite-org-unite', e.target.value); } catch { } c.rendre(); };
     v.querySelectorAll('[data-orgvue]').forEach(b => b.onclick = () => { S.filtres.orgVue = b.dataset.orgvue; try { localStorage.setItem('orbite-org-vue', b.dataset.orgvue); } catch { } c.rendre(); });
     const zone = v.querySelector('.oc-zone'), oc = v.querySelector('.oc');
     if (zone && oc) {
