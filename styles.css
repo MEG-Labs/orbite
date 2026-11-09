@@ -672,3 +672,5 @@ dialog { border: 1px solid var(--trait); border-radius: var(--r-carte); box-shad
 .trajet-fait .titre { text-decoration: line-through; text-decoration-color: color-mix(in srgb, var(--brume) 70%, transparent); }
 .trajet-jour .heure { position: relative; }
 .crochet-fait { display: block; color: var(--vert); font: 700 15px var(--mono); line-height: 1; margin-bottom: 2px; }
+.date-heure { display: grid; grid-template-columns: 1fr 120px; gap: 6px; }
+.quand-capture > span { display: block; }

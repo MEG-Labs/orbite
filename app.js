@@ -697,6 +697,14 @@ function dialogue(html, onsubmit) {
   return d;
 }
 
+/* ---------- Date avec heure facultative ---------- */
+// Une date seule = journée entière (sans heure). Une date + heure = moment précis; l’heure de fin est facultative.
+function planif(jour, debut, fin, jourFin) {
+  if (!jour) return { planifie_debut: null, planifie_fin: null, journee_entiere: false };
+  if (!debut) return { planifie_debut: minuitLocal(jour), planifie_fin: null, journee_entiere: true };
+  return { planifie_debut: depuisLocal(`${jour}T${debut}`), planifie_fin: fin ? depuisLocal(`${jourFin || jour}T${fin}`) : null, journee_entiere: false };
+}
+
 /* ---------- Capture rapide ---------- */
 function ouvrirCapture() {
   dialogue(`<form>
@@ -704,7 +712,7 @@ function ouvrirCapture() {
     <div class="corps">
       <label class="champ large"><span>Quoi?</span><input name="titre" class="titre-saisie" required autofocus autocomplete="off" placeholder="Un titre suffit"></label>
       <div class="types-rapides" role="radiogroup" aria-label="Type">${[...TYPES, 'Achat', 'Note'].map((t, i) => `<label><input type="radio" name="type" value="${t}" ${i === 0 ? 'checked' : ''}><span>${t}</span></label>`).join('')}</div>
-      <label class="champ"><span>Quand (facultatif)</span><input type="datetime-local" name="quand"></label>
+      <div class="champ quand-capture"><span>Quand (facultatif)</span><div class="date-heure"><input type="date" name="quand_jour" aria-label="Date"><input type="time" name="quand_heure" aria-label="Heure (facultative)" title="Heure (facultative)"></div></div>
       <label class="champ"><span>Projet</span><select name="projet_id">${opts(S.projets.filter(p => p.statut === 'Actif'), null, { vide: 'Aucun pour l’instant', lib: 'titre' })}</select></label>
     </div>
     <div class="pied"><button type="button" class="btn" data-fermer>Annuler</button><button type="submit" class="btn primaire">Capturer</button></div>
@@ -720,7 +728,7 @@ function ouvrirCapture() {
       toast(fd.get('type') === 'Achat' ? 'Ajouté aux achats' : 'Note créée'); return rafraichir();
     }
     const ligne = { titre: fd.get('titre').trim(), type: fd.get('type'), statut: fd.get('type') === 'Événement' ? 'À faire' : 'À traiter',
-      planifie_debut: depuisLocal(fd.get('quand')), projet_id: projet?.id || null, domaine_id: projet?.domaine_id || null };
+      ...planif(fd.get('quand_jour'), fd.get('quand_heure')), projet_id: projet?.id || null, domaine_id: projet?.domaine_id || null };
     if (!navigator.onLine) { X.mettreEnFile('actions', ligne); return; }
     const { error } = await sb.from('actions').insert(ligne);
     if (error) { if (/fetch|network/i.test(error.message)) { X.mettreEnFile('actions', ligne); return; } toast('Échec : ' + error.message); return false; }
@@ -771,7 +779,11 @@ function ouvrirSurLeFly() {
 /* ---------- Fiche action ---------- */
 function ouvrirAction(a) {
   const nouveau = !a.id;
-  const jour = a.journee_entiere && a.planifie_debut ? cleJour(a.planifie_debut) : '';
+  // Date et heures séparées : l’heure est facultative.
+  const jourP = a.planifie_debut ? cleJour(a.planifie_debut) : '';
+  const hDebut = a.planifie_debut && !a.journee_entiere ? versLocal(a.planifie_debut).slice(11, 16) : '';
+  const jourFin = a.planifie_fin && !a.journee_entiere ? cleJour(a.planifie_fin) : '';
+  const hFin = a.planifie_fin && !a.journee_entiere ? versLocal(a.planifie_fin).slice(11, 16) : '';
   const m = manquants(a);
   const d = dialogue(`<form>
     <div class="tete-d"><h2>${nouveau ? 'Nouvelle action' : 'Action #' + a.ref}</h2><button type="button" class="btn discret" data-fermer aria-label="Fermer">✕</button></div>
@@ -783,11 +795,11 @@ function ouvrirAction(a) {
       <label class="champ large"><span>Prochain geste</span><input name="prochain_geste" value="${esc(a.prochain_geste)}" placeholder="Une action concrète qui commence par un verbe"></label>
 
       <fieldset><legend>Dates et priorité</legend>
-        <label class="champ case"><input type="checkbox" name="journee_entiere" ${a.journee_entiere ? 'checked' : ''}><span>Journée entière</span></label>
+        <label class="champ"><span>Planifié le</span><input type="date" name="jour" value="${jourP}"></label>
         <label class="champ"><span>Priorité</span><select name="priorite"><option value="">—</option>${Object.entries(PRIOS).map(([k, l]) => `<option value="${k}" ${String(a.priorite) === k ? 'selected' : ''}>${l}</option>`).join('')}</select></label>
-        <label class="champ heure"><span>Planifié — début</span><input type="datetime-local" name="planifie_debut" value="${a.journee_entiere ? '' : versLocal(a.planifie_debut)}"></label>
-        <label class="champ heure"><span>Planifié — fin</span><input type="datetime-local" name="planifie_fin" value="${a.journee_entiere ? '' : versLocal(a.planifie_fin)}"></label>
-        <label class="champ jourent"><span>Planifié le</span><input type="date" name="jour" value="${jour}"></label>
+        <label class="champ"><span>Heure de début (facultatif)</span><input type="time" name="heure_debut" value="${hDebut}"></label>
+        <label class="champ"><span>Heure de fin (facultatif)</span><input type="time" name="heure_fin" value="${hFin}"></label>
+        ${jourFin && jourFin !== jourP ? `<label class="champ"><span>Fin le</span><input type="date" name="jour_fin" value="${jourFin}"></label>` : ''}
         <label class="champ"><span>Échéance</span><input type="date" name="echeance" value="${a.echeance || ''}"></label>
         <label class="champ"><span>Relance</span><input type="date" name="relance" value="${a.relance || ''}"></label>
         <label class="champ"><span>Durée prévue (min)</span><input type="number" min="0" step="1" name="duree_min" value="${a.duree_min ?? ''}"></label>
@@ -830,12 +842,10 @@ function ouvrirAction(a) {
       <button type="button" class="btn" data-fermer>Annuler</button><button type="submit" class="btn primaire">Enregistrer</button>
     </div></form>`, async fd => {
     const vide = k => (fd.get(k) || '').trim() || null;
-    const je = fd.get('journee_entiere') === 'on';
+    const p = planif(fd.get('jour'), fd.get('heure_debut'), fd.get('heure_fin'), fd.get('jour_fin'));
     const ligne = {
       titre: fd.get('titre').trim(), statut: fd.get('statut'), type: fd.get('type'), prochain_geste: vide('prochain_geste'),
-      journee_entiere: je,
-      planifie_debut: je ? (fd.get('jour') ? minuitLocal(fd.get('jour')) : null) : depuisLocal(fd.get('planifie_debut')),
-      planifie_fin: je ? null : depuisLocal(fd.get('planifie_fin')),
+      ...p,
       echeance: vide('echeance'), relance: vide('relance'), priorite: fd.get('priorite') ? +fd.get('priorite') : null,
       duree_min: fd.get('duree_min') ? +fd.get('duree_min') : null,
       duree_reelle_min: fd.get('duree_reelle_min') ? +fd.get('duree_reelle_min') : null,
@@ -851,9 +861,10 @@ function ouvrirAction(a) {
     if (error) { toast('Échec : ' + error.message); return false; }
     toast(nouveau ? 'Action ajoutée' : 'Enregistré'); rafraichir();
   });
-  const cb = d.querySelector('[name=journee_entiere]');
-  const bascule = () => { d.querySelectorAll('.heure').forEach(e => e.hidden = cb.checked); d.querySelector('.jourent').hidden = !cb.checked; };
-  cb.onchange = bascule; bascule();
+  // Sans date, les heures n’ont pas de sens : on les désactive.
+  const jIn = d.querySelector('[name=jour]'), hIns = d.querySelectorAll('[name=heure_debut], [name=heure_fin]');
+  const majHeures = () => hIns.forEach(h => { h.disabled = !jIn.value; });
+  jIn.addEventListener('input', majHeures); majHeures();
   const cr = d.querySelector('#cr'); if (cr) cr.onclick = () => { d.close(); L.compteRendu(a); };
   const vn = d.querySelector('#voirNote'); if (vn) vn.onclick = () => { d.close(); M.ficheNote(parId(S.notes, a.note_id)); };
   const nl = d.querySelector('.notes-liees'); if (nl) M.brancherNotesLiees(nl, { action_id: a.id, projet_id: a.projet_id || null, domaine_id: a.domaine_id || null, titre: a.titre, avant: () => d.close() });
