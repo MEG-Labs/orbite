@@ -325,6 +325,11 @@ function brancherGlisser(v) {
     const a = parId(S.actions, li.dataset.id);
     if (!a || a.type === 'Événement' || !ouvert(a) || a.statut === 'En cours') return;
     li.classList.add('glissable');
+    li.title = 'Glisser vers « En cours »';
+    // Empêche la sélection de texte de démarrer quand on attrape la ligne à la souris.
+    li.addEventListener('mousedown', e => { if (!e.target.closest('button, a, input, select')) e.preventDefault(); });
+    li.addEventListener('selectstart', e => e.preventDefault());
+    li.addEventListener('dragstart', e => e.preventDefault());
     li.addEventListener('pointerdown', e => {
       if (e.button !== 0 || e.target.closest('button, a, input, select')) return;
       const g = glisseEnCours = { li, a, x: e.clientX, y: e.clientY, id: e.pointerId, actif: false, tactile: e.pointerType !== 'mouse', minuterie: null };
