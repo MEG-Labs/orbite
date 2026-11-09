@@ -628,3 +628,4 @@ dialog { border: 1px solid var(--trait); border-radius: var(--r-carte); box-shad
 .charge-texte .leg-t::before { content: ""; display: inline-block; width: 14px; height: 8px; margin-right: 5px; vertical-align: 0;
   background: repeating-linear-gradient(135deg, color-mix(in srgb, var(--craie) 45%, transparent) 0 3px, color-mix(in srgb, var(--craie) 20%, transparent) 3px 6px); }
 @media (max-width: 760px) { .charge-graduations span:nth-child(even):not(:last-child) { display: none; } }
+.oc-code { font: 700 11px var(--mono); color: var(--orange-pale); margin-right: 2px; }

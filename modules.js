@@ -697,7 +697,7 @@ export function installerModules(c) {
   }
   function boiteUnite(u) {
     const postes = S.postes.filter(p => p.unite_id === u.id);
-    return `<div class="oc-boite" data-unite="${u.id}" role="button" tabindex="0"><b>${esc(u.nom)}</b><small>${esc(u.categorie || '')}${postes.length ? ` · ${postes.length} poste${postes.length > 1 ? 's' : ''}` : ''}</small></div>`;
+    return `<div class="oc-boite" data-unite="${u.id}" role="button" tabindex="0" title="${esc(u.mandat || '')}"><b>${u.code ? `<span class="oc-code">${esc(u.code)}</span> ` : ''}${esc(u.nom)}</b><small>${esc(u.categorie || '')}${postes.length ? ` · ${postes.length} poste${postes.length > 1 ? 's' : ''}` : ''}</small></div>`;
   }
   function noeudDiagramme(x, enfants, boite) {
     const e = enfants(x);
