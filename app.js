@@ -662,7 +662,7 @@ function ouvrirSurLeFly() {
     <div class="corps">
       <label class="champ large"><span>Qu’as-tu fait?</span><input name="titre" class="titre-saisie" required autofocus autocomplete="off" placeholder="Ex. Débloqué une commande avec la réception"></label>
       <div class="champ large"><span>Temps passé</span><div class="types-rapides" role="radiogroup" aria-label="Temps passé">${DUREES.map(d => `<label><input type="radio" name="duree" value="${d}" ${d === 15 ? 'checked' : ''}><span>${d < 60 ? d + ' min' : '1 h'}</span></label>`).join('')}<label><input type="radio" name="duree" value="autre"><span>Autre</span></label></div>
-        <input type="number" name="duree_autre" min="1" step="5" placeholder="Minutes" class="duree-autre" aria-label="Autre durée en minutes"></div>
+        <input type="number" name="duree_autre" min="1" step="1" placeholder="Minutes" class="duree-autre" aria-label="Autre durée en minutes"></div>
       <label class="champ"><span>Domaine</span><select name="domaine_id">${domaines.map(d => `<option value="${d.id}" ${d.id === defaut ? 'selected' : ''}>${esc(d.nom)}</option>`).join('')}</select></label>
       <label class="champ"><span>Projet (facultatif)</span><select name="projet_id">${opts(S.projets.filter(p => p.statut === 'Actif'), null, { vide: 'Hors projet', lib: 'titre' })}</select></label>
       <label class="champ"><span>Terminé à</span><input type="datetime-local" name="quand" value="${esc(maintenant)}"></label>
@@ -709,8 +709,8 @@ function ouvrirAction(a) {
         <label class="champ jourent"><span>Planifié le</span><input type="date" name="jour" value="${jour}"></label>
         <label class="champ"><span>Échéance</span><input type="date" name="echeance" value="${a.echeance || ''}"></label>
         <label class="champ"><span>Relance</span><input type="date" name="relance" value="${a.relance || ''}"></label>
-        <label class="champ"><span>Durée prévue (min)</span><input type="number" min="0" step="5" name="duree_min" value="${a.duree_min ?? ''}"></label>
-        <label class="champ"><span>Durée réelle (min)</span><input type="number" min="0" step="5" name="duree_reelle_min" value="${a.duree_reelle_min ?? ''}"></label>
+        <label class="champ"><span>Durée prévue (min)</span><input type="number" min="0" step="1" name="duree_min" value="${a.duree_min ?? ''}"></label>
+        <label class="champ"><span>Durée réelle (min)</span><input type="number" min="0" step="1" name="duree_reelle_min" value="${a.duree_reelle_min ?? ''}"></label>
       </fieldset>
 
       <fieldset><legend>Relier</legend>

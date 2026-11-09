@@ -97,7 +97,7 @@ export function installerLot6(c) {
     const d = dialogue(`<form><div class="tete-d"><h2>${fds ? 'Ma journée' : 'Fermer ma journée'}</h2><button type="button" class="btn discret" data-fermer aria-label="Fermer">✕</button></div>
       <div class="corps rituel" style="grid-template-columns:1fr">
         <section><h3>Tes victoires <span class="nb">${vict.length}</span></h3>
-          ${vict.length ? `<ul class="victoires">${vict.map(a => `<li><span>${a.sur_le_fly ? '⚡' : '✓'} ${esc(a.titre)}</span>${a.duree_min ? `<label class="reel"><input type="number" min="0" step="5" name="reel_${a.id}" value="${a.duree_reelle_min ?? ''}" placeholder="${a.duree_min}" aria-label="Durée réelle en minutes"><small>min réelles · prévu ${a.duree_min}</small></label>` : ''}</li>`).join('')}</ul>`
+          ${vict.length ? `<ul class="victoires">${vict.map(a => `<li><span>${a.sur_le_fly ? '⚡' : '✓'} ${esc(a.titre)}</span>${a.duree_min ? `<label class="reel"><input type="number" min="0" step="1" name="reel_${a.id}" value="${a.duree_reelle_min ?? ''}" placeholder="${a.duree_min}" aria-label="Durée réelle en minutes"><small>min réelles · prévu ${a.duree_min}</small></label>` : ''}</li>`).join('')}</ul>`
             : '<p class="aide">Rien de coché aujourd’hui. Avancer compte aussi : note-le plus bas.</p>'}
         </section>
         ${reste.length ? `<section><h3>Ce qui reste <span class="nb">${reste.length}</span></h3>
@@ -167,7 +167,7 @@ export function installerLot6(c) {
         <p class="aide" style="margin:0">Décider <b>quand</b> tu fais quelque chose rend le passage à l’action nettement plus probable. ${f ? `D’après tes ${facteurEstimation().n} dernières tâches, ${libFacteur(f)} : les durées proposées en tiennent compte.` : 'Note des durées prévues et réelles pour que les propositions s’ajustent à ton rythme.'}</p>
         ${heures.length ? plan.map(a => `<div class="placer"><b>${esc(a.titre)}</b>
           <label class="champ"><span>À</span><select name="h_${a.id}"><option value="">Pas d’heure</option>${heures.map(t => `<option value="${t}" ${propose[a.id] === t ? 'selected' : ''}>${hhmm(t)}${occupe.some(([x, y]) => t >= x && t < y) ? ' · occupé' : ''}</option>`).join('')}</select></label>
-          <label class="champ"><span>Durée (min)</span><input type="number" name="d_${a.id}" min="5" step="5" value="${suggere(a)}"></label></div>`).join('')
+          <label class="champ"><span>Durée (min)</span><input type="number" name="d_${a.id}" min="5" step="1" value="${suggere(a)}"></label></div>`).join('')
           : '<p class="vide" style="padding:0">La plage de travail est terminée pour aujourd’hui. Garde ces actions pour demain matin.</p>'}
       </div>
       <div class="pied"><button type="button" class="btn" data-fermer>Annuler</button>${heures.length ? '<button type="submit" class="btn primaire">Placer</button>' : ''}</div></form>`, async fd => {
