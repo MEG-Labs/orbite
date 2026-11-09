@@ -564,3 +564,12 @@ dialog { border: 1px solid var(--trait); border-radius: var(--r-carte); box-shad
 .theme b { font: 700 14px var(--mono); }
 .theme small { color: var(--brume); font-size: 12px; }
 .theme.choisi { border-color: var(--orange); box-shadow: inset 0 0 0 1px var(--orange); }
+
+/* Fait sur le fly : petit bouton discret au-dessus du bouton de capture */
+.fab-fly { position: fixed; right: 30px; bottom: 90px; z-index: 30; width: 40px; height: 40px; display: grid; place-items: center; cursor: pointer;
+  background: var(--coque-2); color: var(--jaune); border: 1px solid var(--trait-fort); border-radius: var(--r); box-shadow: var(--ombre); opacity: .85; }
+.fab-fly:hover, .fab-fly:focus-visible { opacity: 1; border-color: var(--jaune); }
+.fab-fly svg { width: 18px; height: 18px; }
+@media (max-width: 760px) { .fab-fly { right: 24px; bottom: calc(var(--nav-h) + 84px + env(safe-area-inset-bottom)); } }
+.pastille.fly { color: var(--jaune); border-color: color-mix(in srgb, var(--jaune) 40%, transparent); }
+.duree-autre { margin-top: 6px; max-width: 140px; }

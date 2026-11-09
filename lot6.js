@@ -97,7 +97,7 @@ export function installerLot6(c) {
     const d = dialogue(`<form><div class="tete-d"><h2>${fds ? 'Ma journée' : 'Fermer ma journée'}</h2><button type="button" class="btn discret" data-fermer aria-label="Fermer">✕</button></div>
       <div class="corps rituel" style="grid-template-columns:1fr">
         <section><h3>Tes victoires <span class="nb">${vict.length}</span></h3>
-          ${vict.length ? `<ul class="victoires">${vict.map(a => `<li><span>✓ ${esc(a.titre)}</span>${a.duree_min ? `<label class="reel"><input type="number" min="0" step="5" name="reel_${a.id}" value="${a.duree_reelle_min ?? ''}" placeholder="${a.duree_min}" aria-label="Durée réelle en minutes"><small>min réelles · prévu ${a.duree_min}</small></label>` : ''}</li>`).join('')}</ul>`
+          ${vict.length ? `<ul class="victoires">${vict.map(a => `<li><span>${a.sur_le_fly ? '⚡' : '✓'} ${esc(a.titre)}</span>${a.duree_min ? `<label class="reel"><input type="number" min="0" step="5" name="reel_${a.id}" value="${a.duree_reelle_min ?? ''}" placeholder="${a.duree_min}" aria-label="Durée réelle en minutes"><small>min réelles · prévu ${a.duree_min}</small></label>` : ''}</li>`).join('')}</ul>`
             : '<p class="aide">Rien de coché aujourd’hui. Avancer compte aussi : note-le plus bas.</p>'}
         </section>
         ${reste.length ? `<section><h3>Ce qui reste <span class="nb">${reste.length}</span></h3>
@@ -208,6 +208,13 @@ export function installerLot6(c) {
     if (cette != null && cette <= 2.5) constats.push('Semaine exigeante : allège la prochaine (une soirée sans écran, moins de rendez-vous, une tâche déléguée).');
     const lourds = jours.filter(j => heuresRdv(j) >= 5 && (journalDu(j)?.energie || 5) <= 2);
     if (lourds.length) constats.push(`Les journées à 5 h et plus de rendez-vous te vident (${lourds.map(jourDate).join(', ')}). Protège des plages sans réunion.`);
+    const lim7 = plusJours(auj, -6);
+    const fly = S.actions.filter(a => a.sur_le_fly && a.realisee_le && cleJour(a.realisee_le) >= lim7);
+    if (fly.length) {
+      const min = fly.reduce((t, a) => t + (a.duree_reelle_min || 0), 0);
+      const tFly = fly.filter(estTravail).length;
+      constats.push(`Sur le fly : ${pluriel(fly.length, 'tâche')}${min ? `, ${min >= 60 ? fmt(min / 60) + ' h' : min + ' min'}` : ''}${tFly ? ` (dont ${tFly} au travail)` : ''}. ${min >= 300 ? 'C’est beaucoup d’imprévus : bloque une plage tampon chaque jour.' : ''}`.trim());
+    }
     constats.push(f ? `Estimations : ${libFacteur(f)} (${n} tâches sur 90 jours).` : `Estimations : ${n}/3 tâches avec durée prévue et réelle, pas encore assez pour un facteur.`);
     if (ouvrables) constats.push(`Journées fermées : ${fermes}/${ouvrables}.`);
     return bloc('Énergie et charge · 7 jours', null, `<table class="tableau-energie"><thead><tr><th>Jour</th><th>Énergie</th><th>Rendez-vous</th><th>Victoires</th></tr></thead><tbody>${lignes}</tbody></table>

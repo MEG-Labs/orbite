@@ -203,9 +203,11 @@ function rendre() {
       </nav>
       <main id="vue">${S.horsLigne ? `<div class="bandeau-horsligne">Hors ligne · données du ${esc(fmtJour.format(new Date(S.horsLigne)))} à ${esc(fmtHeure.format(new Date(S.horsLigne)))}. Tes captures seront envoyées au retour du réseau.</div>` : ''}</main>
     </div>
+    <button class="fab-fly" id="fabFly" aria-label="Consigner une tâche faite sur le fly" title="Fait sur le fly (F)"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M13 2 4 14h7l-1 8 9-12h-7z" fill="currentColor"/></svg></button>
     <button class="fab" id="fab" aria-label="Capture rapide" title="Capture rapide (N)">${ico('plus')}</button>`;
   app.querySelectorAll('[data-vue]').forEach(b => b.onclick = () => { S.vue = b.dataset.vue; S.filtres = {}; history.replaceState(null, '', S.vue === 'accueil' ? location.pathname : '#' + S.vue); rendre(); window.scrollTo(0, 0); });
   $('#fab').onclick = () => ouvrirCapture();
+  $('#fabFly').onclick = () => ouvrirSurLeFly();
   $('#btnRecherche').onclick = () => L.ouvrirRecherche();
   $('#deco').onclick = async () => { await sb.auth.signOut(); };
   horloge();
@@ -289,6 +291,7 @@ function ligne(a, { montrerProjet = true, heureSeule = false } = {}) {
   if (a.relance) meta.push(`<span>Relance ${esc(jourDate(a.relance))}</span>`);
   const deleg = parId(S.personnes, a.delegue_a_id); if (deleg) meta.push(`<span>Délégué à ${esc(deleg.nom)}</span>`);
   const att = parId(S.personnes, a.en_attente_de_id); if (att) meta.push(`<span>Attend ${esc(att.nom)}</span>`);
+  if (a.sur_le_fly) meta.push(`<span class="pastille fly" title="Faite sur le fly">⚡ sur le fly</span>`);
   if (a.motif_blocage) meta.push(`<span>${esc(a.motif_blocage)}</span>`);
   if (a.reference_externe && /^[A-Z][A-Z0-9]+-\d+$/.test(a.reference_externe.trim())) {
     const dom = S.reglages.find(r => r.cle === 'jira_domaine')?.valeur || 'canac.atlassian.net';
@@ -519,17 +522,19 @@ function vueActions(v) {
   else if (f.special === 'passes') items = items.filter(evtPasse);
   if (f.statut === 'ouverts') items = items.filter(ouvert);
   else if (f.statut) items = items.filter(a => a.statut === f.statut);
-  if (f.type) items = items.filter(a => a.type === f.type);
+  if (f.type === 'fly') items = items.filter(a => a.sur_le_fly);
+  else if (f.type) items = items.filter(a => a.type === f.type);
   if (f.projet) items = items.filter(a => f.projet === 'aucun' ? !a.projet_id : a.projet_id === f.projet);
   if (q) items = items.filter(a => [a.titre, a.prochain_geste, a.notes, a.reference_externe].some(x => (x || '').toLowerCase().includes(q)));
-  items.sort((a, b) => (ouvert(b) - ouvert(a)) || (b.planifie_debut || b.cree_le).localeCompare(a.planifie_debut || a.cree_le));
+  if (f.type === 'fly') items.sort((a, b) => (b.realisee_le || b.cree_le).localeCompare(a.realisee_le || a.cree_le));
+  else items.sort((a, b) => (ouvert(b) - ouvert(a)) || (b.planifie_debut || b.cree_le).localeCompare(a.planifie_debut || a.cree_le));
   const titreFiltre = { retard: 'En retard', bloques: 'Bloquées ou relances', passes: 'Événements passés encore ouverts' }[f.special];
   v.innerHTML = `
     <h1>Actions et agenda</h1><p class="sous-titre">${titreFiltre ? esc(titreFiltre) + ' · <button class="btn discret" id="effacer" style="padding:0">effacer le filtre</button>' : 'Tâches, événements, jalons et rappels.'}</p>
     <div class="outils">
       <input type="search" id="q" placeholder="Chercher" value="${esc(f.q || '')}" aria-label="Chercher">
       <select id="fStatut" aria-label="Statut"><option value="">Tous les statuts</option><option value="ouverts" ${f.statut === 'ouverts' ? 'selected' : ''}>Ouverts</option>${STATUTS.map(s => `<option ${f.statut === s ? 'selected' : ''}>${s}</option>`).join('')}</select>
-      <select id="fType" aria-label="Type"><option value="">Tous les types</option>${TYPES.map(s => `<option ${f.type === s ? 'selected' : ''}>${s}</option>`).join('')}</select>
+      <select id="fType" aria-label="Type"><option value="">Tous les types</option>${TYPES.map(s => `<option ${f.type === s ? 'selected' : ''}>${s}</option>`).join('')}<option value="fly" ${f.type === 'fly' ? 'selected' : ''}>⚡ Faites sur le fly</option></select>
       <select id="fProjet" aria-label="Projet"><option value="">Tous les projets</option><option value="aucun" ${f.projet === 'aucun' ? 'selected' : ''}>Sans projet</option>${S.projets.map(p => `<option value="${p.id}" ${f.projet === p.id ? 'selected' : ''}>${esc(p.titre)}</option>`).join('')}</select>
     </div>
     <section class="bloc"><header><h2>${items.length} élément${items.length > 1 ? 's' : ''}</h2>
@@ -640,6 +645,46 @@ function ouvrirCapture() {
     if (error) { if (/fetch|network/i.test(error.message)) { X.mettreEnFile('actions', ligne); return; } toast('Échec : ' + error.message); return false; }
     toast('Capturé'); rafraichir();
   });
+}
+
+/* ---------- Fait sur le fly ---------- */
+// Consigner après coup une tâche faite sans être planifiée : elle est créée déjà terminée, marquée « sur le fly ».
+function ouvrirSurLeFly() {
+  const travail = S.domaines.find(d => d.nom === 'Travail');
+  const domTravail = (S.reglages.find(r => r.cle === 'domaines_travail')?.valeur || [])[0] || travail?.id;
+  const hors = L6.horsTravail();
+  const domaines = S.domaines.filter(d => d.actif !== false).sort((a, b) => (a.ordre ?? 99) - (b.ordre ?? 99));
+  const defaut = hors ? (S.domaines.find(d => d.nom === 'Personnel')?.id || '') : domTravail;
+  const DUREES = [5, 15, 30, 60];
+  const maintenant = versLocal(new Date().toISOString());
+  const d = dialogue(`<form>
+    <div class="tete-d"><h2>⚡ Fait sur le fly</h2><div><button type="button" class="btn discret" id="histFly">Historique</button><button type="button" class="btn discret" data-fermer aria-label="Fermer">✕</button></div></div>
+    <div class="corps">
+      <label class="champ large"><span>Qu’as-tu fait?</span><input name="titre" class="titre-saisie" required autofocus autocomplete="off" placeholder="Ex. Débloqué une commande avec la réception"></label>
+      <div class="champ large"><span>Temps passé</span><div class="types-rapides" role="radiogroup" aria-label="Temps passé">${DUREES.map(d => `<label><input type="radio" name="duree" value="${d}" ${d === 15 ? 'checked' : ''}><span>${d < 60 ? d + ' min' : '1 h'}</span></label>`).join('')}<label><input type="radio" name="duree" value="autre"><span>Autre</span></label></div>
+        <input type="number" name="duree_autre" min="1" step="5" placeholder="Minutes" class="duree-autre" aria-label="Autre durée en minutes"></div>
+      <label class="champ"><span>Domaine</span><select name="domaine_id">${domaines.map(d => `<option value="${d.id}" ${d.id === defaut ? 'selected' : ''}>${esc(d.nom)}</option>`).join('')}</select></label>
+      <label class="champ"><span>Projet (facultatif)</span><select name="projet_id">${opts(S.projets.filter(p => p.statut === 'Actif'), null, { vide: 'Hors projet', lib: 'titre' })}</select></label>
+      <label class="champ"><span>Terminé à</span><input type="datetime-local" name="quand" value="${esc(maintenant)}"></label>
+      <label class="champ large"><span>Pour qui / notes (facultatif)</span><input name="notes" autocomplete="off" placeholder="Ex. demande de Rémi"></label>
+    </div>
+    <div class="pied"><button type="button" class="btn" data-fermer>Annuler</button><button type="submit" class="btn primaire">Consigner</button></div>
+  </form>`, async fd => {
+    const projet = parId(S.projets, fd.get('projet_id'));
+    const duree = fd.get('duree') === 'autre' ? (+fd.get('duree_autre') || null) : +fd.get('duree');
+    const fin = depuisLocal(fd.get('quand')) || new Date().toISOString();
+    const ligne = { titre: fd.get('titre').trim(), type: 'Tâche', statut: 'Terminé', sur_le_fly: true, realisee_le: fin,
+      duree_reelle_min: duree, domaine_id: projet?.domaine_id || fd.get('domaine_id') || null, projet_id: projet?.id || null, hors_projet: !projet,
+      notes: (fd.get('notes') || '').trim() || null };
+    if (!navigator.onLine) { X.mettreEnFile('actions', ligne); return; }
+    const { error } = await sb.from('actions').insert(ligne);
+    if (error) { if (/fetch|network/i.test(error.message)) { X.mettreEnFile('actions', ligne); return; } toast('Échec : ' + error.message); return false; }
+    toast('Consigné ⚡'); rafraichir();
+  });
+  d.querySelector('#histFly').onclick = () => { d.close(); S.vue = 'actions'; S.filtres = { type: 'fly' }; history.replaceState(null, '', '#actions'); rendre(); window.scrollTo(0, 0); };
+  const autre = d.querySelector('.duree-autre');
+  autre.hidden = true;
+  d.querySelectorAll('input[name=duree]').forEach(r => r.onchange = () => { autre.hidden = d.querySelector('input[name=duree]:checked').value !== 'autre'; if (!autre.hidden) autre.focus(); });
 }
 
 /* ---------- Fiche action ---------- */
@@ -888,6 +933,7 @@ sb.auth.onAuthStateChange((evt, session) => {
 
 document.addEventListener('keydown', e => {
   if (S.session && ((e.key.toLowerCase() === 'k' && (e.ctrlKey || e.metaKey)) || (e.key === '/' && !document.querySelector('dialog[open]') && !/INPUT|TEXTAREA|SELECT/.test(document.activeElement.tagName)))) { e.preventDefault(); return L.ouvrirRecherche(); }
+  if (e.key.toLowerCase() === 'f' && !e.ctrlKey && !e.metaKey && !e.altKey && S.session && !document.querySelector('dialog[open]') && !/INPUT|TEXTAREA|SELECT/.test(document.activeElement.tagName)) { e.preventDefault(); ouvrirSurLeFly(); }
   if (e.key.toLowerCase() === 'n' && S.session && !document.querySelector('dialog[open]') && !/INPUT|TEXTAREA|SELECT/.test(document.activeElement.tagName)) { e.preventDefault(); ouvrirCapture(); }
 });
 document.addEventListener('visibilitychange', () => { if (!document.hidden && S.session && !document.querySelector('dialog[open]')) rafraichir().catch(() => {}); });

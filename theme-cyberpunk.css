@@ -101,3 +101,4 @@ input:focus, select:focus, textarea:focus { border-color: var(--cyan); box-shado
 .a-agenda { color: var(--vert); }
 :focus-visible { outline-color: var(--cyan); }
 .entete-vue h1 { font-family: var(--titre); letter-spacing: .06em; text-transform: uppercase; text-shadow: var(--lueur-c); }
+.fab-fly { border-radius: 0; background: #0A0815; color: var(--jaune); border-color: var(--jaune); box-shadow: 0 0 8px rgba(245, 229, 10, .45); }

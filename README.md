@@ -41,6 +41,8 @@ L'accueil commence par les **événements du jour** (avec la charge de 8 h à 17
 
 **Thèmes** : dans Plus, choix entre ORBITE (anthracite et orange) et Cyberpunk (néon magenta et cyan, fichier `theme-cyberpunk.css` chargé par-dessus `styles.css`). Le choix est gardé dans le réglage `theme` et suit le compte sur tous les appareils.
 
+**Fait sur le fly** : le petit bouton ⚡ au-dessus du « + » (raccourci F) consigne une tâche faite sans être planifiée, déjà terminée, avec le temps passé, le domaine (Travail par défaut pendant les heures de travail) et une note. Colonne `actions.sur_le_fly`. Elles comptent comme victoires dans le rituel de fermeture, se filtrent dans Actions (« ⚡ Faites sur le fly ») et sont totalisées dans la revue hebdo.
+
 Autres outils :
 - **Recherche globale** : Ctrl+K ou / sur ordinateur, loupe dans le bandeau sur téléphone.
 - **Compte rendu** depuis un événement : note liée au projet; les lignes « - [ ] … » deviennent des tâches.
