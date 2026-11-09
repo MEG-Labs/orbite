@@ -667,3 +667,8 @@ dialog { border: 1px solid var(--trait); border-radius: var(--r-carte); box-shad
 .zone-terminer span { font-size: 20px; }
 .zone-terminer.survol-depot { border-style: solid; border-color: var(--vert); background: color-mix(in srgb, var(--vert) 22%, var(--coque)); color: var(--craie); }
 @media (max-width: 760px) { .zone-terminer { bottom: calc(var(--nav-h) + 14px + env(safe-area-inset-bottom)); } }
+/* Transports du jour : trajets faits ou passés */
+.trajet-fait { opacity: .5; }
+.trajet-fait .titre { text-decoration: line-through; text-decoration-color: color-mix(in srgb, var(--brume) 70%, transparent); }
+.trajet-jour .heure { position: relative; }
+.crochet-fait { display: block; color: var(--vert); font: 700 15px var(--mono); line-height: 1; margin-bottom: 2px; }

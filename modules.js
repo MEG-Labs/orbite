@@ -915,7 +915,10 @@ export function installerModules(c) {
     if (abos.length) lignes.push(['abonnements', `${abos.length} facturation${abos.length > 1 ? 's' : ''} cette semaine`, abos.map(a => `${a.nom} ${fmtArgent(a.montant)}`).join(', ')]);
     if (lecture) lignes.push(['bibliotheque', 'En lecture : ' + lecture.titre, lecture.longueur ? `${lecture.position || 0} / ${lecture.longueur}` : '']);
     return `
-      ${bloc('Transports du jour', traj.length, traj.length ? `<ul class="lignes">${traj.map(t => `<li class="ligne" style="grid-template-columns:52px minmax(0,1fr) auto" data-aller="transports"><div class="heure">${esc(fmtHeure.format(new Date(t.date_heure)))}</div><div><div class="titre">${esc(t.titre.split(' • ').pop())}</div><div class="meta"><span>${esc(t.enfants || '')}</span></div></div><div>${t.responsable ? pastille(t.responsable, 'st-Terminé') : pastille('À attribuer', 'st-Bloqué')}</div></li>`).join('')}</ul>` : vide('Aucun transport aujourd’hui.'), '<button class="btn discret" data-aller="transports">Semaine</button>')}
+      ${bloc('Transports du jour', traj.length, traj.length ? `<ul class="lignes">${traj.map(t => {
+        // Fait (statut) ou heure passée : crochet et ligne atténuée.
+        const fait = t.statut === 'Fait' || new Date(t.date_heure) < new Date();
+        return `<li class="ligne trajet-jour${fait ? ' trajet-fait' : ''}" style="grid-template-columns:52px minmax(0,1fr) auto" data-aller="transports" ${fait ? 'title="Fait"' : ''}><div class="heure">${fait ? '<span class="crochet-fait" aria-label="Fait">✓</span>' : ''}${esc(fmtHeure.format(new Date(t.date_heure)))}</div><div><div class="titre">${esc(t.titre.split(' • ').pop())}</div><div class="meta"><span>${esc(t.enfants || '')}</span></div></div><div>${t.responsable ? pastille(t.responsable, 'st-Terminé') : pastille('À attribuer', 'st-Bloqué')}</div></li>`; }).join('')}</ul>` : vide('Aucun transport aujourd’hui.'), '<button class="btn discret" data-aller="transports">Semaine</button>')}
       ${lignes.length ? bloc('À surveiller', null, `<ul class="lignes">${lignes.map(([k, t, d]) => `<li class="ligne" style="grid-template-columns:22px minmax(0,1fr)" data-aller="${k}"><span class="ico-mini">${c.ico(k)}</span><div><div class="titre">${esc(t)}</div>${d ? `<div class="meta"><span>${esc(d)}</span></div>` : ''}</div></li>`).join('')}</ul>`) : ''}`;
   }
 
