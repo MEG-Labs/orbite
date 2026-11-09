@@ -385,6 +385,7 @@ function vueAccueil(v) {
           ${liste(enCours, 'Rien en cours. Passe une tâche du backlog à « En cours » pour la retrouver ici.')}</section>
         <section class="bloc"><header><h2>Tâches planifiées · 7 jours <span class="nb">${semaine.length}</span></h2><button class="btn discret" data-aller="agenda">Agenda</button></header>
           ${liste(semaine, 'Aucune tâche planifiée cette semaine.')}</section>
+        ${aCompleter.length ? `<section class="bloc"><header><h2>À compléter <span class="nb">${aCompleter.length}</span></h2></header>${liste(aCompleter.slice(0, 8), '')}</section>` : ''}
         <section class="bloc"><header><h2>Backlog et engagements <span class="nb">${backlog.length}</span></h2></header>
           ${liste(backlog, 'Backlog vide.')}</section>
       </div>
@@ -393,7 +394,6 @@ function vueAccueil(v) {
         ${bloques.length ? `<section class="bloc"><header><h2>Blocages et relances <span class="nb">${bloques.length}</span></h2></header>${liste(bloques, '')}</section>` : ''}
         <section class="bloc"><header><h2>Projets en mouvement <span class="nb">${actifs.length}</span></h2><button class="btn discret" data-aller="projets">Tous</button></header>
           ${actifs.map(carteProjet).join('') || '<div class="vide">Aucun projet actif.</div>'}</section>
-        ${aCompleter.length ? `<section class="bloc"><header><h2>À compléter <span class="nb">${aCompleter.length}</span></h2></header>${liste(aCompleter.slice(0, 8), '')}</section>` : ''}
       </div>
     </div>`;
   v.querySelectorAll('[data-aller]').forEach(b => b.onclick = () => { S.vue = b.dataset.aller; rendre(); });
