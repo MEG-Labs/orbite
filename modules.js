@@ -505,37 +505,87 @@ export function installerModules(c) {
 
   /* ================= Carnet ================= */
   const TYPES_NOTE = ['Note', 'Idée', 'Compte rendu', 'Décision', 'Référence', 'Bilan'];
+  /* Cahiers : regroupent des notes (facultatif); un cahier ou une note peut être lié à un projet ou à une tâche. */
+  const COULEURS_CAHIER = [['Orange', '#F26B21'], ['Bleu', '#3E8ED0'], ['Vert', '#4FB286'], ['Jaune', '#E8B23A'], ['Violet', '#9B7BE0'], ['Rose', '#E0679B'], ['Gris', '#8FA8B8']];
+  const cahiersActifs = () => (S.cahiers || []).filter(x => !x.archive).sort((a, b) => a.titre.localeCompare(b.titre));
+  const notesDuCahier = id => S.notes.filter(n => n.cahier_id === id && !n.archivee);
+  const lienAction = id => { const a = id && parId(S.actions, id); return a ? `<span class="lien-obj">✓ ${esc(a.titre)}</span>` : ''; };
+  const lienProjet = id => { const p = id && parId(S.projets, id); return p ? `<span class="lien-obj">▸ ${esc(p.titre)}</span>` : ''; };
+  // Tâches proposées pour un lien : ouvertes, plus celle déjà liée.
+  const actionsLiables = courant => S.actions.filter(a => a.id === courant || (['À traiter', 'À faire', 'En cours', 'En attente', 'Bloqué'].includes(a.statut) && a.type !== 'Routine'))
+    .sort((a, b) => a.titre.localeCompare(b.titre));
+
+  function ligneNote(n, { cahier = true } = {}) {
+    const p = parId(S.projets, n.projet_id), ch = cahier && n.cahier_id && parId(S.cahiers || [], n.cahier_id);
+    const ext = (n.contenu || '').replace(/\s+/g, ' ').slice(0, 160);
+    return `<li class="ligne" data-note="${n.id}" role="button" tabindex="0" style="grid-template-columns:minmax(0,1fr) auto"><div><div class="titre">${esc(n.titre)}</div>
+      <div class="meta">${pastille(n.type)}${ch ? `<span class="pastille pastille-cahier" style="--cahier:${esc(ch.couleur || '#8FA8B8')}">${esc(ch.titre)}</span>` : ''}${p ? `<span>${esc(p.titre)}</span>` : ''}${lienAction(n.action_id)}${(n.mots_cles || []).map(m => `<span>#${esc(m)}</span>`).join('')}</div>${ext ? `<div class="geste extrait">${esc(ext)}${n.contenu.length > 160 ? '…' : ''}</div>` : ''}</div>
+      <div class="droite">${n.date ? esc(jourDate(n.date)) : ''}</div></li>`;
+  }
+  function carteCahier(ch) {
+    const n = notesDuCahier(ch.id).length;
+    return `<button class="cahier" data-cahier="${ch.id}" style="--cahier:${esc(ch.couleur || '#8FA8B8')}"><b>${esc(ch.titre)}</b><small>${n} note${n > 1 ? 's' : ''}</small>${lienProjet(ch.projet_id)}${lienAction(ch.action_id)}</button>`;
+  }
+
   function vueCarnet(v) {
     const f = S.filtres; const type = f.typeNote || ''; const q = (f.qn || '').toLowerCase(); const arch = !!f.archives;
-    const items = S.notes.filter(n => n.archivee === arch && (!type || n.type === type) && (!q || [n.titre, n.contenu].some(x => (x || '').toLowerCase().includes(q))))
+    const sel = f.cahier || ''; // '' = toutes, 'aucun' = sans cahier, sinon id de cahier
+    const ch = sel && sel !== 'aucun' ? parId(S.cahiers || [], sel) : null;
+    if (sel && sel !== 'aucun' && !ch) f.cahier = '';
+    const items = S.notes.filter(n => n.archivee === arch && (!type || n.type === type) && (!q || [n.titre, n.contenu].some(x => (x || '').toLowerCase().includes(q)))
+        && (!sel || (sel === 'aucun' ? !n.cahier_id : n.cahier_id === sel)))
       .sort((a, b) => (b.date || '').localeCompare(a.date || '') || b.cree_le.localeCompare(a.cree_le));
-    v.innerHTML = entete('Carnet', 'Notes, idées, comptes rendus, décisions et bilans.', '<button class="btn primaire" id="ajNote">Nouvelle note</button>') + `
+    const cahiers = cahiersActifs();
+    const sansCahier = S.notes.filter(n => !n.archivee && !n.cahier_id).length;
+    v.innerHTML = entete(ch ? ch.titre : 'Carnet', ch ? (esc(ch.description || '') || 'Cahier') : 'Notes, idées, comptes rendus, décisions et bilans.',
+      `${ch ? '<button class="btn" id="modCahier">Modifier le cahier</button>' : '<button class="btn" id="ajCahier">Nouveau cahier</button>'}<button class="btn primaire" id="ajNote">Nouvelle note</button>`) + `
+      ${ch && (ch.projet_id || ch.action_id) ? `<div class="meta liens-cahier">${lienProjet(ch.projet_id)}${lienAction(ch.action_id)}</div>` : ''}
+      <div class="cahiers-barre" role="tablist" aria-label="Cahiers">
+        <button class="cahier-onglet" data-filtre-cahier="" aria-pressed="${!sel}">Toutes <span class="nb">${S.notes.filter(n => !n.archivee).length}</span></button>
+        <button class="cahier-onglet" data-filtre-cahier="aucun" aria-pressed="${sel === 'aucun'}">Sans cahier <span class="nb">${sansCahier}</span></button>
+        ${cahiers.map(x => `<button class="cahier-onglet" data-filtre-cahier="${x.id}" aria-pressed="${sel === x.id}" style="--cahier:${esc(x.couleur || '#8FA8B8')}"><i></i>${esc(x.titre)} <span class="nb">${notesDuCahier(x.id).length}</span></button>`).join('')}
+      </div>
+      ${!sel && cahiers.length ? `<div class="grille-cahiers">${cahiers.map(carteCahier).join('')}</div>` : ''}
       <div class="outils"><input type="search" id="qn" placeholder="Chercher dans les notes" value="${esc(f.qn || '')}" aria-label="Chercher">
         <select id="tn" aria-label="Type"><option value="">Tous les types</option>${TYPES_NOTE.map(t => `<option ${t === type ? 'selected' : ''}>${t}</option>`).join('')}</select>
         <div class="onglets"><button aria-pressed="${!arch}" data-arch="0">Actives</button><button aria-pressed="${arch}" data-arch="1">Archives</button></div></div>
-      ${bloc(`${items.length} note${items.length > 1 ? 's' : ''}`, null, items.length ? `<ul class="lignes">${items.map(n => {
-        const p = parId(S.projets, n.projet_id); const ext = (n.contenu || '').replace(/\s+/g, ' ').slice(0, 160);
-        return `<li class="ligne" data-note="${n.id}" role="button" tabindex="0" style="grid-template-columns:minmax(0,1fr) auto"><div><div class="titre">${esc(n.titre)}</div>
-          <div class="meta">${pastille(n.type)}${p ? `<span>${esc(p.titre)}</span>` : ''}${(n.mots_cles || []).map(m => `<span>#${esc(m)}</span>`).join('')}</div>${ext ? `<div class="geste extrait">${esc(ext)}${n.contenu.length > 160 ? '…' : ''}</div>` : ''}</div>
-          <div class="droite">${n.date ? esc(jourDate(n.date)) : ''}</div></li>`; }).join('')}</ul>` : vide(q || type ? 'Aucune note pour ces filtres.' : 'Le carnet est vide.'))}`;
+      ${bloc(`${items.length} note${items.length > 1 ? 's' : ''}`, null, items.length ? `<ul class="lignes">${items.map(n => ligneNote(n, { cahier: !ch })).join('')}</ul>` : vide(q || type ? 'Aucune note pour ces filtres.' : ch ? 'Ce cahier est vide.' : 'Le carnet est vide.'))}`;
     const qn = $('#qn');
     qn.oninput = () => { clearTimeout(vueCarnet.t); vueCarnet.t = setTimeout(() => { S.filtres.qn = qn.value; const p = qn.selectionStart; c.rendre(); const n = $('#qn'); n.focus(); n.setSelectionRange(p, p); }, 200); };
     $('#tn').onchange = e => { S.filtres.typeNote = e.target.value; c.rendre(); };
     v.querySelectorAll('[data-arch]').forEach(b => b.onclick = () => { S.filtres.archives = b.dataset.arch === '1'; c.rendre(); });
-    $('#ajNote').onclick = () => ficheNote({ type: 'Note', date: aujourdhui() });
+    v.querySelectorAll('[data-filtre-cahier]').forEach(b => b.onclick = () => { S.filtres.cahier = b.dataset.filtreCahier; c.rendre(); window.scrollTo(0, 0); });
+    v.querySelectorAll('[data-cahier]').forEach(b => b.onclick = () => { S.filtres.cahier = b.dataset.cahier; c.rendre(); window.scrollTo(0, 0); });
+    $('#ajNote').onclick = () => ficheNote({ type: 'Note', date: aujourdhui(), cahier_id: ch?.id || null, projet_id: ch?.projet_id || null, action_id: ch?.action_id || null });
+    const ac = $('#ajCahier'); if (ac) ac.onclick = () => ficheCahier({});
+    const mc = $('#modCahier'); if (mc) mc.onclick = () => ficheCahier(ch);
     brancher(v, '[data-note]', el => ficheNote(parId(S.notes, el.dataset.note)));
+  }
+  function ficheCahier(ch) {
+    const n = ch.id ? notesDuCahier(ch.id).length : 0;
+    fiche({ titre: ch.id ? ch.titre : 'Nouveau cahier', table: 'cahiers', ligne: { couleur: COULEURS_CAHIER[0][1], ...ch }, champs: [
+      { k: 'titre', l: 'Nom du cahier', req: true, large: true, titre: true },
+      { k: 'description', l: 'Description', t: 'textarea', rows: 2 },
+      { k: 'couleur', l: 'Couleur', t: 'select', o: COULEURS_CAHIER.map(([l, h]) => [h, l]) },
+      { k: 'projet_id', l: 'Projet lié', t: 'ref', o: () => S.projets, lib: 'titre' },
+      { k: 'action_id', l: 'Tâche liée', t: 'ref', o: () => actionsLiables(ch.action_id), lib: 'titre' },
+      { k: 'archive', l: 'Archivé', t: 'bool' },
+    ], pied: ch.id && n ? `<p class="aide champ large" style="margin:0">Supprimer le cahier garde ses ${n} note${n > 1 ? 's' : ''}, qui passent dans « Sans cahier ».</p>` : '',
+    apres: id => { if (!ch.id && S.vue === 'carnet') S.filtres.cahier = id; } });
   }
   function ficheNote(n) {
     const evt = n.action_id ? parId(S.actions, n.action_id) : null;
     const issues = n.id ? S.actions.filter(a => a.note_id === n.id) : [];
     const pied = n.id ? `<div class="champ large pied-note">
-      ${evt ? `<span class="aide">Événement : ${esc(evt.titre)}${evt.planifie_debut ? ' · ' + esc(jourDate(cleJour(evt.planifie_debut))) : ''}</span>` : ''}
+      ${evt && evt.type === 'Événement' ? `<span class="aide">Événement : ${esc(evt.titre)}${evt.planifie_debut ? ' · ' + esc(jourDate(cleJour(evt.planifie_debut))) : ''}</span>` : ''}
       ${issues.length ? `<span class="aide">${issues.length} tâche${issues.length > 1 ? 's' : ''} créée${issues.length > 1 ? 's' : ''} depuis cette note</span>` : ''}
       <button type="button" class="btn" data-creer-actions>Créer les tâches « - [ ] »</button></div>` : '';
     const d = fiche({ titre: n.id ? n.titre : 'Nouvelle note', table: 'notes', ligne: n, pied, champs: [
       { k: 'titre', l: 'Titre', req: true, large: true, titre: true },
       { k: 'type', l: 'Type', t: 'select', o: TYPES_NOTE, req: true }, { k: 'date', l: 'Date', t: 'date' },
       { k: 'contenu', l: 'Contenu', t: 'textarea', rows: 14 },
+      { k: 'cahier_id', l: 'Cahier', t: 'ref', o: () => (S.cahiers || []).filter(x => !x.archive || x.id === n.cahier_id).sort((a, b) => a.titre.localeCompare(b.titre)), lib: 'titre' },
+      { k: 'action_id', l: 'Tâche ou événement lié', t: 'ref', o: () => actionsLiables(n.action_id), lib: 'titre' },
       { k: 'projet_id', l: 'Projet', t: 'ref', o: () => S.projets, lib: 'titre' }, { k: 'domaine_id', l: 'Domaine', t: 'ref', o: () => S.domaines },
       { k: 'mots_cles', l: 'Mots-clés', t: 'multi', o: ['À explorer', 'Important', 'Réutilisable'] },
       { k: 'archivee', l: 'Archivée', t: 'bool' },
@@ -548,6 +598,32 @@ export function installerModules(c) {
       if (nouveau != null) zone.value = nouveau;
       b.disabled = false;
     };
+    // Choisir un cahier lié à un projet ou une tâche reprend ces liens s’ils sont vides.
+    const selC = d.querySelector('[name=cahier_id]');
+    if (selC) selC.addEventListener('change', () => {
+      const x = parId(S.cahiers || [], selC.value); if (!x) return;
+      const sp = d.querySelector('[name=projet_id]'), sa = d.querySelector('[name=action_id]');
+      if (x.projet_id && sp && !sp.value) sp.value = x.projet_id;
+      if (x.action_id && sa && !sa.value) sa.value = x.action_id;
+    });
+  }
+
+  /* Notes et cahiers liés à un projet ou à une tâche : bloc réutilisable. */
+  function blocNotesLiees({ projet_id = null, action_id = null }) {
+    const cle = projet_id ? 'projet_id' : 'action_id', id = projet_id || action_id;
+    const cahiers = (S.cahiers || []).filter(x => x[cle] === id && !x.archive);
+    const notes = S.notes.filter(n => n[cle] === id && !n.archivee);
+    const corps = cahiers.length || notes.length
+      ? `${cahiers.length ? `<div class="grille-cahiers petite">${cahiers.map(carteCahier).join('')}</div>` : ''}${notes.length ? `<ul class="lignes">${notes.map(n => ligneNote(n)).join('')}</ul>` : ''}`
+      : vide(projet_id ? 'Aucune note ni cahier lié à ce projet.' : 'Aucune note ni cahier lié.');
+    return bloc('Notes et cahiers', cahiers.length + notes.length, corps,
+      `<div class="boutons-entete"><button class="btn discret" data-nouvelle-note>+ Note</button><button class="btn discret" data-nouveau-cahier>+ Cahier</button></div>`);
+  }
+  function brancherNotesLiees(racine, { projet_id = null, action_id = null, titre = '', domaine_id = null, avant = () => {} }) {
+    brancher(racine, '[data-note]', el => { avant(); ficheNote(parId(S.notes, el.dataset.note)); });
+    racine.querySelectorAll('[data-cahier]').forEach(b => b.onclick = () => { avant(); S.vue = 'carnet'; S.filtres = { cahier: b.dataset.cahier }; history.replaceState(null, '', '#carnet'); c.rendre(); window.scrollTo(0, 0); });
+    racine.querySelectorAll('[data-nouvelle-note]').forEach(b => b.onclick = () => { avant(); ficheNote({ type: 'Note', date: aujourdhui(), projet_id, action_id, domaine_id, titre: titre ? 'Note · ' + titre : '' }); });
+    racine.querySelectorAll('[data-nouveau-cahier]').forEach(b => b.onclick = () => { avant(); ficheCahier({ titre, projet_id, action_id }); });
   }
 
   /* ================= Routines ================= */
@@ -898,21 +974,19 @@ export function installerModules(c) {
   function complementsProjet(p) {
     const parts = S.participations.filter(x => x.projet_id === p.id);
     const achats = S.achats.filter(a => a.projet_id === p.id);
-    const notes = S.notes.filter(n => n.projet_id === p.id);
     return `
       ${blocBudget(p)}
       ${bloc('Parties prenantes', parts.length, parts.length ? `<ul class="lignes">${parts.map(x => { const pe = parId(S.personnes, x.personne_id); return `<li class="ligne" style="grid-template-columns:minmax(0,1fr)"><div><div class="titre">${esc(pe?.nom)}</div><div class="meta">${x.roles.map(r => pastille(r)).join('')}${x.mandat ? `<span>${esc(x.mandat)}</span>` : ''}</div></div></li>`; }).join('')}</ul>` : vide('Aucune partie prenante.'), `<button class="btn discret" data-ajpart="${p.id}">Ajouter</button>`)}
       ${achats.length ? bloc('Achats', achats.length, `<ul class="lignes">${achats.map(ligneAchat).join('')}</ul>`) : ''}
-      ${bloc('Notes', notes.length, notes.length ? `<ul class="lignes">${notes.map(n => `<li class="ligne" data-note="${n.id}" role="button" tabindex="0" style="grid-template-columns:minmax(0,1fr) auto"><div><div class="titre">${esc(n.titre)}</div><div class="meta">${pastille(n.type)}</div></div><div class="droite">${n.date ? esc(jourDate(n.date)) : ''}</div></li>`).join('')}</ul>` : vide('Aucune note liée.'), `<button class="btn discret" data-ajnote="${p.id}">Ajouter</button>`)}`;
+      ${blocNotesLiees({ projet_id: p.id })}`;
   }
   function brancherProjet(v, p) {
     brancher(v, '[data-budget]', el => ficheBudget(parId(S.budget, el.dataset.budget)));
     v.querySelectorAll('[data-ajbudget]').forEach(b => b.onclick = () => { const ouv = v.querySelector('details.lot-budget[open]'); ficheBudget({ projet_id: p.id, statut: 'À chiffrer', lot: ouv?.dataset.lot || null }); });
     v.querySelectorAll('details.lot-budget').forEach(d => d.ontoggle = () => { const o = S.filtres.lotsOuverts || (S.filtres.lotsOuverts = new Set()); d.open ? o.add(d.dataset.lot) : o.delete(d.dataset.lot); });
     v.querySelectorAll('[data-reserve]').forEach(b => b.onclick = () => fiche({ titre: 'Réserve pour imprévus', table: 'projets', ligne: { id: p.id, reserve_pct: p.reserve_pct }, champs: [{ k: 'reserve_pct', l: 'Réserve (% du TTC)', t: 'number', req: true }] }));
-    brancher(v, '[data-note]', el => ficheNote(parId(S.notes, el.dataset.note)));
+    brancherNotesLiees(v, { projet_id: p.id, titre: p.titre, domaine_id: p.domaine_id });
     brancher(v, '[data-achat]', el => ficheAchat(parId(S.achats, el.dataset.achat)));
-    v.querySelectorAll('[data-ajnote]').forEach(b => b.onclick = () => ficheNote({ type: 'Compte rendu', date: aujourdhui(), projet_id: p.id }));
     v.querySelectorAll('[data-ajpart]').forEach(b => b.onclick = () => fiche({ titre: 'Partie prenante', table: 'participations', ligne: { projet_id: p.id, statut: 'Actif', roles: [] }, champs: [
       { k: 'projet_id', l: 'Projet', t: 'ref', o: () => S.projets, lib: 'titre', req: true },
       { k: 'personne_id', l: 'Personne', t: 'ref', o: () => S.personnes, req: true },
@@ -924,6 +998,6 @@ export function installerModules(c) {
   return {
     synchroTheme,
     vues: { vehicules: vueVehicules, achats: vueAchats, abonnements: vueAbonnements, transports: vueTransports, bibliotheque: vueBibliotheque, carnet: vueCarnet, routines: vueRoutines, revue: vueRevue, organigramme: vueOrganigramme, plus: vuePlus },
-    encartsAccueil, complementsProjet, brancherProjet, ficheAchat, ficheNote,
+    encartsAccueil, complementsProjet, brancherProjet, ficheAchat, ficheNote, ficheCahier, blocNotesLiees, brancherNotesLiees,
   };
 }

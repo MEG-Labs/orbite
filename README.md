@@ -43,6 +43,8 @@ L'accueil commence par les **événements du jour** (avec la charge de 8 h à 17
 
 **Fait sur le fly** : le petit bouton ⚡ au-dessus du « + » (raccourci F) consigne une tâche faite sans être planifiée, déjà terminée, avec le temps passé, le domaine (Travail par défaut pendant les heures de travail) et une note. Colonne `actions.sur_le_fly`. Elles comptent comme victoires dans le rituel de fermeture, se filtrent dans Actions (« ⚡ Faites sur le fly ») et sont totalisées dans la revue hebdo.
 
+**Carnet et cahiers** : les notes peuvent être rangées dans des cahiers (table `cahiers`, colonne `notes.cahier_id`), facultatif. Un cahier ou une note peut être lié à un projet et à une tâche (`action_id`). La fiche d'un projet et la fiche d'une tâche affichent leurs notes et cahiers liés, avec « + Note » et « + Cahier » pour en créer directement.
+
 Autres outils :
 - **Recherche globale** : Ctrl+K ou / sur ordinateur, loupe dans le bandeau sur téléphone.
 - **Compte rendu** depuis un événement : note liée au projet; les lignes « - [ ] … » deviennent des tâches.

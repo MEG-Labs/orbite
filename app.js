@@ -17,7 +17,7 @@ const CONTEXTES = ['Maison', 'Bureau', 'Téléphone', 'Ordinateur', 'Courses', '
 
 const S = { session: null, actions: [], projets: [], domaines: [], personnes: [], vue: 'accueil', filtres: {}, agendaPasses: false,
   vehicules: [], entretiens: [], interventions: [], intEnt: [], livres: [], achats: [], abonnements: [], trajets: [], routines: [], notes: [], budget: [], regles: [],
-  unites: [], postes: [], titulaires: [], participations: [], reglages: [], journal: [], push: [], file: [], horsLigne: null };
+  unites: [], postes: [], titulaires: [], participations: [], reglages: [], journal: [], cahiers: [], push: [], file: [], horsLigne: null };
 let M, X, L, L6; // modules, installés après la définition des fonctions communes
 
 const MODULES = [
@@ -126,6 +126,7 @@ async function charger() {
     trajets: sb.from('trajets').select('*').order('date_heure'),
     routines: sb.from('routines').select('*'),
     notes: sb.from('notes').select('*'),
+    cahiers: sb.from('cahiers').select('*').order('titre'),
     budget: sb.from('budget_lignes').select('*'),
     regles: sb.from('regles_classement').select('*'),
     unites: sb.from('unites').select('*').order('nom'),
@@ -740,6 +741,7 @@ function ouvrirAction(a) {
           <label class="champ large"><span>Problème signalé</span><textarea name="probleme_signale">${esc(a.probleme_signale)}</textarea></label>
           <label class="champ large"><span>Travaux réalisés</span><textarea name="travaux_realises">${esc(a.travaux_realises)}</textarea></label>
         </div></details>
+      ${nouveau ? '' : `<div class="champ large notes-liees">${M.blocNotesLiees({ action_id: a.id })}</div>`}
     </div>
     <div class="pied">
       ${nouveau ? '' : '<button type="button" class="btn danger gauche" id="suppr">Supprimer</button>'}
@@ -774,6 +776,7 @@ function ouvrirAction(a) {
   cb.onchange = bascule; bascule();
   const cr = d.querySelector('#cr'); if (cr) cr.onclick = () => { d.close(); L.compteRendu(a); };
   const vn = d.querySelector('#voirNote'); if (vn) vn.onclick = () => { d.close(); M.ficheNote(parId(S.notes, a.note_id)); };
+  const nl = d.querySelector('.notes-liees'); if (nl) M.brancherNotesLiees(nl, { action_id: a.id, projet_id: a.projet_id || null, domaine_id: a.domaine_id || null, titre: a.titre, avant: () => d.close() });
   const s = d.querySelector('#suppr');
   if (s) s.onclick = async () => {
     if (s.dataset.confirme !== '1') { s.dataset.confirme = '1'; s.textContent = 'Confirmer la suppression'; return; }

@@ -2,7 +2,7 @@
 import { admin, autorise, cors, json, cleJour } from './commun.ts';
 
 const TABLES = ['actions', 'projets', 'domaines', 'personnes', 'participations', 'vehicules', 'entretiens', 'interventions', 'interventions_entretiens',
-  'livres', 'achats', 'abonnements', 'trajets', 'routines', 'notes', 'budget_lignes', 'regles_classement', 'unites', 'postes', 'postes_titulaires', 'reglages', 'journal_jours'];
+  'livres', 'achats', 'abonnements', 'trajets', 'routines', 'notes', 'budget_lignes', 'regles_classement', 'unites', 'postes', 'postes_titulaires', 'reglages', 'journal_jours', 'cahiers'];
 
 Deno.serve(async req => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: cors });
