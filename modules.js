@@ -350,7 +350,8 @@ export function installerModules(c) {
   ];
   const JOURS = ['LUNDI', 'MARDI', 'MERCREDI', 'JEUDI', 'VENDREDI', 'SAMEDI', 'DIMANCHE'];
   const STATUTS_TRAJET = ['À attribuer', 'À confirmer', 'Confirmé', 'Fait', 'Annulé'];
-  function lundiDe(cle) { const d = new Date(cle + 'T12:00:00'); const j = (d.getDay() + 6) % 7; d.setDate(d.getDate() - j); return d.toISOString().slice(0, 10); }
+  // Les semaines commencent le dimanche.
+  function dimancheDe(cle) { const d = new Date(cle + 'T12:00:00'); d.setDate(d.getDate() - d.getDay()); return d.toISOString().slice(0, 10); }
   const responsables = () => [...new Set(['Maman', 'Papa', 'Mamie', ...S.trajets.map(t => t.responsable).filter(Boolean)])];
   function ligneTrajet(t) {
     return `<li class="ligne trajet ${t.statut === 'Annulé' ? 'ferme' : ''}" data-trajet="${t.id}">
@@ -366,7 +367,7 @@ export function installerModules(c) {
       </div></li>`;
   }
   function vueTransports(v) {
-    const base = S.filtres.semaine || lundiDe(aujourdhui());
+    const base = S.filtres.semaine || dimancheDe(aujourdhui());
     const fin = plusJours(base, 7);
     const items = S.trajets.filter(t => t.date_heure && cleJour(t.date_heure) >= base && cleJour(t.date_heure) < fin).sort((a, b) => a.date_heure.localeCompare(b.date_heure));
     const parJour = {}; items.forEach(t => (parJour[cleJour(t.date_heure)] ||= []).push(t));
@@ -375,17 +376,17 @@ export function installerModules(c) {
     v.innerHTML = entete('Transports familiaux', `Semaine du ${esc(jourDate(base))}${aAttribuer ? ` · <span class="retard">${aAttribuer} trajet${aAttribuer > 1 ? 's' : ''} à attribuer</span>` : ''}`,
       `<button class="btn" id="genSem">Créer la semaine type</button><button class="btn primaire" id="ajTraj">Ajouter un trajet</button>`) + `
       <div class="outils"><div class="onglets">
-        <button data-sem="-7">‹ Précédente</button><button data-sem="0" aria-pressed="${base === lundiDe(auj)}">Cette semaine</button><button data-sem="7">Suivante ›</button>
+        <button data-sem="-7">‹ Précédente</button><button data-sem="0" aria-pressed="${base === dimancheDe(auj)}">Cette semaine</button><button data-sem="7">Suivante ›</button>
       </div></div>
       ${Object.keys(parJour).length ? Object.keys(parJour).map(j => `<section class="jour ${j === auj ? 'aujourdhui' : ''}"><h3>${esc(c.jourLong(j))}${j === auj ? ' · aujourd’hui' : ''}</h3><ul class="lignes">${parJour[j].map(ligneTrajet).join('')}</ul></section>`).join('')
         : bloc('Semaine', 0, vide('Aucun trajet cette semaine. « Créer la semaine type » ajoute les 20 trajets du lundi au vendredi, sans responsable.'))}`;
-    v.querySelectorAll('[data-sem]').forEach(b => b.onclick = () => { const n = +b.dataset.sem; S.filtres.semaine = n === 0 ? lundiDe(auj) : plusJours(base, n); c.rendre(); });
+    v.querySelectorAll('[data-sem]').forEach(b => b.onclick = () => { const n = +b.dataset.sem; S.filtres.semaine = n === 0 ? dimancheDe(auj) : plusJours(base, n); c.rendre(); });
     $('#ajTraj').onclick = () => ficheTrajet({ statut: 'À attribuer' });
     $('#genSem').onclick = async () => {
       const existantes = new Set(S.trajets.map(t => t.cle_occurrence));
       const nouveaux = [];
       for (let i = 0; i < 5; i++) {
-        const jour = plusJours(base, i);
+        const jour = plusJours(base, i + 1); // lundi à vendredi
         for (const m of MODELE_SEMAINE) {
           const cle = `${jour}|${m.code}`;
           if (existantes.has(cle)) continue;
