@@ -226,6 +226,55 @@ export function installerLot6(c) {
       <ul class="constats">${constats.map(x => `<li>${esc(x)}</li>`).join('')}</ul>`);
   }
 
+  /* ================= Interruptions de support opérationnel ================= */
+  // Mesure le temps happé par le support : 7 derniers jours, comparés à la semaine d'avant.
+  const interruptionsEntre = (de, a) => S.actions.filter(x => x.interruption && x.realisee_le && cleJour(x.realisee_le) >= de && cleJour(x.realisee_le) <= a);
+  const fmtDuree = m => m >= 60 ? `${(m / 60).toFixed(1).replace('.0', '').replace('.', ',')} h` : `${m} min`;
+  const totalMin = l => l.reduce((t, x) => t + (x.duree_reelle_min || 0), 0);
+  function repartition(l, cle) {
+    const m = new Map();
+    l.forEach(x => { const k = x[cle] || 'Non précisé'; const v = m.get(k) || { n: 0, min: 0 }; v.n++; v.min += x.duree_reelle_min || 0; m.set(k, v); });
+    return [...m.entries()].sort((a, b) => b[1].min - a[1].min || b[1].n - a[1].n);
+  }
+  function resumeInterruptions() {
+    const auj = aujourdhui(), de = plusJours(auj, -6);
+    const l = interruptionsEntre(de, auj), avant = interruptionsEntre(plusJours(auj, -13), plusJours(auj, -7));
+    const min = totalMin(l), minAvant = totalMin(avant), ref = +reglage('heures_travail_semaine', 40) * 60;
+    return { de, auj, l, avant, min, minAvant, pct: ref ? Math.round(min / ref * 100) : null,
+      depts: repartition(l, 'interruption_dept'), types: repartition(l, 'interruption_type'), demandeurs: repartition(l.filter(x => x.demandeur), 'demandeur').slice(0, 5) };
+  }
+  function blocInterruptions() {
+    const r = resumeInterruptions();
+    if (!r.l.length) return bloc('🚨 Interruptions · 7 jours', 0, `<div class="vide">Aucune interruption consignée. Chaque fois qu’on te dérange pour du support, touche <kbd>I</kbd> (ou ⚡ puis « interruption »). Deux clics, et tu auras des chiffres pour ta direction.</div>`);
+    const max = Math.max(...r.depts.map(([, v]) => v.min), 1);
+    const lignes = (rep, barres) => rep.map(([k, v]) => `<tr><th scope="row">${esc(k)}</th><td>${v.n}</td><td>${esc(fmtDuree(v.min))}</td>${barres ? `<td class="barre-cell"><span class="barre" style="width:${Math.round(v.min / max * 100)}%"></span></td>` : ''}</tr>`).join('');
+    const ecart = r.minAvant ? Math.round((r.min - r.minAvant) / r.minAvant * 100) : null;
+    const constats = [`${pluriel(r.l.length, 'interruption')}, ${fmtDuree(r.min)}${r.pct != null ? `, environ ${r.pct} % d’une semaine de ${reglage('heures_travail_semaine', 40)} h` : ''}.`];
+    if (ecart != null) constats.push(`Semaine précédente : ${fmtDuree(r.minAvant)} (${ecart >= 0 ? '+' : ''}${ecart} %).`);
+    if (r.depts[0]) constats.push(`Principal demandeur : ${r.depts[0][0]} (${Math.round(r.depts[0][1].min / (r.min || 1) * 100)} % du temps).`);
+    if (r.types[0] && r.types[0][0] !== 'Non précisé') constats.push(`Type qui prend le plus de temps : ${r.types[0][0]}. Si ça revient souvent, une procédure ou une formation pourrait l’éliminer.`);
+    return bloc('🚨 Interruptions · 7 jours', r.l.length, `
+      <table class="tableau-energie tableau-interruptions"><thead><tr><th>Département</th><th>Nb</th><th>Temps</th><th></th></tr></thead><tbody>${lignes(r.depts, true)}</tbody></table>
+      <table class="tableau-energie tableau-interruptions"><thead><tr><th>Type de demande</th><th>Nb</th><th>Temps</th></tr></thead><tbody>${lignes(r.types, false)}</tbody></table>
+      ${r.demandeurs.length ? `<table class="tableau-energie tableau-interruptions"><thead><tr><th>Demandé par</th><th>Nb</th><th>Temps</th></tr></thead><tbody>${lignes(r.demandeurs, false)}</tbody></table>` : ''}
+      <ul class="constats">${constats.map(x => `<li>${esc(x)}</li>`).join('')}</ul>
+      <div class="pied-bloc"><span class="aide">Résumé prêt à coller dans un courriel ou Teams.</span><button class="btn" id="copierInterruptions">Copier le résumé</button></div>`);
+  }
+  function texteInterruptions() {
+    const r = resumeInterruptions();
+    const liste = rep => rep.map(([k, v]) => `- ${k} : ${v.n} (${fmtDuree(v.min)})`).join('\n');
+    return [`Interruptions de support opérationnel, du ${jourDate(r.de)} au ${jourDate(r.auj)}`,
+      `Total : ${pluriel(r.l.length, 'interruption')}, ${fmtDuree(r.min)}${r.pct != null ? ` (environ ${r.pct} % d’une semaine de ${reglage('heures_travail_semaine', 40)} h)` : ''}`,
+      r.minAvant ? `Semaine précédente : ${fmtDuree(r.minAvant)}` : '',
+      '', 'Par département :', liste(r.depts), '', 'Par type de demande :', liste(r.types)].filter(x => x !== null).join('\n').replace(/\n{3,}/g, '\n\n');
+  }
+  document.addEventListener('click', async e => {
+    if (!e.target.closest('#copierInterruptions')) return;
+    const t = texteInterruptions();
+    try { await navigator.clipboard.writeText(t); toast('Résumé copié'); }
+    catch { dialogue(`<form><div class="tete-d"><h2>Résumé</h2><button type="button" class="btn discret" data-fermer aria-label="Fermer">✕</button></div><div class="corps"><textarea class="champ large" rows="12" readonly>${esc(t)}</textarea></div><div class="pied"><button type="submit" class="btn primaire">Fermer</button></div></form>`, () => true); }
+  });
+
   /* ================= Branchements ================= */
   function brancher(v) {
     v.querySelectorAll('[data-mode]').forEach(b => b.onclick = basculer);
@@ -234,5 +283,5 @@ export function installerLot6(c) {
   }
 
   return { estTravail, horsTravail, visible, projetVisible, bandeauMode, basculer, facteurEstimation, avertEnCours, classeEnCours,
-    blocFermeture, ouvrirFermeture, boutonPlacer, ouvrirPlacer, blocRevue, brancher };
+    blocFermeture, ouvrirFermeture, boutonPlacer, ouvrirPlacer, blocRevue, blocInterruptions, brancher };
 }

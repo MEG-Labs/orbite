@@ -43,6 +43,8 @@ L'accueil commence par les **événements du jour** (avec la charge de 8 h à 17
 
 **Fait sur le fly** : le petit bouton ⚡ au-dessus du « + » (raccourci F) consigne une tâche faite sans être planifiée, déjà terminée, avec le temps passé, le domaine (Travail par défaut pendant les heures de travail) et une note. Colonne `actions.sur_le_fly`. Elles comptent comme victoires dans le rituel de fermeture, se filtrent dans Actions (« ⚡ Faites sur le fly ») et sont totalisées dans la revue hebdo.
 
+**Interruptions (support opérationnel)** : touche **I** (ou ⚡ puis « C'est une interruption ») pour consigner en deux clics une demande de support : département, type de demande, demandeur, temps passé. Domaine Travail imposé. Colonnes `actions.interruption`, `interruption_dept`, `interruption_type`, `demandeur`. La revue hebdo affiche le bloc « Interruptions · 7 jours » (par département, type et demandeur, comparé à la semaine précédente, % d'une semaine de travail selon le réglage `heures_travail_semaine`, 40 par défaut) avec un bouton « Copier le résumé » pour un courriel. Filtre « 🚨 Interruptions » dans Actions.
+
 **Carnet et cahiers** : les notes peuvent être rangées dans des cahiers (table `cahiers`, colonne `notes.cahier_id`), facultatif. Un cahier ou une note peut être lié à un projet et à une tâche (`action_id`). La fiche d'un projet et la fiche d'une tâche affichent leurs notes et cahiers liés, avec « + Note » et « + Cahier » pour en créer directement.
 
 Autres outils :

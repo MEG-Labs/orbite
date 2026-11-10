@@ -14,6 +14,9 @@ const TYPES = ['Tâche', 'Événement', 'Jalon', 'Rappel'];
 const PRIOS = { 1: '1 — Critique', 2: '2 — Haute', 3: '3 — Normale', 4: '4 — Basse' };
 const STATUTS_PROJET = ['À envisager', 'À planifier', 'Actif', 'En pause', 'Terminé', 'Annulé'];
 const CONTEXTES = ['Maison', 'Bureau', 'Téléphone', 'Ordinateur', 'Courses', 'Partout'];
+// Interruptions de support opérationnel (consignées avec ⚡ ou la touche I).
+const DEPTS_INTERRUPTION = ['Réception', 'Expédition', 'Conteneurs', 'Inventaire', 'Maintenance', 'Transport', 'Direction / bureau', 'Autre'];
+const TYPES_INTERRUPTION = ['SAP / EWM', 'Équipement / RF', 'Données / rapport', 'Procédure / question', 'Problème opérationnel', 'Autre'];
 
 const S = { session: null, actions: [], projets: [], domaines: [], personnes: [], vue: 'accueil', filtres: {}, agendaPasses: false,
   vehicules: [], entretiens: [], interventions: [], intEnt: [], livres: [], achats: [], abonnements: [], trajets: [], routines: [], notes: [], budget: [], regles: [],
@@ -292,7 +295,8 @@ function ligne(a, { montrerProjet = true, heureSeule = false } = {}) {
   if (a.relance) meta.push(`<span>Relance ${esc(jourDate(a.relance))}</span>`);
   const deleg = parId(S.personnes, a.delegue_a_id); if (deleg) meta.push(`<span>Délégué à ${esc(deleg.nom)}</span>`);
   const att = parId(S.personnes, a.en_attente_de_id); if (att) meta.push(`<span>Attend ${esc(att.nom)}</span>`);
-  if (a.sur_le_fly) meta.push(`<span class="pastille fly" title="Faite sur le fly">⚡ sur le fly</span>`);
+  if (a.interruption) meta.push(`<span class="pastille interruption" title="Interruption de support opérationnel">🚨 ${esc([a.interruption_dept, a.interruption_type].filter(Boolean).join(' · ') || 'interruption')}</span>${a.demandeur ? `<span>Pour ${esc(a.demandeur)}</span>` : ''}`);
+  else if (a.sur_le_fly) meta.push(`<span class="pastille fly" title="Faite sur le fly">⚡ sur le fly</span>`);
   if (a.motif_blocage) meta.push(`<span>${esc(a.motif_blocage)}</span>`);
   if (a.reference_externe && /^[A-Z][A-Z0-9]+-\d+$/.test(a.reference_externe.trim())) {
     const dom = S.reglages.find(r => r.cle === 'jira_domaine')?.valeur || 'canac.atlassian.net';
@@ -606,10 +610,11 @@ function vueActions(v) {
   if (f.statut === 'ouverts') items = items.filter(ouvert);
   else if (f.statut) items = items.filter(a => a.statut === f.statut);
   if (f.type === 'fly') items = items.filter(a => a.sur_le_fly);
+  else if (f.type === 'interruption') items = items.filter(a => a.interruption);
   else if (f.type) items = items.filter(a => a.type === f.type);
   if (f.projet) items = items.filter(a => f.projet === 'aucun' ? !a.projet_id : a.projet_id === f.projet);
   if (q) items = items.filter(a => [a.titre, a.prochain_geste, a.notes, a.reference_externe].some(x => (x || '').toLowerCase().includes(q)));
-  if (f.type === 'fly') items.sort((a, b) => (b.realisee_le || b.cree_le).localeCompare(a.realisee_le || a.cree_le));
+  if (f.type === 'fly' || f.type === 'interruption') items.sort((a, b) => (b.realisee_le || b.cree_le).localeCompare(a.realisee_le || a.cree_le));
   else items.sort((a, b) => (ouvert(b) - ouvert(a)) || (b.planifie_debut || b.cree_le).localeCompare(a.planifie_debut || a.cree_le));
   const titreFiltre = { retard: 'En retard', bloques: 'Bloquées ou relances', passes: 'Événements passés encore ouverts' }[f.special];
   v.innerHTML = `
@@ -617,7 +622,7 @@ function vueActions(v) {
     <div class="outils">
       <input type="search" id="q" placeholder="Chercher" value="${esc(f.q || '')}" aria-label="Chercher">
       <select id="fStatut" aria-label="Statut"><option value="">Tous les statuts</option><option value="ouverts" ${f.statut === 'ouverts' ? 'selected' : ''}>Ouverts</option>${STATUTS.map(s => `<option ${f.statut === s ? 'selected' : ''}>${s}</option>`).join('')}</select>
-      <select id="fType" aria-label="Type"><option value="">Tous les types</option>${TYPES.map(s => `<option ${f.type === s ? 'selected' : ''}>${s}</option>`).join('')}<option value="fly" ${f.type === 'fly' ? 'selected' : ''}>⚡ Faites sur le fly</option></select>
+      <select id="fType" aria-label="Type"><option value="">Tous les types</option>${TYPES.map(s => `<option ${f.type === s ? 'selected' : ''}>${s}</option>`).join('')}<option value="fly" ${f.type === 'fly' ? 'selected' : ''}>⚡ Faites sur le fly</option><option value="interruption" ${f.type === 'interruption' ? 'selected' : ''}>🚨 Interruptions</option></select>
       <select id="fProjet" aria-label="Projet"><option value="">Tous les projets</option><option value="aucun" ${f.projet === 'aucun' ? 'selected' : ''}>Sans projet</option>${S.projets.map(p => `<option value="${p.id}" ${f.projet === p.id ? 'selected' : ''}>${esc(p.titre)}</option>`).join('')}</select>
     </div>
     <section class="bloc"><header><h2>${items.length} élément${items.length > 1 ? 's' : ''}</h2>
@@ -748,7 +753,7 @@ function ouvrirCapture() {
 
 /* ---------- Fait sur le fly ---------- */
 // Consigner après coup une tâche faite sans être planifiée : elle est créée déjà terminée, marquée « sur le fly ».
-function ouvrirSurLeFly() {
+function ouvrirSurLeFly({ interruption = false } = {}) {
   const travail = S.domaines.find(d => d.nom === 'Travail');
   const domTravail = (S.reglages.find(r => r.cle === 'domaines_travail')?.valeur || [])[0] || travail?.id;
   const hors = L6.horsTravail();
@@ -756,33 +761,57 @@ function ouvrirSurLeFly() {
   const defaut = hors ? (S.domaines.find(d => d.nom === 'Personnel')?.id || '') : domTravail;
   const DUREES = [5, 15, 30, 60];
   const maintenant = versLocal(new Date().toISOString());
+  const puces = (nom, valeurs) => `<div class="types-rapides" role="radiogroup">${valeurs.map(x => `<label><input type="radio" name="${nom}" value="${esc(x)}"><span>${esc(x)}</span></label>`).join('')}</div>`;
   const d = dialogue(`<form>
-    <div class="tete-d"><h2>⚡ Fait sur le fly</h2><div><button type="button" class="btn discret" id="histFly">Historique</button><button type="button" class="btn discret" data-fermer aria-label="Fermer">✕</button></div></div>
+    <div class="tete-d"><h2 id="titreFly">⚡ Fait sur le fly</h2><div><button type="button" class="btn discret" id="histFly">Historique</button><button type="button" class="btn discret" data-fermer aria-label="Fermer">✕</button></div></div>
     <div class="corps">
+      <label class="champ large bascule-interruption"><input type="checkbox" name="interruption" ${interruption ? 'checked' : ''}><span>🚨 C’est une interruption (support opérationnel)</span></label>
       <label class="champ large"><span>Qu’as-tu fait?</span><input name="titre" class="titre-saisie" required autofocus autocomplete="off" placeholder="Ex. Débloqué une commande avec la réception"></label>
+      <div class="champs-interruption">
+        <div class="champ large"><span>Département</span>${puces('interruption_dept', DEPTS_INTERRUPTION)}</div>
+        <div class="champ large"><span>Type de demande</span>${puces('interruption_type', TYPES_INTERRUPTION)}</div>
+        <label class="champ large"><span>Demandé par (facultatif)</span><input name="demandeur" list="listeDemandeurs" autocomplete="off" placeholder="Ex. chef d’équipe expédition, soir">
+          <datalist id="listeDemandeurs">${[...new Set([...S.personnes.map(p => p.nom), ...S.actions.map(a => a.demandeur)].filter(Boolean))].sort().map(n => `<option value="${esc(n)}">`).join('')}</datalist></label>
+      </div>
       <div class="champ large"><span>Temps passé</span><div class="types-rapides" role="radiogroup" aria-label="Temps passé">${DUREES.map(d => `<label><input type="radio" name="duree" value="${d}" ${d === 15 ? 'checked' : ''}><span>${d < 60 ? d + ' min' : '1 h'}</span></label>`).join('')}<label><input type="radio" name="duree" value="autre"><span>Autre</span></label></div>
         <input type="number" name="duree_autre" min="1" step="1" placeholder="Minutes" class="duree-autre" aria-label="Autre durée en minutes"></div>
       <label class="champ domaine-fly"><span>Domaine</span><select name="domaine_id">${domaines.map(d => `<option value="${d.id}" ${d.id === defaut ? 'selected' : ''}>${esc(d.nom)}</option>`).join('')}</select></label>
       <label class="champ"><span>Projet (facultatif)</span><select name="projet_id">${opts(S.projets.filter(p => p.statut === 'Actif'), null, { vide: 'Hors projet', lib: 'titre' })}</select></label>
       <label class="champ"><span>Terminé à</span><input type="datetime-local" name="quand" value="${esc(maintenant)}"></label>
-      <label class="champ large"><span>Pour qui / notes (facultatif)</span><input name="notes" autocomplete="off" placeholder="Ex. demande de Rémi"></label>
+      <label class="champ large"><span id="libNotesFly">Pour qui / notes (facultatif)</span><input name="notes" autocomplete="off" placeholder="Ex. demande de Rémi"></label>
     </div>
     <div class="pied"><button type="button" class="btn" data-fermer>Annuler</button><button type="submit" class="btn primaire">Consigner</button></div>
   </form>`, async fd => {
     const projet = parId(S.projets, fd.get('projet_id'));
     const duree = fd.get('duree') === 'autre' ? (+fd.get('duree_autre') || null) : +fd.get('duree');
     const fin = depuisLocal(fd.get('quand')) || new Date().toISOString();
+    const inter = fd.get('interruption') === 'on';
+    if (inter && !fd.get('interruption_dept')) { toast('Choisis le département'); return false; }
     const ligne = { titre: fd.get('titre').trim(), type: 'Tâche', statut: 'Terminé', sur_le_fly: true, realisee_le: fin,
-      duree_reelle_min: duree, domaine_id: domaineProjet(projet?.id) || fd.get('domaine_id') || null, projet_id: projet?.id || null, hors_projet: !projet,
-      notes: (fd.get('notes') || '').trim() || null };
+      duree_reelle_min: duree, domaine_id: domaineProjet(projet?.id) || (inter ? domTravail : fd.get('domaine_id')) || null, projet_id: projet?.id || null, hors_projet: !projet,
+      notes: (fd.get('notes') || '').trim() || null,
+      interruption: inter, interruption_dept: inter ? fd.get('interruption_dept') : null,
+      interruption_type: inter ? (fd.get('interruption_type') || null) : null, demandeur: inter ? ((fd.get('demandeur') || '').trim() || null) : null };
     if (!navigator.onLine) { X.mettreEnFile('actions', ligne); return; }
     const { error } = await sb.from('actions').insert(ligne);
     if (error) { if (/fetch|network/i.test(error.message)) { X.mettreEnFile('actions', ligne); return; } toast('Échec : ' + error.message); return false; }
-    toast('Consigné ⚡'); rafraichir();
+    toast(inter ? 'Interruption consignée 🚨' : 'Consigné ⚡'); rafraichir();
   });
+  // Mode interruption : champs dédiés, domaine Travail imposé.
+  const caseInt = d.querySelector('[name=interruption]'), blocInt = d.querySelector('.champs-interruption');
+  const modeInt = () => {
+    const on = caseInt.checked;
+    blocInt.hidden = !on;
+    d.querySelector('#titreFly').textContent = on ? '🚨 Interruption' : '⚡ Fait sur le fly';
+    d.querySelector('#libNotesFly').textContent = on ? 'Notes (facultatif)' : 'Pour qui / notes (facultatif)';
+    d.querySelector('[name=titre]').placeholder = on ? 'Ex. Débloqué un TU en expédition' : 'Ex. Débloqué une commande avec la réception';
+    d.querySelector('.domaine-fly').hidden = on || !!domaineProjet(d.querySelector('[name=projet_id]').value);
+  };
+  caseInt.onchange = modeInt;
   d.querySelector('#histFly').onclick = () => { d.close(); S.vue = 'actions'; S.filtres = { type: 'fly' }; history.replaceState(null, '', '#actions'); rendre(); window.scrollTo(0, 0); };
   const selPF = d.querySelector('[name=projet_id]'), champDF = d.querySelector('.domaine-fly');
-  selPF.addEventListener('change', () => { champDF.hidden = !!domaineProjet(selPF.value); });
+  selPF.addEventListener('change', () => { champDF.hidden = caseInt.checked || !!domaineProjet(selPF.value); });
+  modeInt();
   const autre = d.querySelector('.duree-autre');
   autre.hidden = true;
   d.querySelectorAll('input[name=duree]').forEach(r => r.onchange = () => { autre.hidden = d.querySelector('input[name=duree]:checked').value !== 'autre'; if (!autre.hidden) autre.focus(); });
@@ -1025,7 +1054,7 @@ async function demarrer(session) {
 }
 
 M = installerModules({ sb, S, $, esc, toast, parId, aujourdhui, plusJours, jourDate, jourLong, cleJour, fmtHeure, versLocal, depuisLocal,
-  dialogue, rafraichir, rendre: () => rendre(), liste, ouvert, enRetard, manquants, carteProjet, ouvrirPersonne, ouvrirAction, MODULES, ico, blocBienEtre: () => L6.blocRevue(),
+  dialogue, rafraichir, rendre: () => rendre(), liste, ouvert, enRetard, manquants, carteProjet, ouvrirPersonne, ouvrirAction, MODULES, ico, blocBienEtre: () => L6.blocInterruptions() + L6.blocRevue(),
   conflitDe: t => L.conflitDe(t), agendaDe: t => L.agendaDe(t), moiTransport: () => L.moi(), encartPneus: () => L.encartPneus(), creerActionsDepuisNote: (n, txt) => L.creerActionsDepuisNote(n, txt), SUPA_URL: SUPABASE_URL });
 
 L = installerLot5({ sb, S, $, esc, toast, parId, aujourdhui, plusJours, jourDate, jourLong, cleJour, fmtHeure, dialogue, rafraichir, ouvert,
@@ -1049,6 +1078,7 @@ sb.auth.onAuthStateChange((evt, session) => {
 document.addEventListener('keydown', e => {
   if (S.session && ((e.key.toLowerCase() === 'k' && (e.ctrlKey || e.metaKey)) || (e.key === '/' && !document.querySelector('dialog[open]') && !/INPUT|TEXTAREA|SELECT/.test(document.activeElement.tagName)))) { e.preventDefault(); return L.ouvrirRecherche(); }
   if (e.key.toLowerCase() === 'f' && !e.ctrlKey && !e.metaKey && !e.altKey && S.session && !document.querySelector('dialog[open]') && !/INPUT|TEXTAREA|SELECT/.test(document.activeElement.tagName)) { e.preventDefault(); ouvrirSurLeFly(); }
+  if (e.key.toLowerCase() === 'i' && !e.ctrlKey && !e.metaKey && !e.altKey && S.session && !document.querySelector('dialog[open]') && !/INPUT|TEXTAREA|SELECT/.test(document.activeElement.tagName)) { e.preventDefault(); ouvrirSurLeFly({ interruption: true }); }
   if (e.key.toLowerCase() === 'n' && S.session && !document.querySelector('dialog[open]') && !/INPUT|TEXTAREA|SELECT/.test(document.activeElement.tagName)) { e.preventDefault(); ouvrirCapture(); }
 });
 document.addEventListener('visibilitychange', () => { if (!document.hidden && S.session && !document.querySelector('dialog[open]')) rafraichir().catch(() => {}); });
