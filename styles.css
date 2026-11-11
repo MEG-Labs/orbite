@@ -754,3 +754,13 @@ fieldset.recurrence [hidden] { display: none !important; }
 .rec-apercu:empty { display: none; }
 .rec-apercu b { color: var(--craie); }
 .pastille.recur { border-color: color-mix(in srgb, var(--orange) 45%, transparent); color: var(--orange-pale); }
+
+/* ================= Capture rapide : plus de détails ================= */
+.details-capture > summary { cursor: pointer; font: 600 13px var(--mono); color: var(--orange-pale); padding: 6px 0; list-style-position: inside; }
+.details-capture > summary .aide { font-weight: 400; margin-left: 8px; }
+.details-capture .corps-details { display: grid; grid-template-columns: 1fr 1fr; gap: 12px 14px; margin-top: 4px; }
+.details-capture [hidden], .corps [hidden].champ { display: none !important; }
+.cap-statut { display: block; margin: 0; font-size: 13px; color: var(--brume); }
+.cap-statut b { color: var(--craie); }
+.cap-plan input:disabled + span { opacity: .55; }
+@media (max-width: 760px) { .details-capture .corps-details { grid-template-columns: 1fr; } }

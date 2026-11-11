@@ -855,34 +855,119 @@ function planif(jour, debut, fin, jourFin) {
 }
 
 /* ---------- Capture rapide ---------- */
+// Titre, type, quand et projet d’abord. « Plus de détails » déplie le reste (domaine, périmètre, contexte, suivi,
+// répétition, plan du jour) pour tout saisir d’un coup; l’état déplié est mémorisé sur l’appareil.
+// Statut automatique : « À faire » si rien ne manque (domaine + projet ou hors projet), sinon « À traiter » (reste dans À trier).
+const CLE_DETAILS = 'orbite-capture-details';
 function ouvrirCapture() {
-  dialogue(`<form>
+  let deplie = false; try { deplie = localStorage.getItem(CLE_DETAILS) === '1'; } catch { }
+  const auj = aujourdhui();
+  const nbPlan = S.actions.filter(a => a.plan_du_jour === auj && ouvert(a)).length;
+  const d = dialogue(`<form>
     <div class="tete-d"><h2>Capture rapide</h2><button type="button" class="btn discret" data-fermer aria-label="Fermer">✕</button></div>
     <div class="corps">
       <label class="champ large"><span>Quoi?</span><input name="titre" class="titre-saisie" required autofocus autocomplete="off" placeholder="Un titre suffit"></label>
       <div class="types-rapides" role="radiogroup" aria-label="Type">${[...TYPES, 'Achat', 'Note'].map((t, i) => `<label><input type="radio" name="type" value="${t}" ${i === 0 ? 'checked' : ''}><span>${t}</span></label>`).join('')}</div>
-      <div class="champ quand-capture"><span>Quand (facultatif)</span><div class="date-heure"><input type="date" name="quand_jour" aria-label="Date"><input type="time" name="quand_heure" aria-label="Heure (facultative)" title="Heure (facultative)"></div></div>
+      <div class="champ quand-capture" data-pour="action"><span>Quand (facultatif)</span><div class="date-heure"><input type="date" name="quand_jour" aria-label="Date"><input type="time" name="quand_heure" aria-label="Heure (facultative)" title="Heure (facultative)"></div></div>
       <label class="champ"><span>Projet</span><select name="projet_id">${opts(S.projets.filter(p => p.statut === 'Actif'), null, { vide: 'Aucun pour l’instant', lib: 'titre' })}</select></label>
+
+      <details class="champ large details-capture" data-pour="action" ${deplie ? 'open' : ''}><summary>Plus de détails <span class="aide">domaine, périmètre, contexte, suivi, répétition</span></summary>
+        <div class="corps-details">
+          <fieldset><legend>Classement</legend>
+            <label class="champ" data-pour="tache"><span>Statut</span><select name="statut"><option value="">Automatique</option>${optsTexte(STATUTS.filter(x => x !== 'Annulé'), '')}</select></label>
+            <label class="champ cap-domaine"><span>Domaine</span><select name="domaine_id">${opts(S.domaines.filter(x => x.actif !== false), null)}</select></label>
+            <p class="aide cap-domaine-herite champ large" hidden></p>
+            <label class="champ case cap-hors-projet" data-pour="tache"><input type="checkbox" name="hors_projet"><span>Hors projet (volontairement)</span></label>
+            <label class="champ" data-pour="tache"><span>Dans mon périmètre?</span><select name="dans_perimetre"><option value="">—</option><option value="true">Oui</option><option value="false">Non, je délègue</option></select></label>
+            <label class="champ cap-delegue" data-pour="tache" hidden><span>Délégué à</span><select name="delegue_a_id">${opts(S.personnes, null)}</select></label>
+            <p class="champ large cap-statut" aria-live="polite"></p>
+          </fieldset>
+          <fieldset><legend>Contexte et suivi</legend>
+            <div class="champ large" data-pour="tache"><span>Contexte</span><div class="types-rapides">${CONTEXTES.map(c => `<label><input type="checkbox" name="contexte" value="${c}"><span>${c}</span></label>`).join('')}</div></div>
+            <label class="champ" data-pour="tache"><span>En attente de</span><select name="en_attente_de_id">${opts(S.personnes, null)}</select></label>
+            <label class="champ" data-pour="tache"><span>Relance</span><input type="date" name="relance"></label>
+            <label class="champ"><span>Lieu ou lien</span><input name="lieu" autocomplete="off"></label>
+            <label class="champ"><span>Référence externe</span><input name="reference_externe" autocomplete="off" placeholder="CANAC-123, billet…"></label>
+            <label class="champ large"><span>Notes</span><textarea name="notes" rows="3"></textarea></label>
+          </fieldset>
+          ${champsRecurrence({})}
+          <label class="champ case large cap-plan" data-pour="tache"><input type="checkbox" name="plan_du_jour" ${nbPlan >= 3 ? 'disabled' : ''}><span>Ajouter à « Aujourd’hui, je fais »${nbPlan >= 3 ? ' (déjà trois actions aujourd’hui)' : ` (${nbPlan}/3)`}</span></label>
+        </div>
+      </details>
     </div>
     <div class="pied"><button type="button" class="btn" data-fermer>Annuler</button><button type="submit" class="btn primaire">Capturer</button></div>
   </form>`, async fd => {
     const projet = parId(S.projets, fd.get('projet_id'));
-    if (fd.get('type') === 'Achat' || fd.get('type') === 'Note') {
-      const [table, l] = fd.get('type') === 'Achat'
+    const type = fd.get('type');
+    if (type === 'Achat' || type === 'Note') {
+      const [table, l] = type === 'Achat'
         ? ['achats', { item: fd.get('titre').trim(), statut: 'À compléter', projet_id: projet?.id || null }]
         : ['notes', { titre: fd.get('titre').trim(), type: 'Note', projet_id: projet?.id || null, domaine_id: projet?.domaine_id || null }];
       if (!navigator.onLine) { X.mettreEnFile(table, l); return; }
       const r = await sb.from(table).insert(l);
       if (r.error) { if (/fetch|network/i.test(r.error.message)) { X.mettreEnFile(table, l); return; } toast('Échec : ' + r.error.message); return false; }
-      toast(fd.get('type') === 'Achat' ? 'Ajouté aux achats' : 'Note créée'); return rafraichir();
+      toast(type === 'Achat' ? 'Ajouté aux achats' : 'Note créée'); return rafraichir();
     }
-    const ligne = { titre: fd.get('titre').trim(), type: fd.get('type'), statut: fd.get('type') === 'Événement' ? 'À faire' : 'À traiter',
-      ...planif(fd.get('quand_jour'), fd.get('quand_heure')), projet_id: projet?.id || null, domaine_id: domaineProjet(projet?.id) };
+    const { ligne, erreur } = ligneCapture(fd, projet);
+    if (erreur) { toast(erreur); return false; }
     if (!navigator.onLine) { X.mettreEnFile('actions', ligne); return; }
     const { error } = await sb.from('actions').insert(ligne);
     if (error) { if (/fetch|network/i.test(error.message)) { X.mettreEnFile('actions', ligne); return; } toast('Échec : ' + error.message); return false; }
-    toast('Capturé'); rafraichir();
+    const m = manquants(ligne);
+    toast(ligne.type === 'Événement' ? 'Capturé' : m.length ? `Capturé · dans À trier (manque : ${m.join(', ')})` : `Capturé · ${ligne.statut}`);
+    rafraichir();
   });
+  brancherCapture(d);
+}
+// Construit la ligne à insérer à partir du formulaire de capture (détails facultatifs).
+function ligneCapture(fd, projet) {
+  const type = fd.get('type'), evt = type === 'Événement', tache = !evt;
+  const vide = k => (fd.get(k) || '').trim() || null;
+  const domProjet = domaineProjet(projet?.id);
+  const ligne = { titre: fd.get('titre').trim(), type, ...planif(fd.get('quand_jour'), fd.get('quand_heure')), projet_id: projet?.id || null,
+    domaine_id: domProjet || vide('domaine_id'), lieu: vide('lieu'), reference_externe: vide('reference_externe'), notes: vide('notes') };
+  if (tache) {
+    const perim = fd.get('dans_perimetre');
+    Object.assign(ligne, { hors_projet: !projet && fd.get('hors_projet') === 'on', dans_perimetre: perim === '' || perim == null ? null : perim === 'true',
+      delegue_a_id: perim === 'false' ? vide('delegue_a_id') : null, en_attente_de_id: vide('en_attente_de_id'), relance: vide('relance'), contexte: fd.getAll('contexte') });
+    if (fd.get('plan_du_jour') === 'on') ligne.plan_du_jour = aujourdhui();
+  }
+  // Statut : choisi, sinon automatique.
+  const force = tache ? fd.get('statut') : '';
+  ligne.statut = evt ? 'À faire' : force || (manquants({ ...ligne, statut: 'À traiter' }).length ? 'À traiter' : 'À faire');
+  if (ligne.statut === 'Terminé') ligne.realisee_le = new Date().toISOString();
+  const rec = lireRecurrence(fd, null);
+  if (rec) {
+    if (rec.type === 'semaine' && rec.base === 'calendrier' && !rec.jours.length) return { erreur: 'Répétition : coche au moins un jour' };
+    if (!colonneRecurrence()) return { erreur: 'Répétition indisponible : exécute d’abord la migration SQL des tâches récurrentes' };
+    ligne.recurrence = rec;
+    if (!ligne.planifie_debut) ligne.echeance = premiereOccurrence(rec);
+  }
+  return { ligne };
+}
+function brancherCapture(d) {
+  const f = d.querySelector('form'), det = d.querySelector('.details-capture');
+  det.addEventListener('toggle', () => { try { localStorage.setItem(CLE_DETAILS, det.open ? '1' : '0'); } catch { } });
+  brancherRecurrence(d, {});
+  const maj = () => {
+    const fd = new FormData(f), type = fd.get('type'), action = !['Achat', 'Note'].includes(type), tache = action && type !== 'Événement';
+    d.querySelectorAll('[data-pour="action"]').forEach(e => { e.hidden = !action; });
+    d.querySelectorAll('[data-pour="tache"]').forEach(e => { e.hidden = !tache || (e.classList.contains('cap-delegue') && fd.get('dans_perimetre') !== 'false'); });
+    // Avec un projet : domaine hérité (mention) et « Hors projet » sans objet.
+    const pid = fd.get('projet_id'), dom = domaineProjet(pid);
+    d.querySelector('.cap-domaine').hidden = !!dom;
+    const her = d.querySelector('.cap-domaine-herite'); her.hidden = !dom; her.textContent = dom ? `Domaine : ${parId(S.domaines, dom)?.nom || '—'} (selon le projet)` : '';
+    d.querySelector('.cap-hors-projet').hidden = !tache || !!pid;
+    // Aperçu du statut qui sera donné.
+    const st = d.querySelector('.cap-statut');
+    if (!tache) { st.textContent = ''; return; }
+    const { ligne } = ligneCapture(fd, parId(S.projets, pid));
+    if (!ligne) { st.textContent = ''; return; }
+    const m = manquants({ ...ligne, statut: 'À traiter' });
+    st.innerHTML = fd.get('statut') ? `Statut choisi : <b>${esc(fd.get('statut'))}</b>.`
+      : m.length ? `Statut : <b>À traiter</b> (ira dans « À trier ») · manque : ${esc(m.join(', '))}.` : 'Statut : <b>À faire</b> · rien ne manque, elle ira directement dans le backlog.';
+  };
+  f.addEventListener('input', maj); f.addEventListener('change', maj); maj();
 }
 
 /* ---------- Fait sur le fly ---------- */
@@ -1109,7 +1194,7 @@ function brancherRecurrence(d, a) {
     if (!r) { ap.textContent = ''; return; }
     if (r.type === 'semaine' && cal && !r.jours.length) { ap.innerHTML = '<span class="erreur">Coche au moins un jour.</span>'; return; }
     // Date de cette occurrence, telle que saisie dans la fiche.
-    const ref = fd.get('echeance') || fd.get('jour') || null;
+    const ref = fd.get('echeance') || fd.get('jour') || fd.get('quand_jour') || null;
     const premiere = ref || premiereOccurrence(r);
     const suiv = prochaineOccurrence(r, premiere);
     ap.innerHTML = `<b>${esc(libRecurrence(r))}</b><br>`
