@@ -298,6 +298,7 @@ function ligne(a, { montrerProjet = true, heureSeule = false } = {}) {
   if (a.interruption) meta.push(`<span class="pastille interruption" title="Interruption de support opérationnel">🚨 ${esc([a.interruption_dept, a.interruption_type].filter(Boolean).join(' · ') || 'interruption')}</span>${a.demandeur ? `<span>Pour ${esc(a.demandeur)}</span>` : ''}`);
   else if (a.sur_le_fly) meta.push(`<span class="pastille fly" title="Faite sur le fly">⚡ sur le fly</span>`);
   if (a.motif_blocage) meta.push(`<span>${esc(a.motif_blocage)}</span>`);
+  if (a.recurrence?.type) meta.push(a.recurrence.sautee ? '<span class="pastille recur">🔁 sautée</span>' : `<span class="pastille recur" title="${esc(libRecurrence(a.recurrence))}">🔁 ${esc(libRecurrence(a.recurrence, { court: true }))}</span>`);
   if (a.reference_externe && /^[A-Z][A-Z0-9]+-\d+$/.test(a.reference_externe.trim())) {
     const dom = S.reglages.find(r => r.cle === 'jira_domaine')?.valeur || 'canac.atlassian.net';
     meta.push(`<a class="lien-jira" href="https://${esc(dom)}/browse/${esc(a.reference_externe.trim())}" target="_blank" rel="noopener">${esc(a.reference_externe.trim())}${a.statut_jira ? ' · ' + esc(a.statut_jira) : ''}</a>`);
@@ -387,7 +388,9 @@ function brancherGlisser(v) {
       if (g.cible === 'en-cours') {
         if (await majAction(g.a.id, { statut: 'En cours' })) { toast(`« ${g.a.titre} » en cours`); rafraichir(); }
       } else if (g.cible === 'terminer') {
-        if (await majAction(g.a.id, { statut: 'Terminé', realisee_le: new Date().toISOString() })) { toast(`✓ « ${g.a.titre} » terminée`); rafraichir(); }
+        if (await majAction(g.a.id, { statut: 'Terminé', realisee_le: new Date().toISOString() })) {
+          if (g.a.recurrence) { await rafraichir(); annoncerSuivante(g.a.id, `✓ « ${g.a.titre} » terminée`); } else { toast(`✓ « ${g.a.titre} » terminée`); rafraichir(); }
+        }
       }
     };
     li.addEventListener('pointerup', finir);
@@ -402,6 +405,7 @@ function brancherLignes(racine) {
     const a = parId(S.actions, b.dataset.coche);
     const nouveau = a.statut === 'Terminé' ? 'À faire' : 'Terminé';
     if (await majAction(a.id, { statut: nouveau, realisee_le: nouveau === 'Terminé' ? new Date().toISOString() : null })) {
+      if (nouveau === 'Terminé' && a.recurrence) { await rafraichir(); return annoncerSuivante(a.id, 'Terminé'); }
       toast(nouveau === 'Terminé' ? 'Terminé' : 'Rouvert'); rafraichir();
     }
   });
@@ -739,10 +743,12 @@ function vueActions(v) {
   else if (f.statut) items = items.filter(a => a.statut === f.statut);
   if (f.type === 'fly') items = items.filter(a => a.sur_le_fly);
   else if (f.type === 'interruption') items = items.filter(a => a.interruption);
+  else if (f.type === 'recurrentes') items = items.filter(a => a.recurrence?.type && ouvert(a));
   else if (f.type) items = items.filter(a => a.type === f.type);
   if (f.projet) items = items.filter(a => f.projet === 'aucun' ? !a.projet_id : a.projet_id === f.projet);
   if (q) items = items.filter(a => [a.titre, a.prochain_geste, a.notes, a.reference_externe].some(x => (x || '').toLowerCase().includes(q)));
   if (f.type === 'fly' || f.type === 'interruption') items.sort((a, b) => (b.realisee_le || b.cree_le).localeCompare(a.realisee_le || a.cree_le));
+  else if (f.type === 'recurrentes') items.sort((a, b) => (dateRef(a) || '9').localeCompare(dateRef(b) || '9'));
   else items.sort((a, b) => (ouvert(b) - ouvert(a)) || (b.planifie_debut || b.cree_le).localeCompare(a.planifie_debut || a.cree_le));
   const titreFiltre = { retard: 'En retard', bloques: 'Bloquées ou relances', passes: 'Événements passés encore ouverts' }[f.special];
   v.innerHTML = `
@@ -750,7 +756,7 @@ function vueActions(v) {
     <div class="outils">
       <input type="search" id="q" placeholder="Chercher" value="${esc(f.q || '')}" aria-label="Chercher">
       <select id="fStatut" aria-label="Statut"><option value="">Tous les statuts</option><option value="ouverts" ${f.statut === 'ouverts' ? 'selected' : ''}>Ouverts</option>${STATUTS.map(s => `<option ${f.statut === s ? 'selected' : ''}>${s}</option>`).join('')}</select>
-      <select id="fType" aria-label="Type"><option value="">Tous les types</option>${TYPES.map(s => `<option ${f.type === s ? 'selected' : ''}>${s}</option>`).join('')}<option value="fly" ${f.type === 'fly' ? 'selected' : ''}>⚡ Faites sur le fly</option><option value="interruption" ${f.type === 'interruption' ? 'selected' : ''}>🚨 Interruptions</option></select>
+      <select id="fType" aria-label="Type"><option value="">Tous les types</option>${TYPES.map(s => `<option ${f.type === s ? 'selected' : ''}>${s}</option>`).join('')}<option value="fly" ${f.type === 'fly' ? 'selected' : ''}>⚡ Faites sur le fly</option><option value="interruption" ${f.type === 'interruption' ? 'selected' : ''}>🚨 Interruptions</option><option value="recurrentes" ${f.type === 'recurrentes' ? 'selected' : ''}>🔁 Récurrentes (occurrence en cours)</option></select>
       <select id="fProjet" aria-label="Projet"><option value="">Tous les projets</option><option value="aucun" ${f.projet === 'aucun' ? 'selected' : ''}>Sans projet</option>${S.projets.map(p => `<option value="${p.id}" ${f.projet === p.id ? 'selected' : ''}>${esc(p.titre)}</option>`).join('')}</select>
     </div>
     <section class="bloc"><header><h2>${items.length} élément${items.length > 1 ? 's' : ''}</h2>
@@ -945,6 +951,174 @@ function ouvrirSurLeFly({ interruption = false } = {}) {
   d.querySelectorAll('input[name=duree]').forEach(r => r.onchange = () => { autre.hidden = d.querySelector('input[name=duree]:checked').value !== 'autre'; if (!autre.hidden) autre.focus(); });
 }
 
+/* ---------- Tâches récurrentes ---------- */
+// Une seule occurrence ouverte à la fois : quand elle passe à « Terminé », Supabase crée la suivante
+// (déclencheur actions_recurrence, fonction prive.creer_occurrence_suivante). « Sauter » appelle sauter_occurrence().
+// Les fonctions ci-dessous sont le miroir JavaScript de prive.recurrence_apres : elles servent à l’aperçu dans la fiche.
+const JOURS_SEM = ['lundi', 'mardi', 'mercredi', 'jeudi', 'vendredi', 'samedi', 'dimanche'];
+const MOIS_AN = ['janvier', 'février', 'mars', 'avril', 'mai', 'juin', 'juillet', 'août', 'septembre', 'octobre', 'novembre', 'décembre'];
+const RANGS = { 1: '1er', 2: '2e', 3: '3e', 4: '4e', '-1': 'dernier' };
+const pad2 = n => String(n).padStart(2, '0');
+const ajJ = (c, n) => { const d = new Date(c + 'T00:00:00Z'); d.setUTCDate(d.getUTCDate() + n); return d.toISOString().slice(0, 10); };
+const isoDow = c => ((new Date(c + 'T00:00:00Z').getUTCDay() + 6) % 7) + 1; // 1 = lundi … 7 = dimanche
+const dernierDuMois = (y, m) => new Date(Date.UTC(y, m, 0)).getUTCDate();
+const ajMois = (c, n) => { // comme un interval Postgres : le 31 janvier + 1 mois = le 28 (ou 29) février
+  const [y, m, j] = c.split('-').map(Number), t = m - 1 + n, ny = y + Math.floor(t / 12), nm = ((t % 12) + 12) % 12 + 1;
+  return `${ny}-${pad2(nm)}-${pad2(Math.min(j, dernierDuMois(ny, nm)))}`;
+};
+function recDansMois(r, y, m) {
+  const dern = dernierDuMois(y, m), debut = `${y}-${pad2(m)}-01`;
+  if (r.mode_mois === 'rang') {
+    const js = +r.jour_semaine || 1, rg = +r.rang || 1;
+    if (rg === -1) { const fin = `${y}-${pad2(m)}-${pad2(dern)}`; return ajJ(fin, -((isoDow(fin) - js + 7) % 7)); }
+    let d = ajJ(debut, ((js - isoDow(debut) + 7) % 7) + 7 * (rg - 1));
+    if (d.slice(5, 7) !== pad2(m)) d = ajJ(d, -7);
+    return d;
+  }
+  const j = +r.jour_mois || 1;
+  return `${y}-${pad2(m)}-${pad2(j === -1 || j > dern ? dern : j)}`;
+}
+function recApres(r, depuis) { // première date strictement après « depuis » selon la règle (base calendrier)
+  const n = Math.max(+r.intervalle || 1, 1);
+  if (r.type === 'jours') return ajJ(depuis, n);
+  if (r.type === 'semaine') {
+    const js = (r.jours?.length ? r.jours : [isoDow(depuis)]).map(Number).sort((a, b) => a - b), dow = isoDow(depuis);
+    for (let i = 1; dow + i <= 7; i++) if (js.includes(dow + i)) return ajJ(depuis, i);
+    return ajJ(ajJ(depuis, -(dow - 1)), 7 * n + js[0] - 1);
+  }
+  if (r.type === 'mois') {
+    const y = +depuis.slice(0, 4), m = +depuis.slice(5, 7), d = recDansMois(r, y, m);
+    if (d > depuis) return d;
+    const t = ajMois(`${y}-${pad2(m)}-01`, n);
+    return recDansMois(r, +t.slice(0, 4), +t.slice(5, 7));
+  }
+  if (r.type === 'annee') {
+    const mo = +r.mois_annee || +depuis.slice(5, 7), j = +r.jour_mois || +depuis.slice(8, 10);
+    let y = +depuis.slice(0, 4), d = null;
+    for (let i = 0; i < 2; i++) { const dern = dernierDuMois(y, mo); d = `${y}-${pad2(mo)}-${pad2(j === -1 || j > dern ? dern : j)}`; if (d > depuis) return d; y += n; }
+    return d;
+  }
+  return null;
+}
+// Date de la prochaine occurrence si celle-ci (datée « ref ») est terminée le jour « fait ». null = fin de la série.
+function prochaineOccurrence(r, ref, fait = aujourdhui()) {
+  const n = Math.max(+r.intervalle || 1, 1);
+  if (r.fin_nombre && (+r.numero || 1) >= +r.fin_nombre) return null;
+  let p;
+  if (r.base === 'realisation') p = r.type === 'jours' ? ajJ(fait, n) : r.type === 'semaine' ? ajJ(fait, 7 * n) : ajMois(fait, r.type === 'mois' ? n : 12 * n);
+  else { p = recApres(r, ref); const auj = aujourdhui(); for (let k = 0; p && p <= auj && k < 5000; k++) p = recApres(r, p); }
+  if (!p || (r.fin_date && p > r.fin_date)) return null;
+  return p;
+}
+// Première date d’une nouvelle série sans date : aujourd’hui si la règle tombe aujourd’hui, sinon la suivante.
+const premiereOccurrence = r => r.base === 'realisation' ? aujourdhui() : recApres(r, ajJ(aujourdhui(), -1));
+const jourAn = c => jourLong(c) + (c.slice(0, 4) !== aujourdhui().slice(0, 4) ? ' ' + c.slice(0, 4) : '');
+const dateRef = a => a.echeance || (a.planifie_debut ? cleJour(a.planifie_debut) : null);
+function libRecurrence(r, { court = false } = {}) {
+  if (!r?.type) return '';
+  const n = Math.max(+r.intervalle || 1, 1);
+  const unite = { jours: ['jour', 'jours'], semaine: ['semaine', 'semaines'], mois: ['mois', 'mois'], annee: ['an', 'ans'] }[r.type];
+  let t;
+  if (r.base === 'realisation') t = `${n} ${unite[n > 1 ? 1 : 0]} après l’avoir faite`;
+  else if (r.type === 'jours') t = n === 1 ? 'Chaque jour' : `Tous les ${n} jours`;
+  else if (r.type === 'semaine') {
+    const js = (r.jours || []).map(Number).sort((a, b) => a - b);
+    const quels = js.join() === '1,2,3,4,5' ? 'du lundi au vendredi' : js.map(j => JOURS_SEM[j - 1]).join(', ');
+    t = (n === 1 ? 'Chaque semaine' : `Toutes les ${n} semaines`) + (quels ? ` : ${quels}` : '');
+  } else if (r.type === 'mois') {
+    const quel = r.mode_mois === 'rang' ? `le ${RANGS[r.rang] || '1er'} ${JOURS_SEM[(+r.jour_semaine || 1) - 1]}` : +r.jour_mois === -1 ? 'le dernier jour' : `le ${+r.jour_mois === 1 ? '1er' : +r.jour_mois || 1}`;
+    t = `${n === 1 ? 'Chaque mois' : `Tous les ${n} mois`}, ${quel}`;
+  } else {
+    const j = +r.jour_mois;
+    t = `${n === 1 ? 'Chaque année' : `Tous les ${n} ans`}, le ${j === -1 ? 'dernier jour de' : j === 1 ? '1er' : j} ${MOIS_AN[(+r.mois_annee || 1) - 1]}`;
+  }
+  if (court) return t;
+  if (r.fin_date) t += ` · jusqu’au ${jourDate(r.fin_date)}`;
+  if (r.fin_nombre) t += ` · ${r.fin_nombre} fois (occurrence ${+r.numero || 1} de ${r.fin_nombre})`;
+  return t;
+}
+const colonneRecurrence = () => !S.actions.length || 'recurrence' in S.actions[0];
+// Après qu’une tâche récurrente est terminée ou sautée : annonce la date de la suivante.
+function annoncerSuivante(id, debut) {
+  const s = S.actions.find(x => x.recurrence_precedent_id === id);
+  const d = s && dateRef(s);
+  toast(s ? `${debut} · 🔁 prochaine : ${d ? jourDate(d) : 'créée'}` : `${debut} · fin de la série`);
+}
+
+function champsRecurrence(a) {
+  const r = a.recurrence || {};
+  const ref = dateRef(a) || aujourdhui();
+  // Valeurs proposées par défaut à partir de la date de la tâche.
+  const jDef = +ref.slice(8, 10), dowDef = isoDow(ref), rangDef = jDef > 28 ? -1 : Math.ceil(jDef / 7);
+  const jours = r.jours?.length ? r.jours.map(Number) : [dowDef];
+  const sel = (nom, options, val) => `<select name="${nom}">${options.map(([v, l]) => `<option value="${v}" ${String(v) === String(val) ? 'selected' : ''}>${l}</option>`).join('')}</select>`;
+  const joursDuMois = [...Array(31)].map((_, i) => [i + 1, i === 0 ? '1er' : String(i + 1)]).concat([[-1, 'dernier jour']]);
+  const fin = r.fin_date ? 'date' : r.fin_nombre ? 'nombre' : '';
+  return `<fieldset class="recurrence"><legend>🔁 Répétition</legend>
+    <label class="champ"><span>Répéter</span>${sel('rec_type', [['', 'Jamais'], ['jours', 'Par jours'], ['semaine', 'Chaque semaine'], ['mois', 'Chaque mois'], ['annee', 'Chaque année']], r.type || '')}</label>
+    <label class="champ rec-o"><span>Intervalle</span><div class="rec-ligne">Tous les <input type="number" name="rec_intervalle" min="1" max="999" step="1" value="${+r.intervalle || 1}" required> <span class="rec-unite"></span></div></label>
+    <div class="champ large rec-o"><span>Date de la suivante</span><div class="types-rapides" role="radiogroup">
+      <label><input type="radio" name="rec_base" value="calendrier" ${r.base !== 'realisation' ? 'checked' : ''}><span>Selon le calendrier</span></label>
+      <label><input type="radio" name="rec_base" value="realisation" ${r.base === 'realisation' ? 'checked' : ''}><span>Après l’avoir faite</span></label></div>
+      <p class="aide rec-aide-base"></p></div>
+    <div class="champ large rec-semaine"><span>Quels jours</span><div class="types-rapides">${JOURS_SEM.map((j, i) => `<label><input type="checkbox" name="rec_jours" value="${i + 1}" ${jours.includes(i + 1) ? 'checked' : ''}><span>${j.slice(0, 3)}.</span></label>`).join('')}</div></div>
+    <div class="champ large rec-mois"><span>Quel jour du mois</span>
+      <label class="rec-ligne"><input type="radio" name="rec_mode_mois" value="jour" ${r.mode_mois !== 'rang' ? 'checked' : ''}> Le ${sel('rec_jour_mois', joursDuMois, r.type === 'mois' && r.mode_mois !== 'rang' ? r.jour_mois : jDef)} du mois</label>
+      <label class="rec-ligne"><input type="radio" name="rec_mode_mois" value="rang" ${r.mode_mois === 'rang' ? 'checked' : ''}> Le ${sel('rec_rang', Object.entries(RANGS).sort((x, y) => (+x[0] === -1) - (+y[0] === -1) || x[0] - y[0]), r.rang ?? rangDef)} ${sel('rec_jour_semaine', JOURS_SEM.map((j, i) => [i + 1, j]), r.jour_semaine ?? dowDef)} du mois</label></div>
+    <div class="champ large rec-annee"><span>Quel jour de l’année</span>
+      <div class="rec-ligne">Le ${sel('rec_jour_an', joursDuMois, r.type === 'annee' ? r.jour_mois : jDef)} ${sel('rec_mois_annee', MOIS_AN.map((m, i) => [i + 1, m]), r.mois_annee ?? +ref.slice(5, 7))}</div></div>
+    <div class="champ large rec-o"><span>Fin de la série</span><div class="rec-ligne">${sel('rec_fin', [['', 'Jamais'], ['date', 'Le'], ['nombre', 'Après']], fin)}
+      <input type="date" name="rec_fin_date" value="${r.fin_date || ''}" aria-label="Date de fin"><span class="rec-nombre"><input type="number" name="rec_fin_nombre" min="1" step="1" value="${r.fin_nombre || ''}" aria-label="Nombre d’occurrences"> occurrences au total${r.numero > 1 ? ` (celle-ci est la ${r.numero}e)` : ''}</span></div></div>
+    <p class="champ large rec-apercu" aria-live="polite"></p>
+  </fieldset>`;
+}
+// Lit la règle saisie (null = pas de répétition). Garde le rang de l’occurrence dans la série.
+function lireRecurrence(fd, ancienne) {
+  const type = fd.get('rec_type'); if (!type) return null;
+  const r = { type, intervalle: Math.max(+fd.get('rec_intervalle') || 1, 1), base: fd.get('rec_base') === 'realisation' ? 'realisation' : 'calendrier' };
+  if (r.base === 'calendrier') {
+    if (type === 'semaine') r.jours = fd.getAll('rec_jours').map(Number);
+    if (type === 'mois') {
+      r.mode_mois = fd.get('rec_mode_mois') === 'rang' ? 'rang' : 'jour';
+      if (r.mode_mois === 'rang') { r.rang = +fd.get('rec_rang'); r.jour_semaine = +fd.get('rec_jour_semaine'); } else r.jour_mois = +fd.get('rec_jour_mois');
+    }
+    if (type === 'annee') { r.jour_mois = +fd.get('rec_jour_an'); r.mois_annee = +fd.get('rec_mois_annee'); }
+  }
+  if (fd.get('rec_fin') === 'date' && fd.get('rec_fin_date')) r.fin_date = fd.get('rec_fin_date');
+  if (fd.get('rec_fin') === 'nombre' && +fd.get('rec_fin_nombre') > 0) r.fin_nombre = +fd.get('rec_fin_nombre');
+  r.numero = +ancienne?.numero || 1;
+  return r;
+}
+function brancherRecurrence(d, a) {
+  const f = d.querySelector('form'), fs = d.querySelector('fieldset.recurrence'); if (!fs) return;
+  const maj = () => {
+    const fd = new FormData(f), r = lireRecurrence(fd, a.recurrence), type = fd.get('rec_type'), cal = fd.get('rec_base') !== 'realisation';
+    fs.querySelectorAll('.rec-o').forEach(e => { e.hidden = !type; });
+    fs.querySelector('.rec-semaine').hidden = !(type === 'semaine' && cal);
+    fs.querySelector('.rec-mois').hidden = !(type === 'mois' && cal);
+    fs.querySelector('.rec-annee').hidden = !(type === 'annee' && cal);
+    const n = Math.max(+fd.get('rec_intervalle') || 1, 1);
+    fs.querySelector('.rec-unite').textContent = type ? { jours: ['jour', 'jours'], semaine: ['semaine', 'semaines'], mois: ['mois', 'mois'], annee: ['an', 'ans'] }[type][n > 1 ? 1 : 0] : '';
+    const finSel = fd.get('rec_fin');
+    fs.querySelector('[name=rec_fin_date]').hidden = finSel !== 'date';
+    fs.querySelector('.rec-nombre').hidden = finSel !== 'nombre';
+    fs.querySelector('.rec-aide-base').textContent = cal
+      ? 'Les dates suivent la règle, peu importe le jour où tu la fais. Une date manquée est sautée : la suivante est toujours dans le futur.'
+      : 'L’intervalle part du jour où tu la termines (ex. changer un filtre 90 jours après l’avoir fait).';
+    const ap = fs.querySelector('.rec-apercu');
+    if (!r) { ap.textContent = ''; return; }
+    if (r.type === 'semaine' && cal && !r.jours.length) { ap.innerHTML = '<span class="erreur">Coche au moins un jour.</span>'; return; }
+    // Date de cette occurrence, telle que saisie dans la fiche.
+    const ref = fd.get('echeance') || fd.get('jour') || null;
+    const premiere = ref || premiereOccurrence(r);
+    const suiv = prochaineOccurrence(r, premiere);
+    ap.innerHTML = `<b>${esc(libRecurrence(r))}</b><br>`
+      + (ref ? '' : `Aucune date : l’échéance sera fixée au <b>${esc(jourAn(premiere))}</b>.<br>`)
+      + (suiv ? `Une fois celle-ci terminée${cal ? '' : ' aujourd’hui'}, la suivante sera créée pour le <b>${esc(jourAn(suiv))}</b>.` : 'Fin de la série : aucune autre occurrence ne sera créée après celle-ci.');
+  };
+  f.addEventListener('input', maj); f.addEventListener('change', maj); maj();
+}
+
 /* ---------- Fiche action ---------- */
 function ouvrirAction(a) {
   const nouveau = !a.id;
@@ -974,6 +1148,8 @@ function ouvrirAction(a) {
         <label class="champ"><span>Durée prévue (min)</span><input type="number" min="0" step="1" name="duree_min" value="${a.duree_min ?? ''}"></label>
         <label class="champ"><span>Durée réelle (min)</span><input type="number" min="0" step="1" name="duree_reelle_min" value="${a.duree_reelle_min ?? ''}"></label>
       </fieldset>
+
+      ${a.uid_externe ? '' : champsRecurrence(a)}
 
       <fieldset><legend>Relier</legend>
         <label class="champ"><span>Projet</span><select name="projet_id">${opts(S.projets, a.projet_id, { lib: 'titre' })}</select></label>
@@ -1009,6 +1185,7 @@ function ouvrirAction(a) {
       ${nouveau ? '' : '<button type="button" class="btn danger gauche" id="suppr">Supprimer</button>'}
       ${!nouveau && a.type === 'Événement' ? `<button type="button" class="btn" id="cr">${L.noteDe(a) ? 'Ouvrir le compte rendu' : 'Compte rendu'}</button>` : ''}
       ${a.note_id && parId(S.notes, a.note_id) ? '<button type="button" class="btn discret" id="voirNote">Note d’origine</button>' : ''}
+      ${!nouveau && a.recurrence && ouvert(a) ? '<button type="button" class="btn" id="sauter" title="Passer à l’occurrence suivante sans marquer celle-ci comme faite">Sauter cette fois</button>' : ''}
       <button type="button" class="btn" data-fermer>Annuler</button><button type="submit" class="btn primaire">Enregistrer</button>
     </div></form>`, async fd => {
     const vide = k => (fd.get(k) || '').trim() || null;
@@ -1027,10 +1204,29 @@ function ouvrirAction(a) {
       compagnie: vide('compagnie'), probleme_signale: vide('probleme_signale'), travaux_realises: vide('travaux_realises'),
     };
     if (ligne.statut !== 'Terminé') ligne.realisee_le = null;
-    const { error } = nouveau ? await sb.from('actions').insert(ligne) : await sb.from('actions').update(ligne).eq('id', a.id);
+    else if (a.statut !== 'Terminé') ligne.realisee_le = a.realisee_le || new Date().toISOString();
+    // Répétition : la règle voyage avec chaque occurrence (colonne recurrence, créée par la migration SQL).
+    if (!a.uid_externe) {
+      const rec = lireRecurrence(fd, a.recurrence);
+      if (rec && rec.type === 'semaine' && rec.base === 'calendrier' && !rec.jours.length) { toast('Répétition : coche au moins un jour'); return false; }
+      if (colonneRecurrence()) ligne.recurrence = rec;
+      else if (rec) { toast('Répétition indisponible : exécute d’abord la migration SQL des tâches récurrentes'); return false; }
+      if (rec && !ligne.echeance && !ligne.planifie_debut) ligne.echeance = premiereOccurrence(rec);
+    }
+    const { data: enr, error } = nouveau ? await sb.from('actions').insert(ligne).select('id').single() : await sb.from('actions').update(ligne).eq('id', a.id).select('id').single();
     if (error) { toast('Échec : ' + error.message); return false; }
-    toast(nouveau ? 'Action ajoutée' : 'Enregistré'); rafraichir();
+    await rafraichir();
+    if (ligne.recurrence && ligne.statut === 'Terminé' && a.statut !== 'Terminé') annoncerSuivante(enr.id, 'Terminé');
+    else toast(nouveau ? 'Action ajoutée' : 'Enregistré');
   });
+  brancherRecurrence(d, a);
+  const sa = d.querySelector('#sauter');
+  if (sa) sa.onclick = async () => {
+    sa.disabled = true;
+    const { error } = await sb.rpc('sauter_occurrence', { p_id: a.id });
+    if (error) { sa.disabled = false; return toast('Échec : ' + error.message); }
+    d.close(); await rafraichir(); annoncerSuivante(a.id, 'Sautée');
+  };
   // Avec un projet, le domaine vient du projet : le champ est masqué et remplacé par une mention.
   const selP = d.querySelector('[name=projet_id]'), champD = d.querySelector('.domaine-tache'), mention = d.querySelector('.domaine-herite');
   const majDomaine = () => {

@@ -741,3 +741,16 @@ body.glisse-encadre, body.glisse-encadre * { cursor: grabbing !important; -webki
 @media (max-width: 760px) { .barre-reorg { flex-wrap: wrap; } }
 .apercu-encadre > .vide { padding: 12px 14px; color: var(--brume); font-size: 13px; }
 @media (max-width: 760px) { .barre-reorg span { font-size: 12px; } .barre-reorg { padding: 8px 12px; } }
+
+/* ================= Tâches récurrentes ================= */
+fieldset.recurrence [hidden] { display: none !important; }
+.rec-ligne { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; font-size: 14px; }
+.rec-ligne select, .rec-ligne input[type=number], .rec-ligne input[type=date] { width: auto; }
+.rec-ligne input[type=number] { max-width: 90px; }
+.rec-mois .rec-ligne + .rec-ligne { margin-top: 6px; }
+.rec-mois input[type=radio] { accent-color: var(--orange); width: 16px; height: 16px; }
+.rec-aide-base { margin: 6px 0 0; }
+.rec-apercu { display: block; margin: 0; padding: 10px 12px; font-size: 13.5px; line-height: 1.5; color: var(--brume); border-left: 3px solid var(--orange); background: color-mix(in srgb, var(--orange) 6%, transparent); border-radius: var(--r); }
+.rec-apercu:empty { display: none; }
+.rec-apercu b { color: var(--craie); }
+.pastille.recur { border-color: color-mix(in srgb, var(--orange) 45%, transparent); color: var(--orange-pale); }
