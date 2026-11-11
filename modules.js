@@ -931,8 +931,16 @@ export function installerModules(c) {
   function synchroTheme() { const k = S.reglages.find(x => x.cle === 'theme')?.valeur; if (k && k !== themeActuel()) appliquerTheme(k); }
 
   /* ================= Encarts de l'accueil ================= */
-  function encartsAccueil() {
+  // Deux encadrés séparés pour pouvoir les placer indépendamment sur l'accueil (réorganisation).
+  function encartsAccueil() { return encartTransports() + encartSurveiller(); }
+  function encartTransports() {
     const traj = trajetsDuJour();
+    return bloc('Transports du jour', traj.length, traj.length ? `<ul class="lignes">${traj.map(t => {
+        // Fait (statut) ou heure passée : crochet et ligne atténuée.
+        const fait = t.statut === 'Fait' || new Date(t.date_heure) < new Date();
+        return `<li class="ligne trajet-jour${fait ? ' trajet-fait' : ''}" style="grid-template-columns:52px minmax(0,1fr) auto" data-aller="transports" ${fait ? 'title="Fait"' : ''}><div class="heure">${fait ? '<span class="crochet-fait" aria-label="Fait">✓</span>' : ''}${esc(fmtHeure.format(new Date(t.date_heure)))}</div><div><div class="titre">${esc(t.titre.split(' • ').pop())}</div><div class="meta"><span>${esc(t.enfants || '')}</span></div></div><div>${t.responsable ? pastille(t.responsable, 'st-Terminé') : pastille('À attribuer', 'st-Bloqué')}</div></li>`; }).join('')}</ul>` : vide('Aucun transport aujourd’hui.'), '<button class="btn discret" data-aller="transports">Semaine</button>');
+  }
+  function encartSurveiller() {
     const entretiens = S.entretiens.filter(e => e.actif).map(e => [e, statutEntretien(e)]).filter(([, s]) => ['retard', 'mois'].includes(s.cle));
     const achats = S.achats.filter(a => ['À compléter', 'À acheter'].includes(a.statut));
     const dans7 = plusJours(aujourdhui(), 7);
@@ -943,12 +951,7 @@ export function installerModules(c) {
     if (achats.length) lignes.push(['achats', `${achats.length} article${achats.length > 1 ? 's' : ''} à acheter`, achats.slice(0, 3).map(a => a.item).join(', ')]);
     if (abos.length) lignes.push(['abonnements', `${abos.length} facturation${abos.length > 1 ? 's' : ''} cette semaine`, abos.map(a => `${a.nom} ${fmtArgent(a.montant)}`).join(', ')]);
     if (lecture) lignes.push(['bibliotheque', 'En lecture : ' + lecture.titre, lecture.longueur ? `${lecture.position || 0} / ${lecture.longueur}` : '']);
-    return `
-      ${bloc('Transports du jour', traj.length, traj.length ? `<ul class="lignes">${traj.map(t => {
-        // Fait (statut) ou heure passée : crochet et ligne atténuée.
-        const fait = t.statut === 'Fait' || new Date(t.date_heure) < new Date();
-        return `<li class="ligne trajet-jour${fait ? ' trajet-fait' : ''}" style="grid-template-columns:52px minmax(0,1fr) auto" data-aller="transports" ${fait ? 'title="Fait"' : ''}><div class="heure">${fait ? '<span class="crochet-fait" aria-label="Fait">✓</span>' : ''}${esc(fmtHeure.format(new Date(t.date_heure)))}</div><div><div class="titre">${esc(t.titre.split(' • ').pop())}</div><div class="meta"><span>${esc(t.enfants || '')}</span></div></div><div>${t.responsable ? pastille(t.responsable, 'st-Terminé') : pastille('À attribuer', 'st-Bloqué')}</div></li>`; }).join('')}</ul>` : vide('Aucun transport aujourd’hui.'), '<button class="btn discret" data-aller="transports">Semaine</button>')}
-      ${lignes.length ? bloc('À surveiller', null, `<ul class="lignes">${lignes.map(([k, t, d]) => `<li class="ligne" style="grid-template-columns:22px minmax(0,1fr)" data-aller="${k}"><span class="ico-mini">${c.ico(k)}</span><div><div class="titre">${esc(t)}</div>${d ? `<div class="meta"><span>${esc(d)}</span></div>` : ''}</div></li>`).join('')}</ul>`) : ''}`;
+    return lignes.length ? bloc('À surveiller', null, `<ul class="lignes">${lignes.map(([k, t, d]) => `<li class="ligne" style="grid-template-columns:22px minmax(0,1fr)" data-aller="${k}"><span class="ico-mini">${c.ico(k)}</span><div><div class="titre">${esc(t)}</div>${d ? `<div class="meta"><span>${esc(d)}</span></div>` : ''}</div></li>`).join('')}</ul>`) : '';
   }
 
   /* ================= Projet : budget ================= */
@@ -1030,6 +1033,6 @@ export function installerModules(c) {
   return {
     synchroTheme,
     vues: { vehicules: vueVehicules, achats: vueAchats, abonnements: vueAbonnements, transports: vueTransports, bibliotheque: vueBibliotheque, carnet: vueCarnet, routines: vueRoutines, revue: vueRevue, organigramme: vueOrganigramme, plus: vuePlus },
-    encartsAccueil, blocHabitudes, brancherHabitudes, complementsProjet, brancherProjet, ficheAchat, ficheNote, ficheCahier, blocNotesLiees, brancherNotesLiees,
+    encartsAccueil, encartTransports, encartSurveiller, blocHabitudes, brancherHabitudes, complementsProjet, brancherProjet, ficheAchat, ficheNote, ficheCahier, blocNotesLiees, brancherNotesLiees,
   };
 }

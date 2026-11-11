@@ -209,7 +209,7 @@ function rendre() {
     </div>
     <button class="fab-fly" id="fabFly" aria-label="Consigner une tâche faite sur le fly" title="Fait sur le fly (F)"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M13 2 4 14h7l-1 8 9-12h-7z" fill="currentColor"/></svg></button>
     <button class="fab" id="fab" aria-label="Capture rapide" title="Capture rapide (N)">${ico('plus')}</button>`;
-  app.querySelectorAll('[data-vue]').forEach(b => b.onclick = () => { S.vue = b.dataset.vue; S.filtres = {}; history.replaceState(null, '', S.vue === 'accueil' ? location.pathname : '#' + S.vue); rendre(); window.scrollTo(0, 0); });
+  app.querySelectorAll('[data-vue]').forEach(b => b.onclick = () => { S.vue = b.dataset.vue; S.filtres = {}; S.reorg = false; history.replaceState(null, '', S.vue === 'accueil' ? location.pathname : '#' + S.vue); rendre(); window.scrollTo(0, 0); });
   $('#fab').onclick = () => ouvrirCapture();
   $('#fabFly').onclick = () => ouvrirSurLeFly();
   $('#btnRecherche').onclick = () => L.ouvrirRecherche();
@@ -416,6 +416,125 @@ function brancherLignes(racine) {
 const triOuvert = (a, b) => (a.priorite ?? 3) - (b.priorite ?? 3) || (a.echeance || '9999').localeCompare(b.echeance || '9999') || a.cree_le.localeCompare(b.cree_le);
 const triDate = (a, b) => (a.planifie_debut || '').localeCompare(b.planifie_debut || '');
 
+/* ---------- Réorganisation de l’accueil ---------- */
+// Bouton « Réorganiser l’accueil » (bas de l’accueil) : les encadrés se glissent par leur poignée ⠿,
+// en haut (pleine largeur), dans la colonne de gauche ou de droite. Sur téléphone, tout s’empile dans cet ordre :
+// haut, gauche, droite. La disposition est gardée dans le réglage `disposition_accueil` et suit le compte.
+const ENCADRES = {
+  evenements: 'Aujourd’hui (événements et charge)', conflits: 'Conflits famille et travail', compteurs: 'Compteurs',
+  plan: 'Aujourd’hui, je fais', habitudes: 'Habitudes du jour', 'en-cours': 'En cours', planifiees: 'Tâches planifiées · 7 jours',
+  'a-completer': 'À compléter', backlog: 'Backlog et engagements', transports: 'Transports du jour', surveiller: 'À surveiller',
+  blocages: 'Blocages et relances', projets: 'Projets en mouvement' };
+const ZONES = { haut: 'Haut · pleine largeur', gauche: 'Colonne de gauche', droite: 'Colonne de droite' };
+const DISPO_DEFAUT = { haut: ['evenements', 'conflits', 'compteurs'], gauche: ['plan', 'habitudes', 'en-cours', 'planifiees', 'a-completer', 'backlog'],
+  droite: ['transports', 'surveiller', 'blocages', 'projets'] };
+function dispositionAccueil() {
+  const r = S.reglages.find(x => x.cle === 'disposition_accueil')?.valeur;
+  const d = { haut: [], gauche: [], droite: [] }, vus = new Set();
+  if (r && typeof r === 'object') for (const z of Object.keys(d)) (Array.isArray(r[z]) ? r[z] : []).forEach(k => { if (ENCADRES[k] && !vus.has(k)) { d[z].push(k); vus.add(k); } });
+  // Encadré absent de la disposition enregistrée (ajouté à ORBITE plus tard) : à sa place par défaut, après son voisin d’origine.
+  for (const z of Object.keys(DISPO_DEFAUT)) DISPO_DEFAUT[z].forEach((k, i) => {
+    if (vus.has(k)) return;
+    const voisin = DISPO_DEFAUT[z].slice(0, i).reverse().find(x => d[z].includes(x));
+    d[z].splice(voisin ? d[z].indexOf(voisin) + 1 : 0, 0, k); vus.add(k);
+  });
+  return d;
+}
+function encadre(k, html) {
+  if (!S.reorg) return html ? `<div class="encadre" data-encadre="${k}">${html}</div>` : '';
+  // En mode réorganiser : poignée + aperçu tronqué et inerte; un encadré vide reste visible pour pouvoir le placer.
+  return `<div class="encadre" data-encadre="${k}"><button type="button" class="poignee-encadre" aria-label="Déplacer « ${esc(ENCADRES[k])} » (flèches pour déplacer)"><span aria-hidden="true">⠿</span>${esc(ENCADRES[k])}</button>
+    <div class="apercu-encadre" inert>${html || '<div class="vide">Vide pour l’instant · s’affichera ici quand il y aura du contenu.</div>'}</div></div>`;
+}
+function lireDisposition(racine) {
+  const d = {};
+  racine.querySelectorAll('[data-zone]').forEach(z => { d[z.dataset.zone] = [...z.querySelectorAll(':scope > .encadre')].map(e => e.dataset.encadre); });
+  return d;
+}
+async function enregistrerDisposition(d) {
+  const r = S.reglages.find(x => x.cle === 'disposition_accueil');
+  if (r) r.valeur = d; else S.reglages.push({ cle: 'disposition_accueil', valeur: d });
+  const { error } = await sb.from('reglages').upsert({ cle: 'disposition_accueil', valeur: d });
+  if (error) toast('Disposition non enregistrée : ' + error.message);
+}
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape' && S.reorg && S.vue === 'accueil' && !document.querySelector('dialog[open]') && !document.body.classList.contains('glisse-encadre')) { S.reorg = false; rendre(); }
+});
+function brancherReorg(v) {
+  const btn = v.querySelector('#reorg'); if (btn) btn.onclick = () => { S.reorg = true; rendre(); };
+  const fin = v.querySelector('#finReorg'); if (fin) fin.onclick = () => { S.reorg = false; rendre(); toast('Disposition enregistrée'); };
+  if (!S.reorg) return;
+  // La barre du mode réorganiser colle juste sous le bandeau (lui-même collant).
+  const barre = v.querySelector('.barre-reorg'), bandeau = document.querySelector('.bandeau');
+  if (barre && bandeau) barre.style.top = bandeau.offsetHeight + 8 + 'px';
+  const racine = v.querySelector('.accueil-encadres');
+  const zones = [...racine.querySelectorAll('[data-zone]')];
+  const ordreZones = ['haut', 'gauche', 'droite'];
+  v.querySelectorAll('.poignee-encadre').forEach(h => {
+    const enc = h.closest('.encadre');
+    // Clavier : ↑ ↓ dans la zone, ← → vers la zone voisine.
+    h.addEventListener('keydown', e => {
+      const z = enc.parentElement;
+      if (e.key === 'ArrowUp' && enc.previousElementSibling) z.insertBefore(enc, enc.previousElementSibling);
+      else if (e.key === 'ArrowDown' && enc.nextElementSibling) z.insertBefore(enc.nextElementSibling, enc);
+      else if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
+        const i = ordreZones.indexOf(z.dataset.zone) + (e.key === 'ArrowRight' ? 1 : -1);
+        const cible = racine.querySelector(`[data-zone="${ordreZones[i]}"]`); if (!cible) return;
+        cible.appendChild(enc);
+      } else return;
+      e.preventDefault(); h.focus(); enregistrerDisposition(lireDisposition(racine));
+    });
+    h.addEventListener('pointerdown', e => {
+      if (e.button !== 0) return;
+      e.preventDefault();
+      h.setPointerCapture(e.pointerId);
+      const r = enc.getBoundingClientRect();
+      const g = { dx: e.clientX - r.left, dy: e.clientY - r.top, x: e.clientX, y: e.clientY };
+      const fantome = enc.cloneNode(true); fantome.classList.add('fantome-encadre');
+      Object.assign(fantome.style, { width: r.width + 'px', left: r.left + 'px', top: r.top + 'px' });
+      const trou = document.createElement('div'); trou.className = 'trou-encadre'; trou.style.height = r.height + 'px';
+      // L’encadré reste dans la page (masqué) : la capture du pointeur sur sa poignée doit survivre au glissement.
+      enc.after(trou); enc.classList.add('encadre-masque');
+      document.body.appendChild(fantome); document.body.classList.add('glisse-encadre');
+      if (e.pointerType !== 'mouse' && navigator.vibrate) navigator.vibrate(15);
+      // Défilement automatique tant que le pointeur reste près du haut ou du bas de l’écran.
+      // Le placement est recalculé après chaque pas de défilement, même si le doigt ne bouge plus.
+      const defil = setInterval(() => {
+        const avant = scrollY;
+        if (g.y < 80 + (bandeau?.offsetHeight || 0)) window.scrollBy(0, -14); else if (g.y > innerHeight - 110) window.scrollBy(0, 14);
+        if (scrollY !== avant) placer();
+      }, 16);
+      const bouger = ev => { g.x = ev.clientX; g.y = ev.clientY; placer(); };
+      const placer = () => {
+        const x = g.x, y = g.y;
+        fantome.style.left = x - g.dx + 'px'; fantome.style.top = y - g.dy + 'px';
+        // Zone sous le pointeur, sinon la plus proche.
+        let zone = null, best = Infinity;
+        for (const z of zones) {
+          const zr = z.getBoundingClientRect();
+          const d = Math.hypot(x < zr.left ? zr.left - x : x > zr.right ? x - zr.right : 0, y < zr.top ? zr.top - y : y > zr.bottom ? y - zr.bottom : 0);
+          if (d < best) { best = d; zone = z; }
+        }
+        // Position : avant le premier encadré dont le milieu est sous le pointeur.
+        const avant = [...zone.querySelectorAll(':scope > .encadre')].find(f => { if (f === enc) return false; const fr = f.getBoundingClientRect(); return y < fr.top + fr.height / 2; });
+        if (avant) { if (trou.nextElementSibling !== avant) zone.insertBefore(trou, avant); }
+        else if (zone.lastElementChild !== trou) zone.appendChild(trou);
+        zones.forEach(z => z.classList.toggle('zone-survol', z === zone));
+      };
+      const finir = () => {
+        clearInterval(defil);
+        h.removeEventListener('pointermove', bouger); h.removeEventListener('pointerup', finir); h.removeEventListener('pointercancel', finir);
+        fantome.remove(); trou.replaceWith(enc); enc.classList.remove('encadre-masque');
+        document.body.classList.remove('glisse-encadre'); zones.forEach(z => z.classList.remove('zone-survol'));
+        enregistrerDisposition(lireDisposition(racine));
+      };
+      h.addEventListener('pointermove', bouger);
+      h.addEventListener('pointerup', finir);
+      h.addEventListener('pointercancel', finir);
+    });
+  });
+}
+
 /* ---------- Accueil ---------- */
 function vueAccueil(v) {
   const auj = aujourdhui(), dans7 = plusJours(auj, 7);
@@ -442,49 +561,58 @@ function vueAccueil(v) {
   const aCompleter = vis.filter(a => manquants(a).length);
 
   const cpt = (n, lbl, cls, cible) => `<button class="compteur ${n ? cls : 'calme'}" data-cible="${cible}"><b>${n}</b><span>${lbl}</span></button>`;
-  v.innerHTML = `${L6.bandeauMode()}${L6.blocFermeture()}
-    <section class="bloc bloc-evenements"><header><h2>Aujourd’hui <span class="nb">${evtAuj.length}</span></h2><button class="btn discret" data-aller="agenda">Agenda</button></header>
+  // Chaque encadré déplaçable, par clé (voir ENCADRES). Une chaîne vide = rien à afficher pour l’instant.
+  const B = {
+    evenements: `<section class="bloc bloc-evenements"><header><h2>Aujourd’hui <span class="nb">${evtAuj.length}</span></h2><button class="btn discret" data-aller="agenda">Agenda</button></header>
       ${L.blocCharge()}
       ${liste(evtAuj, 'Aucun événement aujourd’hui.', { heureSeule: true })}
       <details class="plus-tard" ${S.evtOuverts ? 'open' : ''}><summary>7 prochains jours <span class="nb">${evenements.length - evtJour(auj).length}</span></summary>
         ${joursEvt.filter(j => j !== auj).map(j => `<div class="jour-evt"><h3>${esc(libJour(j))}</h3>${liste(evtJour(j), '', { heureSeule: true })}</div>`).join('') || '<div class="vide">Rien de prévu.</div>'}
-      </details></section>
-    ${L.blocConflits()}
-    ${L.encartPneus()}
-    <section class="compteurs" aria-label="Indicateurs">
+      </details></section>`,
+    conflits: L.blocConflits(),
+    compteurs: `<section class="compteurs" aria-label="Indicateurs">
       ${cpt(enCours.length, 'En cours', L6.classeEnCours(enCours.length), 'en-cours')}
       ${cpt(taches.filter(ouvert).length, 'Tâches ouvertes', 'calme', 'ouvertes')}
       ${cpt(retards.length, 'En retard', 'alerte', 'retard')}
       ${cpt(bloques.length, 'Bloquées ou relances', 'attention', 'bloques')}
       ${cpt(aTrier.length, 'À trier', 'attention', 'trier')}
       ${cpt(actifs.length, 'Projets actifs', 'calme', 'projets')}
-    </section>
+    </section>`,
+    plan: X.blocPlan(),
+    habitudes: M.blocHabitudes(),
+    'en-cours': `<section class="bloc" data-depot="en-cours"><header><h2>En cours <span class="nb">${enCours.length}</span></h2></header>${L6.avertEnCours(enCours.length)}
+      ${liste(enCours, 'Rien en cours. Passe une tâche du backlog à « En cours » pour la retrouver ici.')}</section>`,
+    planifiees: `<section class="bloc" data-glisser><header><h2>Tâches planifiées · 7 jours <span class="nb">${semaine.length}</span></h2><button class="btn discret" data-aller="agenda">Agenda</button></header>
+      ${liste(semaine, 'Aucune tâche planifiée cette semaine.')}</section>`,
+    'a-completer': aCompleter.length ? `<section class="bloc"><header><h2>À compléter <span class="nb">${aCompleter.length}</span></h2></header>${liste(aCompleter.slice(0, 8), '')}</section>` : '',
+    backlog: `<section class="bloc"><header><h2>Backlog et engagements <span class="nb">${backlog.length}</span></h2></header>
+      ${liste(backlog, 'Backlog vide.')}</section>`,
+    transports: M.encartTransports(),
+    surveiller: M.encartSurveiller(),
+    blocages: bloques.length ? `<section class="bloc"><header><h2>Blocages et relances <span class="nb">${bloques.length}</span></h2></header>${liste(bloques, '')}</section>` : '',
+    projets: `<section class="bloc"><header><h2>Projets en mouvement <span class="nb">${actifs.length}</span></h2><button class="btn discret" data-aller="projets">Tous</button></header>
+      ${actifs.map(carteProjet).join('') || '<div class="vide">Aucun projet actif.</div>'}</section>`,
+  };
+  const dispo = dispositionAccueil();
+  const zone = (z, cls) => `<div class="zone-accueil ${cls}" data-zone="${z}" data-libelle="${esc(ZONES[z])}">${dispo[z].map(k => encadre(k, B[k])).join('')}</div>`;
+
+  // Bandeaux contextuels fixés en haut (non déplaçables) : mode hors travail, fermer ma journée, pneus, événements passés.
+  v.innerHTML = `${L6.bandeauMode()}${L6.blocFermeture()}
+    ${L.encartPneus()}
     ${passes.length ? `<div class="bloc signal" style="margin-bottom:22px"><header><h2>${passes.length} événement${passes.length > 1 ? 's' : ''} passé${passes.length > 1 ? 's' : ''} encore ouvert${passes.length > 1 ? 's' : ''}</h2>
       <div style="display:flex;gap:8px"><button class="btn discret" id="voirPasses">Voir</button><button class="btn" id="fermerPasses">Marquer terminés</button></div></header></div>` : ''}
-    <div class="grille">
-      <div class="colonne">
-        ${X.blocPlan()}
-        ${M.blocHabitudes()}
-        <section class="bloc" data-depot="en-cours"><header><h2>En cours <span class="nb">${enCours.length}</span></h2></header>${L6.avertEnCours(enCours.length)}
-          ${liste(enCours, 'Rien en cours. Passe une tâche du backlog à « En cours » pour la retrouver ici.')}</section>
-        <section class="bloc" data-glisser><header><h2>Tâches planifiées · 7 jours <span class="nb">${semaine.length}</span></h2><button class="btn discret" data-aller="agenda">Agenda</button></header>
-          ${liste(semaine, 'Aucune tâche planifiée cette semaine.')}</section>
-        ${aCompleter.length ? `<section class="bloc"><header><h2>À compléter <span class="nb">${aCompleter.length}</span></h2></header>${liste(aCompleter.slice(0, 8), '')}</section>` : ''}
-        <section class="bloc"><header><h2>Backlog et engagements <span class="nb">${backlog.length}</span></h2></header>
-          ${liste(backlog, 'Backlog vide.')}</section>
-      </div>
-      <div class="colonne">
-        ${M.encartsAccueil()}
-        ${bloques.length ? `<section class="bloc"><header><h2>Blocages et relances <span class="nb">${bloques.length}</span></h2></header>${liste(bloques, '')}</section>` : ''}
-        <section class="bloc"><header><h2>Projets en mouvement <span class="nb">${actifs.length}</span></h2><button class="btn discret" data-aller="projets">Tous</button></header>
-          ${actifs.map(carteProjet).join('') || '<div class="vide">Aucun projet actif.</div>'}</section>
-      </div>
-    </div>`;
+    ${S.reorg ? `<div class="barre-reorg" role="region" aria-label="Réorganiser l’accueil"><div><b>Réorganiser l’accueil</b><span>Glisse un encadré par sa poignée ⠿ (ou flèches du clavier). Enregistré automatiquement sur ton compte.</span></div><button class="btn primaire" id="finReorg">Terminé</button></div>` : ''}
+    <div class="accueil-encadres${S.reorg ? ' reorg-actif' : ''}">
+      ${zone('haut', 'zone-haut')}
+      <div class="grille">${zone('gauche', 'colonne')}${zone('droite', 'colonne')}</div>
+    </div>
+    ${S.reorg ? '' : `<div class="pied-accueil"><button class="btn discret" id="reorg" title="Déplacer les encadrés de l’accueil">⠿ Réorganiser l’accueil</button></div>`}`;
   v.querySelectorAll('[data-aller]').forEach(b => b.onclick = () => { S.vue = b.dataset.aller; rendre(); });
   L.brancherConflits(v);
   L6.brancher(v);
   v.querySelector('.bloc.plan-du-jour')?.setAttribute('data-glisser', '');
-  brancherGlisser(v);
+  if (!S.reorg) brancherGlisser(v);
+  brancherReorg(v);
   M.brancherHabitudes(v);
   const pt = v.querySelector('details.plus-tard'); if (pt) pt.ontoggle = () => { S.evtOuverts = pt.open; };
   const cp = v.querySelector('#choisirPlan'); if (cp) cp.onclick = () => X.choisirPlan();
