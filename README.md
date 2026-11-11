@@ -58,7 +58,7 @@ Autres outils :
 - **Ligne de temps** des jalons dans chaque projet.
 - **Achats reliés au budget** : un achat commandé engage le poste, reçu il le passe à « Payé »; photo ou PDF de facture en stockage privé `factures`.
 
-Capture rapide : bouton orange, ou touche **N** sur ordinateur (tâche, événement, jalon, rappel, achat, note).
+Capture rapide : bouton orange, ou touche **N** sur ordinateur (tâche, événement, jalon, rappel, achat, note). « Plus de détails » déplie le reste pour tout saisir d'un coup : statut, domaine (masqué si le projet en donne un), hors projet, périmètre et délégué, contexte, en attente de, relance, lieu ou lien, référence externe, notes, répétition 🔁 et « Ajouter à Aujourd'hui, je fais ». L'état déplié est mémorisé sur l'appareil. Statut automatique : « À faire » si rien ne manque (domaine + projet ou hors projet, délégué si je délègue), sinon « À traiter » (va dans À trier); l'aperçu sous le classement dit lequel sera donné et ce qui manque.
 
 Données importées de Notion le 6 novembre 2026 (colonne `notion_id` pour la traçabilité).
 
