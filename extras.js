@@ -71,7 +71,7 @@ export function installerExtras(c) {
             ${a.relance ? `<span class="${due ? 'retard' : ''}">Relance ${esc(jourDate(a.relance))}</span>` : '<span>Aucune relance prévue</span>'}</div>
             ${a.prochain_geste ? `<div class="geste">▸ ${esc(a.prochain_geste)}</div>` : ''}</div>
             <div class="boutons-ligne"><a class="btn" href="${courriel(a, p)}" data-stop>Courriel</a><button class="btn discret" data-relance="${a.id}">+3 jours</button></div></li>`; }).join('')}</ul>`, p?.courriel ? `<span class="aide">${esc(p.courriel)}</span>` : '', parPers[k].some(a => a.relance && a.relance <= auj) ? 'signal' : '');
-      }).join('') : bloc('Délégations', 0, vide('Rien de délégué. Dans une action, choisis « Délégué à » ou « En attente de » pour la suivre ici.'))}`;
+      }).join('') : bloc('Délégations', 0, vide('Rien de délégué. Dans une action, réponds « Non, je délègue » à « Dans mon périmètre? » puis choisis « Délégué à », ou indique « En attente de », pour la suivre ici.'))}`;
     v.querySelectorAll('[data-stop]').forEach(a => a.onclick = e => e.stopPropagation());
     v.querySelectorAll('[data-relance]').forEach(b => b.onclick = async e => {
       e.stopPropagation();

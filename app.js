@@ -518,7 +518,7 @@ function carteProjet(p) {
   return `<div class="projet" data-projet="${p.id}" role="button" tabindex="0">
     <div class="tete"><span class="nom">${esc(p.titre)}</span><span class="sante ${s}" title="${libSante}" aria-label="${libSante}"></span></div>
     <div class="prochaine">${p.prochaine_action ? '▸ ' + esc(p.prochaine_action) : (p.nb_taches ? 'Aucune prochaine action définie' : 'Aucune tâche liée')}</div>
-    <div class="chiffres"><span>${p.nb_terminees}/${p.nb_taches} terminées</span>${p.nb_retards ? `<span class="rouge">${p.nb_retards} en retard</span>` : ''}${p.cible ? `<span>Cible ${esc(jourDate(p.cible))}</span>` : ''}</div>
+    <div class="chiffres"><span>${p.nb_terminees}/${p.nb_taches} terminées</span>${!p.domaine_id ? '<span class="rouge">Domaine à compléter</span>' : ''}${p.nb_retards ? `<span class="rouge">${p.nb_retards} en retard</span>` : ''}${p.cible ? `<span>Cible ${esc(jourDate(p.cible))}</span>` : ''}</div>
     <div class="jauge" aria-hidden="true"><i style="width:${pct}%"></i></div>
   </div>`;
 }
@@ -852,8 +852,8 @@ function ouvrirAction(a) {
         <label class="champ domaine-tache"><span>Domaine</span><select name="domaine_id">${opts(S.domaines, a.domaine_id)}</select></label>
         <p class="aide domaine-herite" hidden></p>
         <label class="champ case"><input type="checkbox" name="hors_projet" ${a.hors_projet ? 'checked' : ''}><span>Hors projet (volontairement)</span></label>
-        <label class="champ"><span>Dans mon périmètre?</span><select name="dans_perimetre"><option value="">—</option><option value="true" ${a.dans_perimetre === true ? 'selected' : ''}>Oui</option><option value="false" ${a.dans_perimetre === false ? 'selected' : ''}>Non, je délègue</option></select></label>
-        <label class="champ"><span>Délégué à</span><select name="delegue_a_id">${opts(S.personnes, a.delegue_a_id)}</select></label>
+        <label class="champ"><span>Dans mon périmètre?</span><select name="dans_perimetre"><option value="">—</option><option value="true" ${a.dans_perimetre === true ? 'selected' : ''}>Oui</option><option value="false" ${a.dans_perimetre === false || (a.dans_perimetre == null && a.delegue_a_id) ? 'selected' : ''}>Non, je délègue</option></select></label>
+        <label class="champ champ-delegue"><span>Délégué à</span><select name="delegue_a_id">${opts(S.personnes, a.delegue_a_id)}</select></label>
         <label class="champ"><span>En attente de</span><select name="en_attente_de_id">${opts(S.personnes, a.en_attente_de_id)}</select></label>
         <label class="champ large"><span>Motif du blocage</span><input name="motif_blocage" value="${esc(a.motif_blocage)}"></label>
         <div class="champ large"><span>Contexte</span><div class="types-rapides">${CONTEXTES.map(c => `<label><input type="checkbox" name="contexte" value="${c}" ${(a.contexte || []).includes(c) ? 'checked' : ''}><span>${c}</span></label>`).join('')}</div></div>
@@ -893,7 +893,7 @@ function ouvrirAction(a) {
       duree_reelle_min: fd.get('duree_reelle_min') ? +fd.get('duree_reelle_min') : null,
       projet_id: vide('projet_id'), domaine_id: domaineProjet(vide('projet_id')) || vide('domaine_id'), hors_projet: fd.get('hors_projet') === 'on',
       dans_perimetre: fd.get('dans_perimetre') === '' ? null : fd.get('dans_perimetre') === 'true',
-      delegue_a_id: vide('delegue_a_id'), en_attente_de_id: vide('en_attente_de_id'), motif_blocage: vide('motif_blocage'),
+      delegue_a_id: fd.get('dans_perimetre') === 'false' ? vide('delegue_a_id') : null, en_attente_de_id: vide('en_attente_de_id'), motif_blocage: vide('motif_blocage'),
       contexte: fd.getAll('contexte'), lieu: vide('lieu'), reference_externe: vide('reference_externe'), notes: vide('notes'),
       demande_recue_le: vide('demande_recue_le'), emplacement: vide('emplacement'), departement: vide('departement'),
       compagnie: vide('compagnie'), probleme_signale: vide('probleme_signale'), travaux_realises: vide('travaux_realises'),
@@ -911,6 +911,10 @@ function ouvrirAction(a) {
     if (dom) { mention.textContent = `Domaine : ${nomD} (selon le projet)`; d.querySelector('[name=domaine_id]').value = dom; }
   };
   selP.addEventListener('change', majDomaine); majDomaine();
+  // « Délégué à » n’apparaît que si l’action n’est pas dans mon périmètre (sinon la valeur est effacée à l’enregistrement).
+  const selPer = d.querySelector('[name=dans_perimetre]'), champDel = d.querySelector('.champ-delegue');
+  const majDelegue = () => { champDel.hidden = selPer.value !== 'false'; };
+  selPer.addEventListener('change', majDelegue); majDelegue();
   // Sans date, les heures n’ont pas de sens : on les désactive.
   const jIn = d.querySelector('[name=jour]'), hIns = d.querySelectorAll('[name=heure_debut], [name=heure_fin]');
   const majHeures = () => hIns.forEach(h => { h.disabled = !jIn.value; });
@@ -941,7 +945,7 @@ function ouvrirProjet(p) {
       <label class="champ"><span>Priorité</span><select name="priorite"><option value="">—</option>${Object.entries(PRIOS).map(([k, l]) => `<option value="${k}" ${String(p.priorite) === k ? 'selected' : ''}>${l}</option>`).join('')}</select></label>
       <label class="champ"><span>Début</span><input type="date" name="debut" value="${p.debut || ''}"></label>
       <label class="champ"><span>Cible</span><input type="date" name="cible" value="${p.cible || ''}"></label>
-      <label class="champ"><span>Domaine</span><select name="domaine_id">${opts(S.domaines, p.domaine_id)}</select></label>
+      <label class="champ"><span>Domaine</span><select name="domaine_id" required>${opts(S.domaines, p.domaine_id)}</select></label>
       <label class="champ"><span>Responsable</span><select name="responsable_id">${opts(S.personnes, p.responsable_id)}</select></label>
       <label class="champ"><span>Projet parent</span><select name="parent_id">${opts(S.projets.filter(x => x.id !== p.id), p.parent_id, { lib: 'titre' })}</select></label>
       <label class="champ"><span>Budget prévu ($)</span><input type="number" step="0.01" name="budget_prevu" value="${p.budget_prevu ?? ''}"></label>
