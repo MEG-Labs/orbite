@@ -764,3 +764,17 @@ fieldset.recurrence [hidden] { display: none !important; }
 .cap-statut b { color: var(--craie); }
 .cap-plan input:disabled + span { opacity: .55; }
 @media (max-width: 760px) { .details-capture .corps-details { grid-template-columns: 1fr; } }
+
+/* ================= Formulaires sur téléphone : pas d'étirement ni de débordement ================= */
+/* Le panneau occupe tout l'écran : sans ceci, les rangées de la grille s'étirent pour remplir la hauteur. */
+dialog .corps { align-content: start; overflow-x: hidden; }
+.types-rapides { align-items: flex-start; }
+.types-rapides label { line-height: 1.3; }
+/* Date + heure : deux colonnes qui rétrécissent au lieu de déborder (champs natifs Android/iOS). */
+.date-heure { grid-template-columns: minmax(0, 1fr) minmax(0, 120px); width: 100%; }
+.date-heure input { width: 100%; min-width: 0; }
+@media (max-width: 760px) {
+  dialog .corps { gap: 14px; padding: 14px 16px; }
+  .date-heure { grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr); }
+  .types-rapides label { padding: 7px 11px; }
+}
