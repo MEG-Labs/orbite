@@ -707,6 +707,42 @@ export function installerModules(c) {
     'Ajuster les routines qui ne correspondent plus à la réalité.',
     'Vérifier les renouvellements et fins d’essai des abonnements.',
   ];
+  /* ---------- Rappel de la revue hebdo ---------- */
+  // La revue est « due » du vendredi à revue_heure (19 h par défaut) jusqu’au dimanche soir, tant que
+  // « Revue terminée » n’a pas été cliqué pour la semaine en cours (réglage revue_faite, suit le compte).
+  // Notification : Edge Function rappels (vendredi 19 h, relances samedi et dimanche à revue_relance_heure, 10 h par défaut).
+  const reglageVal = (k, def) => S.reglages.find(r => r.cle === k)?.valeur ?? def;
+  const revueFaite = () => { const f = reglageVal('revue_faite', null); return f?.semaine === semaineIso(aujourdhui()) ? f : null; };
+  function revueDue() {
+    const j = new Date(aujourdhui() + 'T12:00:00').getDay(); // 5 = vendredi, 6 = samedi, 0 = dimanche
+    const heure = +new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Toronto', hour: '2-digit', hourCycle: 'h23' }).format(new Date());
+    return ((j === 5 && heure >= +reglageVal('revue_heure', 19)) || j === 6 || j === 0) && !revueFaite();
+  }
+  function bandeauRevue() {
+    if (!revueDue()) return '';
+    return `<div class="alerte-revue" data-aller="revue" role="button" tabindex="0"><b>Revue hebdo à faire</b> · environ 20 minutes
+      <span>Vider les captures, débloquer les projets, choisir une semaine réaliste. Toucher pour commencer.</span></div>`;
+  }
+  // Pop-up à l’ouverture d’ORBITE (et au retour dans l’app après au moins 2 h), tant que la revue est due.
+  let popupRevueLe = 0;
+  function proposerRevue() {
+    if (!revueDue() || S.vue === 'revue' || document.querySelector('dialog[open]') || Date.now() - popupRevueLe < 2 * 3600e3) return;
+    popupRevueLe = Date.now();
+    const j = new Date(aujourdhui() + 'T12:00:00').getDay();
+    dialogue(`<form><div class="tete-d"><h2>📋 Ta revue hebdo</h2><button type="button" class="btn discret" data-fermer aria-label="Fermer">✕</button></div>
+      <div class="corps" style="grid-template-columns:1fr"><p style="margin:0">${j === 5 ? 'C’est vendredi soir : le bon moment pour ta revue de la semaine.' : 'Ta revue de la semaine n’est pas encore faite.'}</p>
+      <p class="aide" style="margin:0">Environ 20 minutes : vider les captures, traiter les retards, donner une suite aux projets, vérifier la charge des 14 prochains jours. Termine par « Revue terminée » pour arrêter les rappels de la semaine.</p></div>
+      <div class="pied"><button type="button" class="btn" data-fermer>Plus tard</button><button type="submit" class="btn primaire">Commencer</button></div></form>`,
+      () => { S.vue = 'revue'; S.filtres = {}; history.replaceState(null, '', '#revue'); c.rendre(); window.scrollTo(0, 0); }).classList.add('petit');
+  }
+  async function marquerRevue(faite) {
+    const valeur = faite ? { semaine: semaineIso(aujourdhui()), le: new Date().toISOString() } : null;
+    const { error } = faite ? await sb.from('reglages').upsert({ cle: 'revue_faite', valeur }) : await sb.from('reglages').delete().eq('cle', 'revue_faite');
+    if (error) return toast('Échec : ' + error.message);
+    S.reglages = S.reglages.filter(r => r.cle !== 'revue_faite'); if (faite) S.reglages.push({ cle: 'revue_faite', valeur });
+    toast(faite ? '✓ Revue terminée · plus de rappel cette semaine' : 'Revue rouverte'); c.rendre();
+  }
+
   function vueRevue(v) {
     const sem = semaineIso(aujourdhui()); const cle = 'orbite-revue-' + sem;
     let coches = []; try { coches = JSON.parse(localStorage.getItem(cle) || '[]'); } catch { }
@@ -718,7 +754,11 @@ export function installerModules(c) {
     const minutes = charge.reduce((s, a) => s + (a.duree_min || (a.planifie_fin ? (new Date(a.planifie_fin) - new Date(a.planifie_debut)) / 6e4 : 0)), 0);
     const abos = S.abonnements.filter(a => ['Actif', 'Essai'].includes(a.statut) && [a.prochaine_facturation, a.fin_essai].some(d => d && d >= auj && d <= dans14));
     const aCompleter = S.actions.filter(a => manquants(a).length);
-    v.innerHTML = entete('Revue hebdomadaire', `${esc(sem)} · Vider ce qui s’accumule, débloquer les projets, choisir une semaine réaliste. Environ 20 minutes.`) + `
+    const faite = revueFaite();
+    const boutonFin = faite
+      ? `<span class="revue-faite">✓ Faite le ${esc(new Intl.DateTimeFormat('fr-CA', { timeZone: 'America/Toronto', weekday: 'long', day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' }).format(new Date(faite.le)))}</span><button class="btn discret" id="revueRouvrir">Annuler</button>`
+      : '<button class="btn primaire" id="revueFin" title="Arrête les rappels de revue pour cette semaine">✓ Revue terminée</button>';
+    v.innerHTML = entete('Revue hebdomadaire', `${esc(sem)} · Vider ce qui s’accumule, débloquer les projets, choisir une semaine réaliste. Environ 20 minutes.`, boutonFin) + `
       <div class="grille">
         <div class="colonne">
           ${bloc('1. Vider les captures', captures.length, liste(captures, 'Aucune capture à trier.'))}
@@ -738,6 +778,8 @@ export function installerModules(c) {
       c.rendre();
     });
     v.querySelectorAll('[data-aller]').forEach(el => el.onclick = () => { S.vue = el.dataset.aller; c.rendre(); });
+    const rf = $('#revueFin'); if (rf) rf.onclick = () => marquerRevue(true);
+    const ro = $('#revueRouvrir'); if (ro) ro.onclick = () => marquerRevue(false);
     $('#bilan').onclick = () => ficheNote({ type: 'Bilan', date: auj, titre: `Revue ${sem}`, contenu: 'Résultat principal de la semaine :\n\nCe qui avance :\n\nCe qui attend :\n\nÀ ralentir ou mettre en pause :\n' });
   }
 
@@ -1033,6 +1075,7 @@ export function installerModules(c) {
   return {
     synchroTheme,
     vues: { vehicules: vueVehicules, achats: vueAchats, abonnements: vueAbonnements, transports: vueTransports, bibliotheque: vueBibliotheque, carnet: vueCarnet, routines: vueRoutines, revue: vueRevue, organigramme: vueOrganigramme, plus: vuePlus },
+    revueDue, bandeauRevue, proposerRevue, semaineIso,
     encartsAccueil, encartTransports, encartSurveiller, blocHabitudes, brancherHabitudes, complementsProjet, brancherProjet, ficheAchat, ficheNote, ficheCahier, blocNotesLiees, brancherNotesLiees,
   };
 }

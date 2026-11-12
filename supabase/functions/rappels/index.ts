@@ -1,6 +1,7 @@
 // Notifications : résumé du matin et rappel du soir (appel horaire à :15),
 // invitation à fermer la journée (jours de semaine, heure de fermeture),
-// rappel 15 minutes avant chaque événement et trajet (appel aux 5 minutes avec {"mode":"rdv"}).
+// rappel 15 minutes avant chaque événement et trajet (appel aux 5 minutes avec {"mode":"rdv"}),
+// revue hebdo : vendredi à revue_heure (19 h), relances samedi et dimanche à revue_relance_heure (10 h) si elle n’est pas faite.
 import webpush from 'npm:web-push@3.6.7';
 import { admin, secret, reglage, autorise, cors, json, cleJour, heureLocale, fmtHeure, plusJours, argent } from './commun.ts';
 
@@ -81,6 +82,20 @@ Deno.serve(async req => {
     }
   }
 
+  // Revue hebdo : tant que « Revue terminée » n’a pas été cliqué cette semaine (réglage revue_faite = { semaine, le }).
+  const hRevue = +(await reglage(sb, 'revue_heure') ?? 19), hRelance = +(await reglage(sb, 'revue_relance_heure') ?? 10);
+  if ((jourSem === 5 && h === hRevue) || ((jourSem === 6 || jourSem === 0) && h === hRelance) || corps.forcer === 'revue') {
+    const sem = semaineIso(auj);
+    const faite = await reglage(sb, 'revue_faite') as { semaine?: string } | null;
+    if (faite?.semaine !== sem) {
+      const captures = A.filter(a => a.statut === 'À traiter').length;
+      const retards = A.filter(a => OUVERTS.includes(a.statut) && a.echeance && a.echeance < auj).length;
+      const etat = [captures ? `${captures} capture${captures > 1 ? 's' : ''} à trier` : '', retards ? `${retards} en retard` : ''].filter(Boolean).join(' · ');
+      messages.push({ title: jourSem === 5 ? '📋 C’est l’heure de ta revue hebdo' : '📋 Revue hebdo toujours à faire',
+        body: `Environ 20 minutes pour vider les captures, débloquer les projets et choisir une semaine réaliste.${etat ? '\n' + etat : ''}`, url: './#revue', tag: 'revue-' + sem });
+    }
+  }
+
   const envoyes = await envoyer(sb, abos, messages);
   return json({ envoyes, messages: messages.length, heure: h });
 });
@@ -150,4 +165,12 @@ async function envoyer(sb: ReturnType<typeof admin>, abos: Abo[], messages: Msg[
     }
   }
   return envoyes;
+}
+
+// Semaine ISO au format de l’app (« 2026-S46 »), calculée sur la date locale AAAA-MM-JJ.
+function semaineIso(cle: string) {
+  const d = new Date(cle + 'T12:00:00Z');
+  d.setUTCDate(d.getUTCDate() + 3 - (d.getUTCDay() + 6) % 7);
+  const a = new Date(Date.UTC(d.getUTCFullYear(), 0, 4));
+  return `${d.getUTCFullYear()}-S${String(1 + Math.round(((d.getTime() - a.getTime()) / 864e5 - 3 + (a.getUTCDay() + 6) % 7) / 7)).padStart(2, '0')}`;
 }

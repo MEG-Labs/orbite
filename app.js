@@ -602,6 +602,7 @@ function vueAccueil(v) {
 
   // Bandeaux contextuels fixés en haut (non déplaçables) : mode hors travail, fermer ma journée, pneus, événements passés.
   v.innerHTML = `${L6.bandeauMode()}${L6.blocFermeture()}
+    ${M.bandeauRevue()}
     ${L.encartPneus()}
     ${passes.length ? `<div class="bloc signal" style="margin-bottom:22px"><header><h2>${passes.length} événement${passes.length > 1 ? 's' : ''} passé${passes.length > 1 ? 's' : ''} encore ouvert${passes.length > 1 ? 's' : ''}</h2>
       <div style="display:flex;gap:8px"><button class="btn discret" id="voirPasses">Voir</button><button class="btn" id="fermerPasses">Marquer terminés</button></div></header></div>` : ''}
@@ -1463,7 +1464,7 @@ async function demarrer(session) {
   const h = location.hash.slice(1); if (MODULES.some(m => m.k === h)) S.vue = h;
   $('#app').innerHTML = '<div class="connexion"><p style="color:var(--brume);font-family:var(--mono)">Chargement…</p></div>';
   majMeteo();
-  try { await charger(); M.synchroTheme(); rendre(); X.viderFile(); if (h === 'fermer') { history.replaceState(null, '', location.pathname); L6.ouvrirFermeture(); } } catch (e) { $('#app').innerHTML = `<div class="connexion"><p class="erreur">Impossible de charger les données : ${esc(e.message)}</p></div>`; }
+  try { await charger(); M.synchroTheme(); rendre(); X.viderFile(); if (h !== 'fermer') setTimeout(() => M.proposerRevue(), 600); if (h === 'fermer') { history.replaceState(null, '', location.pathname); L6.ouvrirFermeture(); } } catch (e) { $('#app').innerHTML = `<div class="connexion"><p class="erreur">Impossible de charger les données : ${esc(e.message)}</p></div>`; }
 }
 
 M = installerModules({ sb, S, $, esc, toast, parId, aujourdhui, plusJours, jourDate, jourLong, cleJour, fmtHeure, versLocal, depuisLocal,
@@ -1478,7 +1479,13 @@ X = installerExtras({ sb, S, $, esc, toast, parId, aujourdhui, plusJours, jourDa
 
 L6 = installerLot6({ sb, S, esc, toast, parId, aujourdhui, plusJours, jourDate, cleJour, fmtHeure, dialogue, rafraichir, rendre: () => rendre(), ouvert, depuisLocal,
   charge: () => L.chargeDuJour(), minutesLocales: d => L.minutesLocales(d) });
-window.addEventListener('hashchange', () => { if (location.hash === '#fermer' && S.session) { history.replaceState(null, '', location.pathname); L6.ouvrirFermeture(); } });
+window.addEventListener('hashchange', () => {
+  if (!S.session) return;
+  if (location.hash === '#fermer') { history.replaceState(null, '', location.pathname); L6.ouvrirFermeture(); return; }
+  // Lien de notification (#revue, #agenda…) alors que l’app est déjà ouverte : on affiche ce module.
+  const k = location.hash.slice(1);
+  if (MODULES.some(m => m.k === k) && S.vue !== k) { S.vue = k; S.filtres = {}; S.reorg = false; rendre(); window.scrollTo(0, 0); }
+});
 
 let derniereSession;
 sb.auth.onAuthStateChange((evt, session) => {
@@ -1494,5 +1501,5 @@ document.addEventListener('keydown', e => {
   if (e.key.toLowerCase() === 'i' && !e.ctrlKey && !e.metaKey && !e.altKey && S.session && !document.querySelector('dialog[open]') && !/INPUT|TEXTAREA|SELECT/.test(document.activeElement.tagName)) { e.preventDefault(); ouvrirSurLeFly({ interruption: true }); }
   if (e.key.toLowerCase() === 'n' && S.session && !document.querySelector('dialog[open]') && !/INPUT|TEXTAREA|SELECT/.test(document.activeElement.tagName)) { e.preventDefault(); ouvrirCapture(); }
 });
-document.addEventListener('visibilitychange', () => { if (!document.hidden && S.session && !document.querySelector('dialog[open]')) rafraichir().catch(() => {}); });
+document.addEventListener('visibilitychange', () => { if (!document.hidden && S.session && !document.querySelector('dialog[open]')) rafraichir().then(() => M.proposerRevue()).catch(() => {}); });
 if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => {});
