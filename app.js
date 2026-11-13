@@ -422,20 +422,26 @@ const triDate = (a, b) => (a.planifie_debut || '').localeCompare(b.planifie_debu
 
 /* ---------- Réorganisation de l’accueil ---------- */
 // Bouton « Réorganiser l’accueil » (bas de l’accueil) : les encadrés se glissent par leur poignée ⠿,
-// en haut (pleine largeur), dans la colonne de gauche ou de droite. Sur téléphone, tout s’empile dans cet ordre :
-// haut, gauche, droite. La disposition est gardée dans le réglage `disposition_accueil` et suit le compte.
+// en haut (pleine largeur), dans la colonne de gauche ou de droite, ou en bas (pleine largeur, sous les colonnes).
+// Sur téléphone, tout s’empile dans cet ordre : haut, gauche, droite, bas. La disposition est gardée dans le réglage `disposition_accueil` et suit le compte.
 const ENCADRES = {
   evenements: 'Aujourd’hui (événements et charge)', conflits: 'Conflits famille et travail', compteurs: 'Compteurs',
   plan: 'Aujourd’hui, je fais', habitudes: 'Habitudes du jour', 'en-cours': 'En cours', planifiees: 'Tâches planifiées · 7 jours',
   'a-completer': 'À compléter', backlog: 'Backlog et engagements', transports: 'Transports du jour', surveiller: 'À surveiller',
-  blocages: 'Blocages et relances', projets: 'Projets en mouvement' };
-const ZONES = { haut: 'Haut · pleine largeur', gauche: 'Colonne de gauche', droite: 'Colonne de droite' };
+  blocages: 'Blocages et relances', projets: 'Projets en mouvement (Kanban)' };
+const ZONES = { haut: 'Haut · pleine largeur', gauche: 'Colonne de gauche', droite: 'Colonne de droite', bas: 'Bas · pleine largeur' };
 const DISPO_DEFAUT = { haut: ['evenements', 'conflits', 'compteurs'], gauche: ['plan', 'habitudes', 'en-cours', 'planifiees', 'a-completer', 'backlog'],
-  droite: ['transports', 'surveiller', 'blocages', 'projets'] };
+  droite: ['transports', 'surveiller', 'blocages'], bas: ['projets'] };
 function dispositionAccueil() {
   const r = S.reglages.find(x => x.cle === 'disposition_accueil')?.valeur;
-  const d = { haut: [], gauche: [], droite: [] }, vus = new Set();
-  if (r && typeof r === 'object') for (const z of Object.keys(d)) (Array.isArray(r[z]) ? r[z] : []).forEach(k => { if (ENCADRES[k] && !vus.has(k)) { d[z].push(k); vus.add(k); } });
+  const d = { haut: [], gauche: [], droite: [], bas: [] }, vus = new Set();
+  // Disposition enregistrée avant l’ajout de la zone du bas : le Kanban des projets descend une fois en bas
+  // (pleine largeur); ensuite, il reste là où il a été glissé.
+  const avantBas = r && typeof r === 'object' && !Array.isArray(r.bas);
+  if (r && typeof r === 'object') for (const z of Object.keys(d)) (Array.isArray(r[z]) ? r[z] : []).forEach(k => {
+    if (avantBas && k === 'projets') return;
+    if (ENCADRES[k] && !vus.has(k)) { d[z].push(k); vus.add(k); }
+  });
   // Encadré absent de la disposition enregistrée (ajouté à ORBITE plus tard) : à sa place par défaut, après son voisin d’origine.
   for (const z of Object.keys(DISPO_DEFAUT)) DISPO_DEFAUT[z].forEach((k, i) => {
     if (vus.has(k)) return;
@@ -473,7 +479,7 @@ function brancherReorg(v) {
   if (barre && bandeau) barre.style.top = bandeau.offsetHeight + 8 + 'px';
   const racine = v.querySelector('.accueil-encadres');
   const zones = [...racine.querySelectorAll('[data-zone]')];
-  const ordreZones = ['haut', 'gauche', 'droite'];
+  const ordreZones = ['haut', 'gauche', 'droite', 'bas'];
   v.querySelectorAll('.poignee-encadre').forEach(h => {
     const enc = h.closest('.encadre');
     // Clavier : ↑ ↓ dans la zone, ← → vers la zone voisine.
@@ -594,8 +600,7 @@ function vueAccueil(v) {
     transports: M.encartTransports(),
     surveiller: M.encartSurveiller(),
     blocages: bloques.length ? `<section class="bloc"><header><h2>Blocages et relances <span class="nb">${bloques.length}</span></h2></header>${liste(bloques, '')}</section>` : '',
-    projets: `<section class="bloc"><header><h2>Projets en mouvement <span class="nb">${actifs.length}</span></h2><button class="btn discret" data-aller="projets">Tous</button></header>
-      ${actifs.map(carteProjet).join('') || '<div class="vide">Aucun projet actif.</div>'}</section>`,
+    projets: kanbanProjets(actifs),
   };
   const dispo = dispositionAccueil();
   const zone = (z, cls) => `<div class="zone-accueil ${cls}" data-zone="${z}" data-libelle="${esc(ZONES[z])}">${dispo[z].map(k => encadre(k, B[k])).join('')}</div>`;
@@ -610,6 +615,7 @@ function vueAccueil(v) {
     <div class="accueil-encadres${S.reorg ? ' reorg-actif' : ''}">
       ${zone('haut', 'zone-haut')}
       <div class="grille">${zone('gauche', 'colonne')}${zone('droite', 'colonne')}</div>
+      ${zone('bas', 'zone-bas')}
     </div>
     ${S.reorg ? '' : `<div class="pied-accueil"><button class="btn discret" id="reorg" title="Déplacer les encadrés de l’accueil">⠿ Réorganiser l’accueil</button></div>`}`;
   v.querySelectorAll('[data-aller]').forEach(b => b.onclick = () => { S.vue = b.dataset.aller; rendre(); });
@@ -643,6 +649,25 @@ function sante(p) {
   if (p.nb_bloquees > 0 || (p.nb_taches > p.nb_terminees && !p.prochaine_action)) return 'risque';
   if (p.nb_taches === 0) return 'neutre';
   return 'ok';
+}
+// Kanban des projets actifs de l’accueil : une colonne par santé (calculée par sante()).
+// La santé découle des tâches et des dates du projet; on ne la change pas en glissant une carte :
+// on ouvre le projet (clic) et on agit sur ses tâches, sa cible ou sa prochaine action.
+const COLONNES_SANTE = [
+  { k: 'ko', l: 'En retard', aide: 'Au moins une tâche en retard, ou date cible dépassée.' },
+  { k: 'risque', l: 'À surveiller', aide: 'Tâche bloquée, ou tâches ouvertes sans prochaine action définie.' },
+  { k: 'ok', l: 'En santé', aide: 'Tâches à jour et prochaine action définie.' },
+  { k: 'neutre', l: 'Sans tâches', aide: 'Aucune tâche liée à ce projet pour l’instant.' }];
+function kanbanProjets(actifs) {
+  const tri = (a, b) => (a.cible || '9999').localeCompare(b.cible || '9999') || a.titre.localeCompare(b.titre, 'fr');
+  const col = c => {
+    const ps = actifs.filter(p => sante(p) === c.k).sort(tri);
+    return `<div class="kanban-col" data-sante="${c.k}" role="group" aria-label="${esc(c.l)} : ${ps.length} projet${ps.length > 1 ? 's' : ''}">
+      <h3 title="${esc(c.aide)}"><span class="sante ${c.k}" aria-hidden="true"></span>${esc(c.l)} <span class="nb">${ps.length}</span></h3>
+      <div class="kanban-cartes">${ps.map(carteProjet).join('') || '<div class="vide">Aucun</div>'}</div></div>`;
+  };
+  return `<section class="bloc bloc-kanban"><header><h2>Projets en mouvement <span class="nb">${actifs.length}</span></h2><button class="btn discret" data-aller="projets">Tous</button></header>
+    ${actifs.length ? `<div class="kanban">${COLONNES_SANTE.map(col).join('')}</div>` : '<div class="vide">Aucun projet actif.</div>'}</section>`;
 }
 function carteProjet(p) {
   const pct = p.nb_taches ? Math.round(100 * p.nb_terminees / p.nb_taches) : 0;

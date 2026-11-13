@@ -708,6 +708,31 @@ dialog { border: 1px solid var(--trait); border-radius: var(--r-carte); box-shad
 /* ================= Accueil : encadrés réorganisables ================= */
 .zone-haut { display: flex; flex-direction: column; gap: 22px; margin-bottom: 22px; }
 .zone-haut:empty { display: none; }
+.zone-bas { display: flex; flex-direction: column; gap: 22px; margin-top: 22px; }
+.zone-bas:empty { display: none; }
+.reorg-actif .zone-bas { display: flex; }
+
+/* Kanban des projets (accueil) : quatre colonnes par santé, chaque colonne défile seule
+   pour que la page ne s’allonge pas. Dans une colonne étroite, les colonnes s’empilent. */
+.kanban { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; padding: 12px; }
+.kanban-col { display: flex; flex-direction: column; min-width: 0; background: var(--nuit); border: 1px solid #1A3A4E; border-top-width: 3px; }
+.kanban-col[data-sante="ko"] { border-top-color: var(--rouge); }
+.kanban-col[data-sante="risque"] { border-top-color: var(--jaune); }
+.kanban-col[data-sante="ok"] { border-top-color: var(--vert); }
+.kanban-col[data-sante="neutre"] { border-top-color: var(--acier); }
+.kanban-col > h3 { display: flex; align-items: center; gap: 8px; margin: 0; padding: 9px 12px; font: 700 12.5px var(--mono); text-transform: uppercase; letter-spacing: .04em; color: var(--brume); border-bottom: 1px solid #1A3A4E; cursor: help; }
+.kanban-col > h3 .nb { margin-left: auto; color: var(--craie); }
+.kanban-cartes { display: flex; flex-direction: column; gap: 8px; padding: 8px; max-height: 420px; overflow-y: auto; overscroll-behavior: contain; }
+.kanban-cartes .projet { border: 1px solid var(--acier); background: var(--coque); }
+.kanban-cartes .projet:last-child { border-bottom: 1px solid var(--acier); }
+.kanban-cartes .vide { padding: 10px 4px; color: var(--brume); font-size: 13px; text-align: center; }
+.grille .kanban { grid-template-columns: 1fr; }
+@media (max-width: 1080px) { .kanban { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+/* Téléphone : colonnes côte à côte, glissées à l’horizontale (une colonne et un bout de la suivante visibles). */
+@media (max-width: 760px) {
+  .kanban, .grille .kanban { display: flex; overflow-x: auto; scroll-snap-type: x mandatory; gap: 10px; padding: 10px; }
+  .kanban-col { flex: 0 0 82%; scroll-snap-align: start; }
+}
 .encadre { min-width: 0; }
 .encadre > .bloc, .encadre > .compteurs, .apercu-encadre > .bloc, .apercu-encadre > .compteurs { margin: 0; }
 /* Compteurs placés dans une colonne : trois par rangée. */
