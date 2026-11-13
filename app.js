@@ -5,6 +5,7 @@ import { installerExtras } from './extras.js';
 import { installerLot5 } from './lot5.js';
 import { installerLot6 } from './lot6.js';
 import { installerLot7 } from './lot7.js';
+import { installerLot8 } from './lot8.js';
 
 const sb = createClient(SUPABASE_URL, SUPABASE_KEY, { auth: { persistSession: true, autoRefreshToken: true } });
 
@@ -22,7 +23,7 @@ const TYPES_INTERRUPTION = ['SAP / EWM', 'Équipement / RF', 'Données / rapport
 const S = { session: null, actions: [], projets: [], domaines: [], personnes: [], vue: 'accueil', filtres: {}, agendaPasses: false,
   vehicules: [], entretiens: [], interventions: [], intEnt: [], livres: [], achats: [], abonnements: [], trajets: [], routines: [], notes: [], budget: [], regles: [],
   unites: [], postes: [], titulaires: [], participations: [], reglages: [], journal: [], cahiers: [], push: [], file: [], horsLigne: null };
-let M, X, L, L6, L7; // modules, installés après la définition des fonctions communes
+let M, X, L, L6, L7, L8; // modules, installés après la définition des fonctions communes
 
 const MODULES = [
   { k: 'accueil', l: 'Accueil', g: 'Pilotage', principal: true },
@@ -716,15 +717,20 @@ function vueAgenda(v) {
 /* ---------- Projets ---------- */
 function vueProjets(v) {
   const f = S.filtres.statutProjet || 'Actif';
+  const aff = L8.affichage(), kanban = aff.mode === 'kanban';
   const projets = S.projets.filter(p => f === 'tous' || p.statut === f);
+  // En Kanban regroupé par statut, les colonnes remplacent les onglets de statut.
+  const ongletsStatut = kanban && aff.groupe === 'statut' ? '' : `<div class="onglets">
+      ${['Actif', 'À planifier', 'En pause', 'Terminé', 'tous'].map(s => `<button aria-pressed="${f === s}" data-sp="${s}">${s === 'tous' ? 'Tous' : s}</button>`).join('')}
+    </div>`;
   v.innerHTML = `
     <h1>Projets et objectifs</h1><p class="sous-titre">Avancement, tâches et santé de chaque projet.</p>
-    <div class="outils"><div class="onglets">
-      ${['Actif', 'À planifier', 'En pause', 'Terminé', 'tous'].map(s => `<button aria-pressed="${f === s}" data-sp="${s}">${s === 'tous' ? 'Tous' : s}</button>`).join('')}
-    </div><button class="btn primaire" id="nouveauProjet">Nouveau projet</button></div>
-    <div class="cartes-projets">${projets.map(carteProjet).join('') || '<div class="bloc"><div class="vide">Aucun projet dans ce statut.</div></div>'}</div>`;
+    <div class="outils">${ongletsStatut}<button class="btn primaire" id="nouveauProjet">Nouveau projet</button></div>
+    ${L8.barreAffichage()}
+    ${kanban ? L8.kanban() : `<div class="cartes-projets">${projets.map(carteProjet).join('') || '<div class="bloc"><div class="vide">Aucun projet dans ce statut.</div></div>'}</div>`}`;
   v.querySelectorAll('[data-sp]').forEach(b => b.onclick = () => { S.filtres.statutProjet = b.dataset.sp; rendre(); });
   $('#nouveauProjet').onclick = () => ouvrirProjet({ statut: 'Actif', nature: 'Projet ponctuel', niveau: 'Projet' });
+  L8.brancherProjets(v);
 }
 
 function vueProjet(v) {
@@ -901,10 +907,10 @@ function ouvrirCapture() {
     <div class="corps">
       <label class="champ large"><span>Quoi?</span><input name="titre" class="titre-saisie" required autofocus autocomplete="off" placeholder="Un titre suffit"></label>
       <div class="types-rapides" role="radiogroup" aria-label="Type">${[...TYPES, 'Achat', 'Note'].map((t, i) => `<label><input type="radio" name="type" value="${t}" ${i === 0 ? 'checked' : ''}><span>${t}</span></label>`).join('')}</div>
-      <div class="champ quand-capture" data-pour="action"><span>Quand (facultatif)</span><div class="date-heure"><input type="date" name="quand_jour" aria-label="Date"><input type="time" name="quand_heure" aria-label="Heure (facultative)" title="Heure (facultative)"></div></div>
+      <div class="champ quand-capture" data-pour="action"><span>Quand (facultatif)</span><div class="date-heure"><input type="date" name="quand_jour" aria-label="Date"><input type="time" name="quand_heure" aria-label="Heure (facultative)" title="Heure (facultative)"></div>${L8.boutonsDate('quand_jour')}</div>
       <label class="champ"><span>Projet</span><select name="projet_id">${opts(S.projets.filter(p => p.statut === 'Actif'), null, { vide: 'Aucun pour l’instant', lib: 'titre' })}</select></label>
       <label class="champ" data-pour="tache"><span>Promis à (facultatif)</span><select name="promis_a_id">${opts(S.personnes, null, { vide: 'Personne' })}</select></label>
-      <label class="champ cap-promis-pour" data-pour="tache"><span>Promis pour le</span><input type="date" name="promis_pour"></label>
+      <div class="champ cap-promis-pour" data-pour="tache"><span>Promis pour le</span><input type="date" name="promis_pour" aria-label="Promis pour le">${L8.boutonsDate('promis_pour')}</div>
 
       <details class="champ large details-capture" data-pour="action" ${deplie ? 'open' : ''}><summary>Plus de détails <span class="aide">domaine, périmètre, contexte, suivi, répétition</span></summary>
         <div class="corps-details">
@@ -1303,12 +1309,12 @@ function ouvrirAction(a) {
       <label class="champ large"><span>Prochain geste</span><input name="prochain_geste" value="${esc(a.prochain_geste)}" placeholder="Une action concrète qui commence par un verbe"></label>
 
       <fieldset><legend>Dates et priorité</legend>
-        <label class="champ"><span>Planifié le</span><input type="date" name="jour" value="${jourP}"></label>
+        <div class="champ"><span>Planifié le</span><input type="date" name="jour" value="${jourP}" aria-label="Planifié le">${L8.boutonsDate('jour')}</div>
         <label class="champ"><span>Priorité</span><select name="priorite"><option value="">—</option>${Object.entries(PRIOS).map(([k, l]) => `<option value="${k}" ${String(a.priorite) === k ? 'selected' : ''}>${l}</option>`).join('')}</select></label>
         <label class="champ"><span>Heure de début (facultatif)</span><input type="time" name="heure_debut" value="${hDebut}"></label>
         <label class="champ"><span>Heure de fin (facultatif)</span><input type="time" name="heure_fin" value="${hFin}"></label>
         ${jourFin && jourFin !== jourP ? `<label class="champ"><span>Fin le</span><input type="date" name="jour_fin" value="${jourFin}"></label>` : ''}
-        <label class="champ"><span>Échéance</span><input type="date" name="echeance" value="${a.echeance || ''}"></label>
+        <div class="champ"><span>Échéance</span><input type="date" name="echeance" value="${a.echeance || ''}" aria-label="Échéance">${L8.boutonsDate('echeance')}</div>
         <label class="champ"><span>Relance</span><input type="date" name="relance" value="${a.relance || ''}"></label>
         <label class="champ"><span>Durée prévue (min)</span><input type="number" min="0" step="1" name="duree_min" value="${a.duree_min ?? ''}"></label>
         <label class="champ"><span>Durée réelle (min)</span><input type="number" min="0" step="1" name="duree_reelle_min" value="${a.duree_reelle_min ?? ''}"></label>
@@ -1566,6 +1572,8 @@ L6 = installerLot6({ sb, S, esc, toast, parId, aujourdhui, plusJours, jourDate, 
 
 L7 = installerLot7({ sb, S, esc, toast, parId, aujourdhui, plusJours, jourDate, cleJour, rafraichir, rendre: () => rendre(), liste, ouvert, enRetard,
   ouvrirAction, ficheNote: n => M.ficheNote(n), visible: a => L6.visible(a) });
+
+L8 = installerLot8({ sb, S, esc, toast, parId, aujourdhui, plusJours, rafraichir, rendre: () => rendre(), carteProjet, sante, STATUTS_PROJET, PRIOS });
 window.addEventListener('hashchange', () => {
   if (!S.session) return;
   if (location.hash === '#fermer') { history.replaceState(null, '', location.pathname); L6.ouvrirFermeture(); return; }

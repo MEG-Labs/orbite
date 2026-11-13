@@ -12,7 +12,7 @@ Tâches, agenda, projets et organisation de la vie courante. Remplace l'espace N
 | --- | --- | --- |
 | Pilotage | Accueil | Compteurs, en cours, backlog, transports du jour, à surveiller, 7 prochains jours, projets |
 | | Agenda | Événements, tâches planifiées et échéances, jour par jour |
-| | Projets | Avancement, santé, budget par lots (HT, TTC, réserve, engagé, payé), actions, parties prenantes, achats et notes liés |
+| | Projets | Cartes ou Kanban (regroupé par statut, domaine, santé, priorité, échéance cible, responsable, nature ou niveau; glisser une carte change le critère). Avancement, santé, budget par lots (HT, TTC, réserve, engagé, payé), actions, parties prenantes, achats et notes liés |
 | | Actions | Recherche et filtres sur tout |
 | | Délégations | Ce que j'ai délégué ou attends, par personne, avec relance et courriel de suivi |
 | | Engagements | Ce que j'ai promis aux autres, par personne, avec courriel de suivi; registre des décisions tirées du Carnet |
@@ -59,6 +59,10 @@ L'accueil commence par les **événements du jour** (avec la charge de 8 h à 17
 - **Comptes rendus** : une ligne d'action « - [ ] … @Nom » est déléguée à cette personne, « - [ ] … → Nom » (ou `->`) lui est promise. Un nom absent du répertoire reste dans le titre.
 - **Registre des décisions** : Engagements › Décisions lit, sans copie, les notes de type Décision, les lignes « - » sous un titre « Décisions : » et toute ligne « Décision : … ». Filtre par projet et recherche; toucher une décision ouvre sa note.
 - **Dictée** : bouton micro sur les champs de saisie rapide quand le navigateur offre la reconnaissance vocale (Chrome sur Android et ordinateur), en français canadien. Le son est traité par le service de Chrome, comme la dictée du clavier.
+
+**Projets en Kanban** (lot 8) : bouton Cartes / Kanban et menu « Regrouper par » dans Projets; choix gardé dans le réglage `projets_affichage` = `{ mode, groupe }` (suit le compte). Regroupements : statut (les colonnes remplacent les onglets; « Inclure terminés et annulés » facultatif), domaine, santé, priorité, échéance cible (dépassée, ce mois-ci, d'ici 3 mois, plus tard, sans cible), responsable, nature, niveau. Glisser une carte vers une autre colonne met à jour le champ du projet (souris : dès 6 px; tactile : appui long de 350 ms). Santé et échéance cible sont calculées : pas de glisser. Un projet ne peut pas être déposé dans « Sans domaine ».
+
+**Raccourcis de date** (lot 8) : boutons « Aujourd’hui » et « Demain » sous Quand et Promis pour le (capture rapide), Planifié le et Échéance (fiche d'une action). Un 2e toucher sur le bouton actif efface la date.
 
 **Carnet et cahiers** : les notes peuvent être rangées dans des cahiers (table `cahiers`, colonne `notes.cahier_id`), facultatif. Un cahier ou une note peut être lié à un projet et à une tâche (`action_id`). La fiche d'un projet et la fiche d'une tâche affichent leurs notes et cahiers liés, avec « + Note » et « + Cahier » pour en créer directement.
 
