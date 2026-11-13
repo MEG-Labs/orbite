@@ -517,7 +517,7 @@ export function installerModules(c) {
 
   function ligneNote(n, { cahier = true } = {}) {
     const p = parId(S.projets, n.projet_id), ch = cahier && n.cahier_id && parId(S.cahiers || [], n.cahier_id);
-    const ext = (n.contenu || '').replace(/\s+/g, ' ').slice(0, 160);
+    const ext = (c.texteBrut ? c.texteBrut(n.contenu) : (n.contenu || '')).replace(/\s+/g, ' ').trim().slice(0, 160);
     return `<li class="ligne" data-note="${n.id}" role="button" tabindex="0" style="grid-template-columns:minmax(0,1fr) auto"><div><div class="titre">${esc(n.titre)}</div>
       <div class="meta">${pastille(n.type)}${ch ? `<span class="pastille pastille-cahier" style="--cahier:${esc(ch.couleur || '#8FA8B8')}">${esc(ch.titre)}</span>` : ''}${p ? `<span>${esc(p.titre)}</span>` : ''}${lienAction(n.action_id)}${(n.mots_cles || []).map(m => `<span>#${esc(m)}</span>`).join('')}</div>${ext ? `<div class="geste extrait">${esc(ext)}${n.contenu.length > 160 ? '…' : ''}</div>` : ''}</div>
       <div class="droite">${n.date ? esc(jourDate(n.date)) : ''}</div></li>`;
@@ -527,13 +527,43 @@ export function installerModules(c) {
     return `<button class="cahier" data-cahier="${ch.id}" style="--cahier:${esc(ch.couleur || '#8FA8B8')}"><b>${esc(ch.titre)}</b><small>${n} note${n > 1 ? 's' : ''}</small>${lienProjet(ch.projet_id)}${lienAction(ch.action_id)}</button>`;
   }
 
+  // Domaine d’une note : le sien, sinon celui de son projet (ou du premier projet parent qui en a un).
+  function domaineNote(n) {
+    if (n.domaine_id) return n.domaine_id;
+    let p = n.projet_id && parId(S.projets, n.projet_id), k = 0;
+    while (p && !p.domaine_id && p.parent_id && k++ < 10) p = parId(S.projets, p.parent_id);
+    return p?.domaine_id || null;
+  }
+  // Groupes dans l’ordre : domaines selon leur ordre, projets par titre; « Sans … » à la fin.
+  function grouper(items, cle) {
+    const g = new Map(); items.forEach(n => { const k = cle(n) || ''; if (!g.has(k)) g.set(k, []); g.get(k).push(n); });
+    return [...g.entries()];
+  }
+  const nomDomaine = id => id ? (parId(S.domaines, id)?.nom || 'Domaine retiré') : 'Sans domaine';
+  const nomProjet = id => id ? (parId(S.projets, id)?.titre || 'Projet retiré') : 'Sans projet';
+  const ordreDom = ([a], [b]) => (!a) - (!b) || (parId(S.domaines, a)?.ordre ?? 99) - (parId(S.domaines, b)?.ordre ?? 99) || nomDomaine(a).localeCompare(nomDomaine(b), 'fr');
+  const ordreProj = ([a], [b]) => (!a) - (!b) || nomProjet(a).localeCompare(nomProjet(b), 'fr');
+  function notesClassees(items, classer, avecCahier) {
+    const lst = l => `<ul class="lignes">${l.map(n => ligneNote(n, { cahier: avecCahier })).join('')}</ul>`;
+    const nb = l => `${l.length} note${l.length > 1 ? 's' : ''}`;
+    if (classer === 'domaine') return grouper(items, domaineNote).sort(ordreDom).map(([k, l]) => bloc(esc(nomDomaine(k)), l.length, lst(l))).join('');
+    if (classer === 'projet') return grouper(items, n => n.projet_id).sort(ordreProj).map(([k, l]) => bloc(esc(nomProjet(k)), l.length, lst(l))).join('');
+    if (classer === 'domaine-projet') return grouper(items, domaineNote).sort(ordreDom).map(([k, l]) => bloc(esc(nomDomaine(k)), l.length,
+      grouper(l, n => n.projet_id).sort(ordreProj).map(([kp, lp]) => `<h3 class="sous-groupe-notes">${esc(nomProjet(kp))} <span class="nb">${lp.length}</span></h3>${lst(lp)}`).join(''))).join('');
+    return bloc(nb(items), null, lst(items));
+  }
+
   function vueCarnet(v) {
     const f = S.filtres; const type = f.typeNote || ''; const q = (f.qn || '').toLowerCase(); const arch = !!f.archives;
     const sel = f.cahier || ''; // '' = toutes, 'aucun' = sans cahier, sinon id de cahier
     const ch = sel && sel !== 'aucun' ? parId(S.cahiers || [], sel) : null;
     if (sel && sel !== 'aucun' && !ch) f.cahier = '';
+    // Classement facultatif par domaine et projet (lot 9) : choix gardé dans le réglage `carnet_classement`.
+    const classer = f.classer || S.reglages.find(r => r.cle === 'carnet_classement')?.valeur?.classer || 'date';
+    const domF = f.domNote || '', projF = f.projNote || '';
     const items = S.notes.filter(n => n.archivee === arch && (!type || n.type === type) && (!q || [n.titre, n.contenu].some(x => (x || '').toLowerCase().includes(q)))
-        && (!sel || (sel === 'aucun' ? !n.cahier_id : n.cahier_id === sel)))
+        && (!sel || (sel === 'aucun' ? !n.cahier_id : n.cahier_id === sel))
+        && (!domF || (domF === 'aucun' ? !domaineNote(n) : domaineNote(n) === domF)) && (!projF || (projF === 'aucun' ? !n.projet_id : n.projet_id === projF)))
       .sort((a, b) => (b.date || '').localeCompare(a.date || '') || b.cree_le.localeCompare(a.cree_le));
     const cahiers = cahiersActifs();
     const sansCahier = S.notes.filter(n => !n.archivee && !n.cahier_id).length;
@@ -549,10 +579,21 @@ export function installerModules(c) {
       <div class="outils"><input type="search" id="qn" placeholder="Chercher dans les notes" value="${esc(f.qn || '')}" aria-label="Chercher">
         <select id="tn" aria-label="Type"><option value="">Tous les types</option>${TYPES_NOTE.map(t => `<option ${t === type ? 'selected' : ''}>${t}</option>`).join('')}</select>
         <div class="onglets"><button aria-pressed="${!arch}" data-arch="0">Actives</button><button aria-pressed="${arch}" data-arch="1">Archives</button></div></div>
-      ${bloc(`${items.length} note${items.length > 1 ? 's' : ''}`, null, items.length ? `<ul class="lignes">${items.map(n => ligneNote(n, { cahier: !ch })).join('')}</ul>` : vide(q || type ? 'Aucune note pour ces filtres.' : ch ? 'Ce cahier est vide.' : 'Le carnet est vide.'))}`;
+      <div class="outils outils-classement">
+        <label class="choix-groupe"><span>Classer par</span><select id="classerNotes">${[['date', 'Date (sans regrouper)'], ['domaine', 'Domaine'], ['projet', 'Projet'], ['domaine-projet', 'Domaine, puis projet']].map(([k, l]) => `<option value="${k}" ${k === classer ? 'selected' : ''}>${l}</option>`).join('')}</select></label>
+        <select id="domNote" aria-label="Domaine"><option value="">Tous les domaines</option><option value="aucun" ${domF === 'aucun' ? 'selected' : ''}>Sans domaine</option>${S.domaines.map(d => `<option value="${d.id}" ${d.id === domF ? 'selected' : ''}>${esc(d.nom)}</option>`).join('')}</select>
+        <select id="projNote" aria-label="Projet"><option value="">Tous les projets</option><option value="aucun" ${projF === 'aucun' ? 'selected' : ''}>Sans projet</option>${S.projets.filter(p => S.notes.some(n => n.projet_id === p.id)).sort((a, b) => a.titre.localeCompare(b.titre, 'fr')).map(p => `<option value="${p.id}" ${p.id === projF ? 'selected' : ''}>${esc(p.titre)}</option>`).join('')}</select></div>
+      ${items.length ? notesClassees(items, classer, !ch) : bloc('0 note', null, vide(q || type || domF || projF ? 'Aucune note pour ces filtres.' : ch ? 'Ce cahier est vide.' : 'Le carnet est vide.'))}`;
     const qn = $('#qn');
     qn.oninput = () => { clearTimeout(vueCarnet.t); vueCarnet.t = setTimeout(() => { S.filtres.qn = qn.value; const p = qn.selectionStart; c.rendre(); const n = $('#qn'); n.focus(); n.setSelectionRange(p, p); }, 200); };
     $('#tn').onchange = e => { S.filtres.typeNote = e.target.value; c.rendre(); };
+    $('#classerNotes').onchange = async e => {
+      const val = { classer: e.target.value }; S.filtres.classer = val.classer;
+      const r = S.reglages.find(x => x.cle === 'carnet_classement'); if (r) r.valeur = val; else S.reglages.push({ cle: 'carnet_classement', valeur: val });
+      c.rendre(); const { error } = await sb.from('reglages').upsert({ cle: 'carnet_classement', valeur: val }); if (error) toast('Classement non enregistré : ' + error.message);
+    };
+    $('#domNote').onchange = e => { S.filtres.domNote = e.target.value; c.rendre(); };
+    $('#projNote').onchange = e => { S.filtres.projNote = e.target.value; c.rendre(); };
     v.querySelectorAll('[data-arch]').forEach(b => b.onclick = () => { S.filtres.archives = b.dataset.arch === '1'; c.rendre(); });
     v.querySelectorAll('[data-filtre-cahier]').forEach(b => b.onclick = () => { S.filtres.cahier = b.dataset.filtreCahier; c.rendre(); window.scrollTo(0, 0); });
     v.querySelectorAll('[data-cahier]').forEach(b => b.onclick = () => { S.filtres.cahier = b.dataset.cahier; c.rendre(); window.scrollTo(0, 0); });
@@ -574,6 +615,7 @@ export function installerModules(c) {
     apres: id => { if (!ch.id && S.vue === 'carnet') S.filtres.cahier = id; } });
   }
   function ficheNote(n) {
+    if (c.ouvrirNote) return c.ouvrirNote(n); // lot 9 : note en pleine page, dans son onglet
     const evt = n.action_id ? parId(S.actions, n.action_id) : null;
     const issues = n.id ? S.actions.filter(a => a.note_id === n.id) : [];
     const pied = n.id ? `<div class="champ large pied-note">
@@ -1075,7 +1117,7 @@ export function installerModules(c) {
   return {
     synchroTheme,
     vues: { vehicules: vueVehicules, achats: vueAchats, abonnements: vueAbonnements, transports: vueTransports, bibliotheque: vueBibliotheque, carnet: vueCarnet, routines: vueRoutines, revue: vueRevue, organigramme: vueOrganigramme, plus: vuePlus },
-    revueDue, bandeauRevue, proposerRevue, semaineIso,
+    revueDue, bandeauRevue, proposerRevue, semaineIso, ficheUnite,
     encartsAccueil, encartTransports, encartSurveiller, blocHabitudes, brancherHabitudes, complementsProjet, brancherProjet, ficheAchat, ficheNote, ficheCahier, blocNotesLiees, brancherNotesLiees,
   };
 }

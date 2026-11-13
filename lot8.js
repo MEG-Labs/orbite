@@ -76,7 +76,8 @@ export function installerLot8(c) {
     const a = affichage();
     return `<div class="barre-affichage"><div class="onglets" role="group" aria-label="Affichage"><button data-mode-proj="cartes" aria-pressed="${a.mode === 'cartes'}">Cartes</button><button data-mode-proj="kanban" aria-pressed="${a.mode === 'kanban'}">Kanban</button></div>
       ${a.mode === 'kanban' ? `<label class="choix-groupe"><span>Regrouper par</span><select id="groupeKanban">${Object.entries(GROUPES).map(([k, g]) => `<option value="${k}" ${k === a.groupe ? 'selected' : ''}>${g.l}</option>`).join('')}</select></label>
-        ${a.groupe === 'statut' ? `<label class="champ case"><input type="checkbox" id="kanbanTermines" ${S.filtres.kanbanTermines ? 'checked' : ''}><span>Inclure terminés et annulés</span></label>` : ''}` : ''}</div>`;
+        ${a.groupe === 'statut' ? `<label class="champ case"><input type="checkbox" id="kanbanTermines" ${S.filtres.kanbanTermines ? 'checked' : ''}><span>Inclure terminés et annulés</span></label>` : ''}
+        <label class="champ case"><input type="checkbox" id="kanbanVides" ${a.masquerVides ? 'checked' : ''}><span>Masquer les colonnes vides</span></label>` : ''}</div>`;
   }
   function kanban() {
     const a = affichage(), g = GROUPES[a.groupe] || GROUPES.statut;
@@ -86,9 +87,12 @@ export function installerLot8(c) {
     // Valeur sans colonne prévue (ex. ancien statut) : colonne ajoutée pour ne rien cacher.
     Object.keys(parCol).filter(k => !cols.some(([x]) => x === k)).forEach(k => cols.push([k, k || 'Non précisé']));
     const deplacable = !!g.champ;
+    // Colonnes vides masquées sur demande (réglage gardé avec l’affichage). On ne peut alors plus y déposer de carte.
+    const visibles = a.masquerVides ? cols.filter(([k]) => (parCol[k] || []).length) : cols;
+    if (!visibles.length) return `<div class="bloc">${'<div class="vide">Aucun projet pour ce filtre.</div>'}</div>`;
     return `${g.aide ? `<p class="aide aide-kanban">${esc(g.aide)}</p>` : deplacable ? '<p class="aide aide-kanban">Glisse une carte vers une autre colonne pour changer ce critère (sur téléphone : appui long, puis glisse). Toucher une carte ouvre le projet.</p>' : ''}
-      <div class="kanban kanban-projets" data-groupe="${esc(a.groupe)}" ${deplacable ? 'data-deplacable' : ''} style="--nb-col:${cols.length}">
-      ${cols.map(([k, l]) => {
+      <div class="kanban kanban-projets" data-groupe="${esc(a.groupe)}" ${deplacable ? 'data-deplacable' : ''} style="--nb-col:${visibles.length}">
+      ${visibles.map(([k, l]) => {
         const ps = (parCol[k] || []).sort(tri);
         return `<div class="kanban-col" data-col="${esc(k)}" ${a.groupe === 'sante' ? `data-sante="${esc(k)}"` : ''} role="group" aria-label="${esc(l)} : ${ps.length} projet${ps.length > 1 ? 's' : ''}">
           <h3>${a.groupe === 'sante' ? `<span class="sante ${esc(k)}" aria-hidden="true"></span>` : ''}${esc(l)} <span class="nb">${ps.length}</span></h3>
@@ -98,6 +102,7 @@ export function installerLot8(c) {
   function brancherProjets(v) {
     v.querySelectorAll('[data-mode-proj]').forEach(b => b.onclick = () => enregistrerAffichage({ mode: b.dataset.modeProj }));
     const gk = v.querySelector('#groupeKanban'); if (gk) gk.onchange = () => enregistrerAffichage({ groupe: gk.value });
+    const kv = v.querySelector('#kanbanVides'); if (kv) kv.onchange = () => enregistrerAffichage({ masquerVides: kv.checked });
     const kt = v.querySelector('#kanbanTermines'); if (kt) kt.onchange = () => { S.filtres.kanbanTermines = kt.checked; rendre(); };
     const k = v.querySelector('.kanban-projets[data-deplacable]'); if (k) brancherGlisser(k);
   }

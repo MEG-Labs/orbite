@@ -40,8 +40,8 @@ a { color: var(--orange-pale); }
 .horloge small { display: block; font: 12px/1.4 var(--mono); color: var(--brume); font-weight: 400; }
 
 /* ---------- Structure ---------- */
-.coquille { display: grid; grid-template-columns: 200px 1fr; min-height: calc(100vh - 56px); }
-.nav { border-right: 1px solid var(--acier); padding: 16px 10px; display: flex; flex-direction: column; gap: 2px; position: sticky; top: 56px; height: calc(100vh - 56px); }
+.coquille { display: grid; grid-template-columns: 200px 1fr; min-height: calc(100vh - var(--haut-tete, 56px)); }
+.nav { border-right: 1px solid var(--acier); padding: 16px 10px; display: flex; flex-direction: column; gap: 2px; position: sticky; top: var(--haut-tete, 56px); height: calc(100vh - var(--haut-tete, 56px)); }
 .nav button {
   display: flex; align-items: center; gap: 10px; width: 100%;
   background: none; border: 0; border-left: 3px solid transparent; border-radius: 0;
@@ -871,3 +871,89 @@ fieldset.bloc-reprise legend { color: var(--orange-pale); padding: 0 6px; }
 }
 /* Pendant un glisser, l’aimantation des colonnes empêcherait le défilement automatique. */
 .kanban.kanban-projets.glisse-actif { scroll-snap-type: none; }
+
+/* ---------- Lot 9 : onglets ---------- */
+/* La bande d’onglets fait partie de l’en-tête collant; l’onglet actif « coupe » la ligne orange, comme dans un navigateur. */
+.bandeau { row-gap: 8px; }
+.barre-onglets { grid-column: 1 / -1; display: flex; align-items: flex-end; gap: 2px; margin: 0 -20px -10px; padding: 0 20px; overflow-x: auto; scrollbar-width: none; }
+.barre-onglets::-webkit-scrollbar { display: none; }
+.onglet { position: relative; display: flex; align-items: center; gap: 7px; flex: 0 1 210px; min-width: 112px; height: 32px; padding: 0 4px 0 10px;
+  border: 1px solid transparent; border-bottom: 0; border-radius: 6px 6px 0 0; color: var(--brume); font: 13px var(--mono); cursor: pointer; user-select: none; }
+.onglet > span { flex: 1; min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.onglet > svg { width: 15px; height: 15px; flex: none; }
+.onglet:hover { background: var(--coque); color: var(--craie); }
+.onglet.actif { background: var(--nuit); color: var(--craie); border-color: var(--acier); box-shadow: inset 0 2px 0 var(--orange); height: 35px; margin-bottom: -3px; z-index: 1; }
+.onglet:focus-visible { outline-offset: -2px; }
+.fermer-onglet { flex: none; width: 22px; height: 22px; display: grid; place-items: center; background: none; border: 0; border-radius: 4px; color: var(--brume); font: 16px/1 var(--sans); cursor: pointer; opacity: 0; }
+.onglet:hover .fermer-onglet, .onglet.actif .fermer-onglet, .fermer-onglet:focus-visible { opacity: 1; }
+.fermer-onglet:hover { background: var(--coque-2); color: var(--craie); }
+.nouvel-onglet { flex: none; width: 32px; height: 30px; margin-bottom: 2px; background: none; border: 0; border-radius: 6px; color: var(--brume); font: 20px/1 var(--sans); cursor: pointer; }
+.nouvel-onglet:hover { background: var(--coque); color: var(--craie); }
+/* Écran tactile : × seulement sur l’onglet actif (plus de place pour les titres). */
+@media (hover: none) { .fermer-onglet { opacity: 1; } .onglet:not(.actif) .fermer-onglet { display: none; } .onglet:not(.actif) { padding-right: 10px; } }
+@media (max-width: 760px) {
+  .barre-onglets { margin: 0 -16px -10px; padding: 0 16px; }
+  .onglet { flex-basis: 150px; min-width: 96px; height: 30px; font-size: 12px; }
+  .onglet.actif { height: 33px; }
+}
+
+/* ---------- Lot 9 : note en pleine page ---------- */
+.page-note { max-width: 1000px; }
+.barre-note { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 8px; }
+.etat-note { margin-right: auto; font: 12.5px var(--mono); color: var(--brume); }
+.etat-note.erreur { color: var(--rouge); }
+.titre-note { width: 100%; padding: 6px 0 10px; background: none; border: 0; border-bottom: 1px solid var(--acier); border-radius: 0; color: var(--craie); font: 700 27px/1.25 var(--sans); }
+.titre-note:focus { border-bottom-color: var(--orange); }
+.proprietes-note > summary { cursor: pointer; padding: 9px 0; font: 13px var(--mono); color: var(--brume); }
+.proprietes-note > summary .aide { opacity: .7; }
+.grille-proprietes { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px 14px; padding: 4px 0 14px; }
+.grille-proprietes .large { grid-column: 1 / -1; }
+.outils-edition { position: sticky; top: var(--haut-tete, 56px); z-index: 5; display: flex; flex-wrap: wrap; align-items: center; gap: 2px; padding: 5px;
+  background: var(--coque); border: 1px solid var(--acier); border-radius: var(--r); }
+.outils-edition button { min-width: 34px; height: 32px; padding: 0 8px; display: grid; place-items: center; background: none; border: 1px solid transparent; border-radius: var(--r);
+  color: var(--craie); font: 14px var(--sans); cursor: pointer; }
+.outils-edition button svg { width: 18px; height: 18px; }
+.outils-edition button:hover { background: var(--coque-2); }
+.outils-edition button[aria-pressed="true"] { border-color: var(--orange); color: var(--orange-pale); background: color-mix(in srgb, var(--orange) 10%, transparent); }
+.sep-outils { width: 1px; align-self: stretch; margin: 4px 4px; background: var(--acier); }
+.editeur-note { min-height: 55vh; padding: 18px 2px 60px; font: 16px/1.65 var(--sans); color: var(--craie); outline: none; overflow-wrap: anywhere; caret-color: var(--orange); }
+.editeur-note > :first-child { margin-top: 0; }
+.editeur-note p { margin: 0 0 .3em; }
+.editeur-note h2 { display: block; font: 700 22px/1.3 var(--sans); margin: 1em 0 .4em; }
+.editeur-note h3 { font: 700 18px/1.35 var(--sans); margin: .9em 0 .35em; }
+.editeur-note h4 { font: 700 16px/1.4 var(--sans); margin: .8em 0 .3em; color: var(--brume); }
+.editeur-note ul, .editeur-note ol { margin: .1em 0 .5em; padding-left: 1.6em; }
+.editeur-note li { margin: .12em 0; padding-left: 2px; }
+.editeur-note li::marker { color: var(--orange-pale); }
+.editeur-note li[data-case] { list-style: none; position: relative; margin-left: -1.2em; padding-left: 30px; }
+.editeur-note li[data-case]::before { content: ''; position: absolute; left: 2px; top: .32em; width: 16px; height: 16px; box-sizing: border-box; border: 1.5px solid var(--brume); border-radius: 3px;
+  cursor: pointer; font: 700 12px/13px var(--sans); text-align: center; }
+.editeur-note li[data-case="x"] { color: var(--brume); text-decoration: line-through; }
+.editeur-note li[data-case="x"]::before { content: '✓'; background: var(--orange); border-color: var(--orange); color: #1A0D04; }
+.editeur-note li[data-case="→"]::before { content: '→'; border-color: var(--vert); color: var(--vert); }
+.editeur-note hr { border: 0; border-top: 2px solid var(--acier); margin: 1.1em 0; }
+.editeur-note blockquote { margin: .5em 0; padding: 4px 14px; border-left: 3px solid var(--orange); color: var(--brume); }
+.editeur-note code { font: 14px var(--mono); background: var(--coque-2); padding: 1px 5px; border-radius: 3px; }
+.editeur-note a { color: var(--orange-pale); }
+.editeur-note strong, .editeur-note b { color: #fff; }
+@media (max-width: 760px) {
+  .titre-note { font-size: 22px; }
+  .grille-proprietes { grid-template-columns: 1fr; }
+  .outils-edition { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; }
+  .outils-edition button { min-width: 38px; height: 36px; }
+  .editeur-note { font-size: 16px; }
+}
+
+/* ---------- Lot 9 : carnet classé, parties prenantes ---------- */
+.outils-classement select { max-width: 220px; }
+.sous-groupe-notes { margin: 0; padding: 10px 14px 4px; font: 700 13px var(--mono); color: var(--brume); border-top: 1px solid #1A3A4E; display: flex; gap: 8px; }
+.sous-groupe-notes:first-child { border-top: 0; }
+.carte-cie.inactive { opacity: .6; }
+.carte-cie .promis { color: var(--orange-pale); }
+.fil-cie { margin-bottom: 2px; }
+.entete-cie { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; flex-wrap: wrap; margin: 4px 0 14px; }
+.nom-cie { font: 700 21px/1.25 var(--mono); }
+.entete-cie .sous-titre { margin: 4px 0 0; }
+.conversion-cies .reglage p { margin: 0; }
+/* L’organigramme est un sous-onglet : son grand titre est déjà porté par « Parties prenantes ». */
+.sous-vue-org > .entete-vue h1 { display: none; }

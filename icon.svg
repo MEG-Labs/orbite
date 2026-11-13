@@ -1,6 +1,11 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
-  <rect width="64" height="64" fill="#0B1F2A"/>
-  <ellipse cx="32" cy="32" rx="25" ry="10" fill="none" stroke="#F26B21" stroke-width="3" transform="rotate(-28 32 32)"/>
-  <circle cx="32" cy="32" r="9" fill="#E6EDF2"/>
-  <circle cx="53" cy="21" r="4" fill="#F26B21"/>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <defs>
+    <linearGradient id="lgo-p" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#FF2E88"/><stop offset=".55" stop-color="#F26B21"/><stop offset="1" stop-color="#FFC24B"/></linearGradient>
+    <filter id="lgo-g" x="-30%" y="-30%" width="160%" height="160%"><feGaussianBlur stdDeviation="8" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+    <mask id="lgo-m"><rect width="512" height="512" fill="#fff"/><g fill="#000"><rect y="282" width="512" height="9"/><rect y="313" width="512" height="12"/><rect y="346" width="512" height="15"/><rect y="381" width="512" height="18"/></g></mask>
+  </defs>
+  <g transform="rotate(-20 256 256)" filter="url(#lgo-g)"><path d="M20 256A236 56 0 0 1 492 256" fill="none" stroke="#00E5FF" stroke-width="13" stroke-linecap="round"/></g>
+  <circle cx="256" cy="256" r="146" fill="url(#lgo-p)" mask="url(#lgo-m)" filter="url(#lgo-g)"/>
+  <g transform="rotate(-20 256 256)" filter="url(#lgo-g)"><path d="M20 256A236 56 0 0 0 492 256" fill="none" stroke="#00E5FF" stroke-width="13" stroke-linecap="round"/></g>
+  <circle cx="436" cy="98" r="17" fill="#00E5FF" filter="url(#lgo-g)"/>
 </svg>

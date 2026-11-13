@@ -6,6 +6,7 @@ import { installerLot5 } from './lot5.js';
 import { installerLot6 } from './lot6.js';
 import { installerLot7 } from './lot7.js';
 import { installerLot8 } from './lot8.js';
+import { installerLot9 } from './lot9.js';
 
 const sb = createClient(SUPABASE_URL, SUPABASE_KEY, { auth: { persistSession: true, autoRefreshToken: true } });
 
@@ -23,7 +24,7 @@ const TYPES_INTERRUPTION = ['SAP / EWM', 'Équipement / RF', 'Données / rapport
 const S = { session: null, actions: [], projets: [], domaines: [], personnes: [], vue: 'accueil', filtres: {}, agendaPasses: false,
   vehicules: [], entretiens: [], interventions: [], intEnt: [], livres: [], achats: [], abonnements: [], trajets: [], routines: [], notes: [], budget: [], regles: [],
   unites: [], postes: [], titulaires: [], participations: [], reglages: [], journal: [], cahiers: [], push: [], file: [], horsLigne: null };
-let M, X, L, L6, L7, L8; // modules, installés après la définition des fonctions communes
+let M, X, L, L6, L7, L8, L9; // modules, installés après la définition des fonctions communes
 
 const MODULES = [
   { k: 'accueil', l: 'Accueil', g: 'Pilotage', principal: true },
@@ -40,8 +41,7 @@ const MODULES = [
   { k: 'bibliotheque', l: 'Bibliothèque', g: 'Vie' },
   { k: 'routines', l: 'Routines', g: 'Vie' },
   { k: 'carnet', l: 'Carnet', g: 'Repères' },
-  { k: 'organigramme', l: 'Organigramme', g: 'Repères' },
-  { k: 'reperes', l: 'Personnes et domaines', g: 'Repères' },
+  { k: 'parties', l: 'Parties prenantes', g: 'Repères' },
   { k: 'reglages', l: 'Réglages', g: 'Repères' },
 ];
 
@@ -109,12 +109,13 @@ const ICONES = {
   carnet: '<path d="M6 3h11v18H6zM9 7h5M9 11h5M3 6h3M3 10h3M3 14h3" fill="none" stroke="currentColor" stroke-width="2"/>',
   organigramme: '<rect x="9" y="3" width="6" height="5" fill="none" stroke="currentColor" stroke-width="2"/><rect x="3" y="16" width="6" height="5" fill="none" stroke="currentColor" stroke-width="2"/><rect x="15" y="16" width="6" height="5" fill="none" stroke="currentColor" stroke-width="2"/><path d="M12 8v4M6 16v-4h12v4" fill="none" stroke="currentColor" stroke-width="2"/>',
   delegations: '<circle cx="8" cy="8" r="3" fill="none" stroke="currentColor" stroke-width="2"/><path d="M3 19c0-3 2.2-5 5-5s5 2 5 5M14 9h7M18 6l3 3-3 3" fill="none" stroke="currentColor" stroke-width="2"/>',
+  parties: '<rect x="3" y="8" width="8" height="13" fill="none" stroke="currentColor" stroke-width="2"/><path d="M5.5 12h3M5.5 16h3" stroke="currentColor" stroke-width="2"/><circle cx="17" cy="9" r="3" fill="none" stroke="currentColor" stroke-width="2"/><path d="M12.5 21c0-3 2-5 4.5-5s4.5 2 4.5 5" fill="none" stroke="currentColor" stroke-width="2"/>',
   engagements: '<path d="M4 5h16v11H10l-5 4v-4H4z" fill="none" stroke="currentColor" stroke-width="2"/><path d="m8.5 10.5 2.5 2.5 4.5-4.5" fill="none" stroke="currentColor" stroke-width="2"/>',
   reglages: '<circle cx="12" cy="12" r="3" fill="none" stroke="currentColor" stroke-width="2"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M4.9 19.1 7 17M17 7l2.1-2.1" stroke="currentColor" stroke-width="2"/>',
   moins: '<circle cx="5" cy="12" r="2" fill="currentColor"/><circle cx="12" cy="12" r="2" fill="currentColor"/><circle cx="19" cy="12" r="2" fill="currentColor"/>',
 };
 const ico = n => `<svg viewBox="0 0 24 24" aria-hidden="true">${ICONES[n]}</svg>`;
-const LOGO = `<svg viewBox="0 0 64 64" aria-hidden="true"><ellipse cx="32" cy="32" rx="25" ry="10" fill="none" stroke="#F26B21" stroke-width="3" transform="rotate(-28 32 32)"/><circle cx="32" cy="32" r="9" fill="#E6EDF2"/><circle cx="53" cy="21" r="4" fill="#F26B21"/></svg>`;
+const LOGO = `<svg viewBox="0 0 512 512" aria-hidden="true"><defs><linearGradient id="lgo-p" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#FF2E88"/><stop offset=".55" stop-color="#F26B21"/><stop offset="1" stop-color="#FFC24B"/></linearGradient><filter id="lgo-g" x="-30%" y="-30%" width="160%" height="160%"><feGaussianBlur stdDeviation="8" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter><mask id="lgo-m"><rect width="512" height="512" fill="#fff"/><g fill="#000"><rect y="282" width="512" height="9"/><rect y="313" width="512" height="12"/><rect y="346" width="512" height="15"/><rect y="381" width="512" height="18"/></g></mask></defs><g transform="rotate(-20 256 256)" filter="url(#lgo-g)"><path d="M20 256A236 56 0 0 1 492 256" fill="none" stroke="#00E5FF" stroke-width="13" stroke-linecap="round"/></g><circle cx="256" cy="256" r="146" fill="url(#lgo-p)" mask="url(#lgo-m)" filter="url(#lgo-g)"/><g transform="rotate(-20 256 256)" filter="url(#lgo-g)"><path d="M20 256A236 56 0 0 0 492 256" fill="none" stroke="#00E5FF" stroke-width="13" stroke-linecap="round"/></g><circle cx="436" cy="98" r="17" fill="#00E5FF" filter="url(#lgo-g)"/></svg>`;
 
 /* ================= Données ================= */
 async function charger() {
@@ -190,7 +191,9 @@ async function majAction(id, champs) {
 function rendre() {
   const app = $('#app');
   if (!S.session) return rendreConnexion(app);
-  const courant = S.vue === 'projet' ? 'projets' : S.vue;
+  // Onglets : on enregistre la note en cours, puis l’état affiché devient celui de l’onglet actif.
+  L9.avantRendre(); L9.synchro();
+  const courant = S.vue === 'projet' ? 'projets' : S.vue === 'note' ? 'carnet' : S.vue;
   const estPrincipal = MODULES.find(m => m.k === courant)?.principal;
   let groupe = '';
   const navHtml = MODULES.map(m => {
@@ -203,6 +206,7 @@ function rendre() {
       <div class="devise">Processus de soutien. Projets logistiques. Le reste, <u>je délègue</u>.</div>
       <button class="btn-recherche" id="btnRecherche" aria-label="Chercher partout" title="Chercher partout (Ctrl+K)"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5" fill="none" stroke="currentColor" stroke-width="2"/><path d="m15.5 15.5 5 5" stroke="currentColor" stroke-width="2" stroke-linecap="square"/></svg><span>Chercher</span><kbd>Ctrl K</kbd></button>
       <div class="horloge" id="horloge"></div>
+      ${L9.barreOnglets()}
     </header>
     <div class="coquille">
       <nav class="nav" aria-label="Sections">
@@ -214,14 +218,15 @@ function rendre() {
     <button class="fab-fly" id="fabFly" aria-label="Consigner une tâche faite sur le fly" title="Fait sur le fly (F)"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M13 2 4 14h7l-1 8 9-12h-7z" fill="currentColor"/></svg></button>
     <button class="fab" id="fab" aria-label="Capture rapide" title="Capture rapide (N)">${ico('plus')}</button>`;
   app.querySelectorAll('[data-vue]').forEach(b => b.onclick = () => { S.vue = b.dataset.vue; S.filtres = {}; S.reorg = false; history.replaceState(null, '', S.vue === 'accueil' ? location.pathname : '#' + S.vue); rendre(); window.scrollTo(0, 0); });
+  L9.brancherOnglets(app);
   $('#fab').onclick = () => ouvrirCapture();
   $('#fabFly').onclick = () => ouvrirSurLeFly();
   $('#btnRecherche').onclick = () => L.ouvrirRecherche();
   $('#deco').onclick = async () => { await sb.auth.signOut(); };
   horloge();
   const v = document.createElement('div'); $('#vue').appendChild(v);
-  ({ accueil: vueAccueil, agenda: vueAgenda, projets: vueProjets, projet: vueProjet, actions: vueActions, reperes: vueReperes, ...M.vues, ...X.vues, ...L7.vues,
-    reglages: async v => { await X.vues.reglages(v); L.complementReglages(v); } }[S.vue] || vueAccueil)(v);
+  ({ accueil: vueAccueil, agenda: vueAgenda, projets: vueProjets, projet: vueProjet, actions: vueActions, reperes: vueReperes, ...M.vues, ...X.vues, ...L7.vues, ...L9.vues,
+    reglages: async v => { await X.vues.reglages(v); L.complementReglages(v); L9.complementReglages(v); } }[S.vue] || vueAccueil)(v);
   brancherLignes(v);
 }
 
@@ -1478,16 +1483,17 @@ function ouvrirProjet(p) {
 /* ---------- Fiches personne et domaine ---------- */
 function ouvrirPersonne(p) {
   const nouveau = !p.id;
-  dialogue(`<form>
+  const d = dialogue(`<form>
     <div class="tete-d"><h2>${nouveau ? 'Nouvelle personne' : esc(p.nom)}</h2><button type="button" class="btn discret" data-fermer aria-label="Fermer">✕</button></div>
     <div class="corps">
       <label class="champ large"><span>Nom</span><input name="nom" required value="${esc(p.nom)}" ${nouveau ? 'autofocus' : ''}></label>
-      <label class="champ"><span>Nature</span><select name="nature">${optsTexte(['Personne', 'Équipe', 'Organisation'], p.nature)}</select></label>
+      <label class="champ"><span>Nature</span><select name="nature">${['Personne', 'Équipe', ...(p.nature === 'Organisation' ? ['Organisation'] : [])].map(n => `<option value="${n}" ${n === p.nature ? 'selected' : ''}>${n === 'Organisation' ? 'Compagnie (fiche de contact)' : n}</option>`).join('')}</select></label>
       <label class="champ"><span>Fonction</span><input name="fonction" value="${esc(p.fonction)}"></label>
       <label class="champ"><span>Courriel</span><input type="email" name="courriel" value="${esc(p.courriel)}"></label>
       <label class="champ"><span>Téléphone</span><input type="tel" name="telephone" value="${esc(p.telephone)}"></label>
-      <label class="champ"><span>Compagnie</span><select name="compagnie_id">${opts(S.unites.filter(u => u.categorie === 'Organisation'), p.compagnie_id)}</select></label>
-      <label class="champ"><span>Département</span><select name="departement_id">${opts(S.unites.filter(u => u.categorie !== 'Organisation'), p.departement_id)}</select></label>
+      <label class="champ"><span>Compagnie</span><select name="compagnie_id">${opts(L9.compagnies().concat(S.unites.filter(u => u.id === p.compagnie_id && u.actif === false)), p.compagnie_id)}<option value="__nouvelle">＋ Nouvelle compagnie…</option></select></label>
+      <label class="champ champ-nouvelle-cie" hidden><span>Nom de la nouvelle compagnie</span><input name="nouvelle_cie" autocomplete="off"></label>
+      <label class="champ"><span>Département</span><select name="departement_id"></select></label>
       ${p.id ? `<p class="champ large aide" style="margin:0">${S.titulaires.filter(t => t.personne_id === p.id).map(t => esc(parId(S.postes, t.poste_id)?.titre)).join(', ') || 'Aucun poste dans l’organigramme'}</p>` : ''}
       <label class="champ large"><span>Notes</span><textarea name="notes">${esc(p.notes)}</textarea></label>
     </div>
@@ -1495,10 +1501,28 @@ function ouvrirPersonne(p) {
   </form>`, async fd => {
     const vide = k => (fd.get(k) || '').trim() || null;
     const ligne = { nom: fd.get('nom').trim(), nature: fd.get('nature'), fonction: vide('fonction'), courriel: vide('courriel'), telephone: vide('telephone'), notes: vide('notes'), compagnie_id: vide('compagnie_id'), departement_id: vide('departement_id') };
+    // Nouvelle compagnie saisie ici : créée une seule fois, comme unité de l’organigramme, avec sa fiche de contact.
+    if (ligne.compagnie_id === '__nouvelle') {
+      const nom = vide('nouvelle_cie'); if (!nom) { toast('Indique le nom de la nouvelle compagnie'); return false; }
+      const r = await sb.from('unites').insert({ nom, categorie: 'Organisation', actif: true }).select('id').single();
+      if (r.error) { toast('Échec : ' + r.error.message); return false; }
+      ligne.compagnie_id = r.data.id;
+      await sb.from('personnes').insert({ nom, nature: 'Organisation', compagnie_id: r.data.id });
+    }
     const { error } = nouveau ? await sb.from('personnes').insert(ligne) : await sb.from('personnes').update(ligne).eq('id', p.id);
     if (error) { toast('Échec : ' + error.message); return false; }
     toast('Enregistré'); rafraichir();
   });
+  // Département : seulement ceux de la compagnie choisie (sinon tous).
+  const selC = d.querySelector('[name=compagnie_id]'), selD = d.querySelector('[name=departement_id]'), champN = d.querySelector('.champ-nouvelle-cie');
+  const majDeps = () => {
+    const cie = selC.value, nouvelle = cie === '__nouvelle';
+    champN.hidden = !nouvelle; if (nouvelle) champN.querySelector('input').focus();
+    const garde = selD.value || p.departement_id;
+    const deps = S.unites.filter(u => u.categorie !== 'Organisation' && (!cie || nouvelle ? !nouvelle : L9.compagnieDe(u.id)?.id === cie)).sort((a, b) => a.nom.localeCompare(b.nom, 'fr'));
+    selD.innerHTML = opts(deps, deps.some(u => u.id === garde) ? garde : null);
+  };
+  selC.onchange = majDeps; majDeps();
 }
 function ouvrirDomaine(dm) {
   const nouveau = !dm.id;
@@ -1550,18 +1574,18 @@ async function demarrer(session) {
   const horsReseau = error && (!navigator.onLine || /fetch|network|load failed/i.test(error.message || ''));
   if (!horsReseau && (error || !ok)) { await sb.auth.signOut(); S.session = null; return rendreConnexion($('#app'), 'Ce compte n’a pas accès à ORBITE.'); }
   S.session = session;
-  const h = location.hash.slice(1); if (MODULES.some(m => m.k === h)) S.vue = h;
+  const h = location.hash.slice(1); L9.restaurer(h); // onglets de l’appareil, puis lien direct éventuel
   $('#app').innerHTML = '<div class="connexion"><p style="color:var(--brume);font-family:var(--mono)">Chargement…</p></div>';
   majMeteo();
   try { await charger(); M.synchroTheme(); rendre(); X.viderFile(); if (h !== 'fermer') setTimeout(() => M.proposerRevue(), 600); if (h === 'fermer') { history.replaceState(null, '', location.pathname); L6.ouvrirFermeture(); } } catch (e) { $('#app').innerHTML = `<div class="connexion"><p class="erreur">Impossible de charger les données : ${esc(e.message)}</p></div>`; }
 }
 
 M = installerModules({ sb, S, $, esc, toast, parId, aujourdhui, plusJours, jourDate, jourLong, cleJour, fmtHeure, versLocal, depuisLocal,
-  dialogue, rafraichir, rendre: () => rendre(), liste, ouvert, enRetard, manquants, carteProjet, ouvrirPersonne, ouvrirAction, MODULES, ico, blocBienEtre: () => L6.blocInterruptions() + L7.blocRevue() + L6.blocRevue(),
+  dialogue, rafraichir, rendre: () => rendre(), liste, ouvert, enRetard, manquants, carteProjet, ouvrirPersonne, ouvrirAction, MODULES, ico, ouvrirNote: n => L9.ouvrirNote(n), texteBrut: t => L9.texteBrut(t), blocBienEtre: () => L6.blocInterruptions() + L7.blocRevue() + L6.blocRevue(),
   conflitDe: t => L.conflitDe(t), agendaDe: t => L.agendaDe(t), moiTransport: () => L.moi(), encartPneus: () => L.encartPneus(), creerActionsDepuisNote: (n, txt) => L.creerActionsDepuisNote(n, txt), SUPA_URL: SUPABASE_URL });
 
 L = installerLot5({ sb, S, $, esc, toast, parId, aujourdhui, plusJours, jourDate, jourLong, cleJour, fmtHeure, dialogue, rafraichir, ouvert,
-  rendre: () => rendre(), ouvrirAction, ouvrirPersonne, ficheNote: n => M.ficheNote(n), ficheAchat: a => M.ficheAchat(a), meteo: () => METEO.donnees,
+  rendre: () => rendre(), ouvrirAction, ouvrirPersonne, ficheNote: n => L9.ouvrirNote(n), ficheAchat: a => M.ficheAchat(a), meteo: () => METEO.donnees,
   personneParNom: n => L7.personneParNom(n), colonnePromis: () => L7.colonnePromis() });
 
 X = installerExtras({ sb, S, $, esc, toast, parId, aujourdhui, plusJours, jourDate, cleJour, dialogue, rafraichir, liste, ouvert, COULEURS_CAL,
@@ -1571,15 +1595,19 @@ L6 = installerLot6({ sb, S, esc, toast, parId, aujourdhui, plusJours, jourDate, 
   charge: () => L.chargeDuJour(), minutesLocales: d => L.minutesLocales(d) });
 
 L7 = installerLot7({ sb, S, esc, toast, parId, aujourdhui, plusJours, jourDate, cleJour, rafraichir, rendre: () => rendre(), liste, ouvert, enRetard,
-  ouvrirAction, ficheNote: n => M.ficheNote(n), visible: a => L6.visible(a) });
+  ouvrirAction, ficheNote: n => L9.ouvrirNote(n), visible: a => L6.visible(a) });
+
+L9 = installerLot9({ sb, S, esc, toast, parId, aujourdhui, jourDate, cleJour, fmtHeure, rafraichir, rendre: () => rendre(), liste, ouvert, ico, MODULES, dialogue, opts,
+  ouvrirPersonne, ouvrirDomaine, ouvrirAction, ficheUnite: u => M.ficheUnite(u), vueOrganigramme: v => M.vues.organigramme(v),
+  creerActionsDepuisNote: (n, t) => L.creerActionsDepuisNote(n, t), rechargerActions: () => charger() });
 
 L8 = installerLot8({ sb, S, esc, toast, parId, aujourdhui, plusJours, rafraichir, rendre: () => rendre(), carteProjet, sante, STATUTS_PROJET, PRIOS });
 window.addEventListener('hashchange', () => {
   if (!S.session) return;
   if (location.hash === '#fermer') { history.replaceState(null, '', location.pathname); L6.ouvrirFermeture(); return; }
   // Lien de notification (#revue, #agenda…) alors que l’app est déjà ouverte : on affiche ce module.
-  const k = location.hash.slice(1);
-  if (MODULES.some(m => m.k === k) && S.vue !== k) { S.vue = k; S.filtres = {}; S.reorg = false; rendre(); window.scrollTo(0, 0); }
+  const h = location.hash.slice(1), k = L9.ALIAS[h] || h;
+  if (MODULES.some(m => m.k === k) && (S.vue !== k || h !== k)) { S.vue = k; S.filtres = h === 'organigramme' ? { sous: 'organigramme' } : {}; S.reorg = false; if (h !== k) history.replaceState(null, '', '#' + k); rendre(); window.scrollTo(0, 0); }
 });
 
 let derniereSession;
@@ -1591,10 +1619,10 @@ sb.auth.onAuthStateChange((evt, session) => {
 });
 
 document.addEventListener('keydown', e => {
-  if (S.session && ((e.key.toLowerCase() === 'k' && (e.ctrlKey || e.metaKey)) || (e.key === '/' && !document.querySelector('dialog[open]') && !/INPUT|TEXTAREA|SELECT/.test(document.activeElement.tagName)))) { e.preventDefault(); return L.ouvrirRecherche(); }
-  if (e.key.toLowerCase() === 'f' && !e.ctrlKey && !e.metaKey && !e.altKey && S.session && !document.querySelector('dialog[open]') && !/INPUT|TEXTAREA|SELECT/.test(document.activeElement.tagName)) { e.preventDefault(); ouvrirSurLeFly(); }
-  if (e.key.toLowerCase() === 'i' && !e.ctrlKey && !e.metaKey && !e.altKey && S.session && !document.querySelector('dialog[open]') && !/INPUT|TEXTAREA|SELECT/.test(document.activeElement.tagName)) { e.preventDefault(); ouvrirSurLeFly({ interruption: true }); }
-  if (e.key.toLowerCase() === 'n' && S.session && !document.querySelector('dialog[open]') && !/INPUT|TEXTAREA|SELECT/.test(document.activeElement.tagName)) { e.preventDefault(); ouvrirCapture(); }
+  if (S.session && ((e.key.toLowerCase() === 'k' && (e.ctrlKey || e.metaKey)) || (e.key === '/' && !document.querySelector('dialog[open]') && !(/INPUT|TEXTAREA|SELECT/.test(document.activeElement.tagName) || document.activeElement.isContentEditable)))) { e.preventDefault(); return L.ouvrirRecherche(); }
+  if (e.key.toLowerCase() === 'f' && !e.ctrlKey && !e.metaKey && !e.altKey && S.session && !document.querySelector('dialog[open]') && !(/INPUT|TEXTAREA|SELECT/.test(document.activeElement.tagName) || document.activeElement.isContentEditable)) { e.preventDefault(); ouvrirSurLeFly(); }
+  if (e.key.toLowerCase() === 'i' && !e.ctrlKey && !e.metaKey && !e.altKey && S.session && !document.querySelector('dialog[open]') && !(/INPUT|TEXTAREA|SELECT/.test(document.activeElement.tagName) || document.activeElement.isContentEditable)) { e.preventDefault(); ouvrirSurLeFly({ interruption: true }); }
+  if (e.key.toLowerCase() === 'n' && S.session && !document.querySelector('dialog[open]') && !(/INPUT|TEXTAREA|SELECT/.test(document.activeElement.tagName) || document.activeElement.isContentEditable)) { e.preventDefault(); ouvrirCapture(); }
 });
-document.addEventListener('visibilitychange', () => { if (!document.hidden && S.session && !document.querySelector('dialog[open]')) rafraichir().then(() => M.proposerRevue()).catch(() => {}); });
+document.addEventListener('visibilitychange', () => { if (!document.hidden && S.session && !document.querySelector('dialog[open]') && !L9.editionEnCours()) rafraichir().then(() => M.proposerRevue()).catch(() => {}); });
 if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => {});
