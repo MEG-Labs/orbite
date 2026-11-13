@@ -509,6 +509,8 @@ export function installerLot9(c) {
   const compagniePersonne = p => parId(S.unites, p.compagnie_id) || (p.departement_id ? compagnieDe(p.departement_id) : null);
   const membres = u => { const un = sousUnites(u.id); return S.personnes.filter(p => p.nature !== 'Organisation' && (p.compagnie_id === u.id || (p.departement_id && un.has(p.departement_id)))); };
   // Organisations saisies comme « personnes » sans compagnie correspondante : à convertir.
+  // Poste d’une personne : son poste dans l’organigramme, sinon l’ancienne fonction saisie en texte.
+  const posteDe = p => S.titulaires.filter(t => t.personne_id === p.id).map(t => parId(S.postes, t.poste_id)?.titre).filter(Boolean).join(', ') || p.fonction || '';
   const aConvertir = () => S.personnes.filter(p => p.nature === 'Organisation' && !p.compagnie_id);
 
   function vueParties(v) {
@@ -587,7 +589,7 @@ export function installerLot9(c) {
         <div class="boutons-entete"><button class="btn" data-org-cie>Organigramme</button><button class="btn primaire" data-modif-cie>Modifier</button></div></div>
       <div class="grille">
         <div class="colonne">
-          ${bloc('Personnes', m.length, m.length ? `<ul class="lignes">${m.map(p => `<li class="ligne" data-pers-cie="${p.id}" role="button" tabindex="0" style="grid-template-columns:minmax(0,1fr) auto"><div><div class="titre">${esc(p.nom)}</div><div class="meta">${[p.fonction, parId(S.unites, p.departement_id)?.nom].filter(Boolean).map(x => `<span>${esc(x)}</span>`).join('')}</div></div><div class="droite">${esc(p.courriel || '')}</div></li>`).join('')}</ul>` : vide('Personne pour l’instant.'), '<button class="btn" data-aj-pers-cie>Ajouter</button>')}
+          ${bloc('Personnes', m.length, m.length ? `<ul class="lignes">${m.map(p => `<li class="ligne" data-pers-cie="${p.id}" role="button" tabindex="0" style="grid-template-columns:minmax(0,1fr) auto"><div><div class="titre">${esc(p.nom)}</div><div class="meta">${[posteDe(p), parId(S.unites, p.departement_id)?.nom].filter(Boolean).map(x => `<span>${esc(x)}</span>`).join('')}</div></div><div class="droite">${esc(p.courriel || '')}</div></li>`).join('')}</ul>` : vide('Personne pour l’instant.'), '<button class="btn" data-aj-pers-cie>Ajouter</button>')}
           ${bloc('Départements et équipes', S.unites.filter(x => sousUnites(u.id).has(x.id)).length - 1, deps ? `<ul class="lignes">${deps}</ul>` : vide('Aucun département. Ils apparaissent aussi dans l’organigramme.'), '<button class="btn" data-aj-dep-cie>Ajouter</button>')}
         </div>
         <div class="colonne">
@@ -639,14 +641,14 @@ export function installerLot9(c) {
   function vuePersonnes() {
     const f = S.filtres, q = norm(f.qp), cie = f.ciePers || '';
     const gens = S.personnes.filter(p => p.nature !== 'Organisation')
-      .filter(p => (!q || norm([p.nom, p.fonction, p.courriel].join(' ')).includes(q)) && (!cie || (cie === 'aucune' ? !compagniePersonne(p) : compagniePersonne(p)?.id === cie)))
+      .filter(p => (!q || norm([p.nom, posteDe(p), p.courriel].join(' ')).includes(q)) && (!cie || (cie === 'aucune' ? !compagniePersonne(p) : compagniePersonne(p)?.id === cie)))
       .sort((a, b) => a.nom.localeCompare(b.nom, 'fr'));
     return `<div class="outils"><input type="search" id="qp" placeholder="Chercher une personne" value="${esc(f.qp || '')}" aria-label="Chercher une personne">
         <select id="ciePers" aria-label="Compagnie"><option value="">Toutes les compagnies</option><option value="aucune" ${cie === 'aucune' ? 'selected' : ''}>Sans compagnie</option>${compagnies().map(u => `<option value="${u.id}" ${u.id === cie ? 'selected' : ''}>${esc(u.nom)}</option>`).join('')}</select>
         <button class="btn primaire" data-aj-pers>Ajouter une personne</button></div>
-      ${bloc(pluriel(gens.length, 'personne'), null, gens.length ? `<table class="tableau"><thead><tr><th>Nom</th><th>Compagnie</th><th class="opt">Fonction ou département</th><th class="opt">Courriel</th><th>Me doit</th></tr></thead><tbody>
+      ${bloc(pluriel(gens.length, 'personne'), null, gens.length ? `<table class="tableau"><thead><tr><th>Nom</th><th>Compagnie</th><th class="opt">Poste et département</th><th class="opt">Courriel</th><th>Me doit</th></tr></thead><tbody>
         ${gens.map(p => { const n = S.actions.filter(a => ouvert(a) && (a.delegue_a_id === p.id || a.en_attente_de_id === p.id)).length;
-          return `<tr data-pers="${p.id}" tabindex="0"><td>${esc(p.nom)}${p.nature === 'Équipe' ? ' <span class="pastille">Équipe</span>' : ''}</td><td>${esc(compagniePersonne(p)?.nom || '—')}</td><td class="opt">${esc([p.fonction, parId(S.unites, p.departement_id)?.nom].filter(Boolean).join(' · '))}</td><td class="opt">${esc(p.courriel || '')}</td><td>${n || ''}</td></tr>`; }).join('')}
+          return `<tr data-pers="${p.id}" tabindex="0"><td>${esc(p.nom)}${p.nature === 'Équipe' ? ' <span class="pastille">Équipe</span>' : ''}</td><td>${esc(compagniePersonne(p)?.nom || '—')}</td><td class="opt">${esc([posteDe(p), parId(S.unites, p.departement_id)?.nom].filter(Boolean).join(' · '))}</td><td class="opt">${esc(p.courriel || '')}</td><td>${n || ''}</td></tr>`; }).join('')}
         </tbody></table>` : vide('Aucune personne pour ces filtres.'))}`;
   }
   function brancherPersonnes(v) {
@@ -671,5 +673,5 @@ export function installerLot9(c) {
   }
 
   return { vues: { parties: vueParties, note: vueNote }, synchro, restaurer, barreOnglets, brancherOnglets, ouvrir, ouvrirNote, avantRendre, editionEnCours,
-    mdVersHtml, htmlVersMd, texteBrut, ficheCompagnie, compagnies, compagnieDe, complementReglages, ALIAS };
+    mdVersHtml, htmlVersMd, texteBrut, ficheCompagnie, compagnies, compagnieDe, sousUnites, complementReglages, ALIAS };
 }

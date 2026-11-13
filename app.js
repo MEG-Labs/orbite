@@ -1488,19 +1488,22 @@ function ouvrirPersonne(p) {
     <div class="corps">
       <label class="champ large"><span>Nom</span><input name="nom" required value="${esc(p.nom)}" ${nouveau ? 'autofocus' : ''}></label>
       <label class="champ"><span>Nature</span><select name="nature">${['Personne', 'Équipe', ...(p.nature === 'Organisation' ? ['Organisation'] : [])].map(n => `<option value="${n}" ${n === p.nature ? 'selected' : ''}>${n === 'Organisation' ? 'Compagnie (fiche de contact)' : n}</option>`).join('')}</select></label>
-      <label class="champ"><span>Fonction</span><input name="fonction" value="${esc(p.fonction)}"></label>
-      <label class="champ"><span>Courriel</span><input type="email" name="courriel" value="${esc(p.courriel)}"></label>
-      <label class="champ"><span>Téléphone</span><input type="tel" name="telephone" value="${esc(p.telephone)}"></label>
       <label class="champ"><span>Compagnie</span><select name="compagnie_id">${opts(L9.compagnies().concat(S.unites.filter(u => u.id === p.compagnie_id && u.actif === false)), p.compagnie_id)}<option value="__nouvelle">＋ Nouvelle compagnie…</option></select></label>
       <label class="champ champ-nouvelle-cie" hidden><span>Nom de la nouvelle compagnie</span><input name="nouvelle_cie" autocomplete="off"></label>
       <label class="champ"><span>Département</span><select name="departement_id"></select></label>
-      ${p.id ? `<p class="champ large aide" style="margin:0">${S.titulaires.filter(t => t.personne_id === p.id).map(t => esc(parId(S.postes, t.poste_id)?.titre)).join(', ') || 'Aucun poste dans l’organigramme'}</p>` : ''}
+      <label class="champ"><span>Poste (organigramme)</span><select name="poste_id"></select></label>
+      <label class="champ champ-nouveau-poste" hidden><span>Titre du nouveau poste</span><input name="nouveau_poste" autocomplete="off" value="${esc(postesDe(p).length ? '' : p.fonction)}"></label>
+      <p class="champ large aide aide-poste" style="margin:0"></p>
+      <label class="champ"><span>Courriel</span><input type="email" name="courriel" value="${esc(p.courriel)}"></label>
+      <label class="champ"><span>Téléphone</span><input type="tel" name="telephone" value="${esc(p.telephone)}"></label>
       <label class="champ large"><span>Notes</span><textarea name="notes">${esc(p.notes)}</textarea></label>
     </div>
     <div class="pied"><button type="button" class="btn" data-fermer>Annuler</button><button type="submit" class="btn primaire">Enregistrer</button></div>
   </form>`, async fd => {
     const vide = k => (fd.get(k) || '').trim() || null;
-    const ligne = { nom: fd.get('nom').trim(), nature: fd.get('nature'), fonction: vide('fonction'), courriel: vide('courriel'), telephone: vide('telephone'), notes: vide('notes'), compagnie_id: vide('compagnie_id'), departement_id: vide('departement_id') };
+    const ligne = { nom: fd.get('nom').trim(), nature: fd.get('nature'), courriel: vide('courriel'), telephone: vide('telephone'), notes: vide('notes'), compagnie_id: vide('compagnie_id'), departement_id: vide('departement_id') };
+    let posteChoisi = vide('poste_id');
+    if (posteChoisi === '__nouveau' && !vide('nouveau_poste')) { toast('Indique le titre du nouveau poste'); return false; }
     // Nouvelle compagnie saisie ici : créée une seule fois, comme unité de l’organigramme, avec sa fiche de contact.
     if (ligne.compagnie_id === '__nouvelle') {
       const nom = vide('nouvelle_cie'); if (!nom) { toast('Indique le nom de la nouvelle compagnie'); return false; }
@@ -1509,10 +1512,60 @@ function ouvrirPersonne(p) {
       ligne.compagnie_id = r.data.id;
       await sb.from('personnes').insert({ nom, nature: 'Organisation', compagnie_id: r.data.id });
     }
-    const { error } = nouveau ? await sb.from('personnes').insert(ligne) : await sb.from('personnes').update(ligne).eq('id', p.id);
+    // Nouveau poste : créé dans l’organigramme, dans le département choisi (sinon la compagnie), déjà pourvu.
+    if (posteChoisi === '__nouveau') {
+      const r = await sb.from('postes').insert({ titre: vide('nouveau_poste'), unite_id: ligne.departement_id || ligne.compagnie_id || null, statut: 'Pourvu' }).select('id').single();
+      if (r.error) { toast('Poste non créé : ' + r.error.message); return false; }
+      posteChoisi = r.data.id; S.postes.push({ id: r.data.id, titre: vide('nouveau_poste'), statut: 'Pourvu' });
+    }
+    // La fonction affichée suit le poste choisi (l’ancienne fonction en texte reste si aucun poste n’est choisi).
+    if (posteChoisi) ligne.fonction = parId(S.postes, posteChoisi)?.titre || null;
+    const { data: enr, error } = nouveau ? await sb.from('personnes').insert(ligne).select('id').single() : await sb.from('personnes').update(ligne).eq('id', p.id).select('id').single();
     if (error) { toast('Échec : ' + error.message); return false; }
+    // Titulaire : on remplace seulement le poste affiché ici; les autres postes de la personne ne bougent pas.
+    const ancien = posteAffiche, idPers = enr?.id || p.id;
+    if (posteChoisi !== ancien) {
+      if (ancien) {
+        await sb.from('postes_titulaires').delete().eq('poste_id', ancien).eq('personne_id', idPers);
+        if (!S.titulaires.some(t => t.poste_id === ancien && t.personne_id !== idPers)) await sb.from('postes').update({ statut: 'Vacant' }).eq('id', ancien);
+      }
+      if (posteChoisi) {
+        const r = await sb.from('postes_titulaires').insert({ poste_id: posteChoisi, personne_id: idPers });
+        if (r.error) { toast('Personne enregistrée, mais pas son poste : ' + r.error.message); rafraichir(); return; }
+        if (parId(S.postes, posteChoisi)?.statut !== 'Pourvu') await sb.from('postes').update({ statut: 'Pourvu' }).eq('id', posteChoisi);
+      }
+    }
     toast('Enregistré'); rafraichir();
   });
+  // Poste : ceux de la compagnie choisie, groupés par unité, le département choisi en premier.
+  const autres = postesDe(p).slice(1), posteAffiche = postesDe(p)[0]?.id || null;
+  const selP = d.querySelector('[name=poste_id]'), champNP = d.querySelector('.champ-nouveau-poste'), aideP = d.querySelector('.aide-poste');
+  const majPostes = () => {
+    const cie = selC.value, dep = selD.value, garde = selP.value || posteAffiche;
+    const perimetre = cie && cie !== '__nouvelle' ? L9.sousUnites(cie) : null;
+    const liste = S.postes.filter(x => x.id === garde || (cie === '__nouvelle' ? false : !perimetre || perimetre.has(x.unite_id) || !x.unite_id));
+    const groupes = {};
+    liste.forEach(x => { (groupes[x.unite_id || ''] ||= []).push(x); });
+    const depU = dep ? L9.sousUnites(dep) : new Set();
+    const cles = Object.keys(groupes).sort((a, b) => (!a) - (!b) || depU.has(b) - depU.has(a) || (parId(S.unites, a)?.nom || '').localeCompare(parId(S.unites, b)?.nom || '', 'fr'));
+    const lib = x => `${x.titre}${x.statut === 'Vacant' ? ' (vacant)' : ''}`;
+    selP.innerHTML = `<option value="">— Aucun</option>${cles.map(k => `<optgroup label="${esc(k ? parId(S.unites, k)?.nom || 'Unité retirée' : 'Sans unité')}">${groupes[k].sort((a, b) => a.titre.localeCompare(b.titre, 'fr')).map(x => `<option value="${x.id}" ${x.id === garde ? 'selected' : ''}>${esc(lib(x))}</option>`).join('')}</optgroup>`).join('')}<option value="__nouveau" ${garde === '__nouveau' ? 'selected' : ''}>＋ Nouveau poste…</option>`;
+    majAidePoste();
+  };
+  const majAidePoste = () => {
+    const nouv = selP.value === '__nouveau'; champNP.hidden = !nouv;
+    const msgs = [];
+    if (nouv) msgs.push(`Le poste sera créé dans ${esc(parId(S.unites, selD.value)?.nom || parId(S.unites, selC.value)?.nom || 'l’organigramme, sans unité')}.`);
+    if (autres.length) msgs.push(`Aussi titulaire de : ${autres.map(x => esc(x.titre)).join(', ')} (modifiable dans l’organigramme).`);
+    if (!selP.value && !posteAffiche && p.fonction) msgs.push(`Ancienne fonction : « ${esc(p.fonction)} ». Choisis le poste correspondant ou « ＋ Nouveau poste… ».`);
+    aideP.innerHTML = msgs.join('<br>'); aideP.hidden = !msgs.length;
+  };
+  // Choisir un poste remplit le département s’il est vide (le poste appartient à une unité de l’organigramme).
+  selP.onchange = () => {
+    const x = parId(S.postes, selP.value), u = x && parId(S.unites, x.unite_id);
+    if (u && u.categorie !== 'Organisation' && !selD.value && [...selD.options].some(o => o.value === u.id)) selD.value = u.id;
+    majAidePoste(); if (selP.value === '__nouveau') champNP.querySelector('input').focus();
+  };
   // Département : seulement ceux de la compagnie choisie (sinon tous).
   const selC = d.querySelector('[name=compagnie_id]'), selD = d.querySelector('[name=departement_id]'), champN = d.querySelector('.champ-nouvelle-cie');
   const majDeps = () => {
@@ -1521,9 +1574,12 @@ function ouvrirPersonne(p) {
     const garde = selD.value || p.departement_id;
     const deps = S.unites.filter(u => u.categorie !== 'Organisation' && (!cie || nouvelle ? !nouvelle : L9.compagnieDe(u.id)?.id === cie)).sort((a, b) => a.nom.localeCompare(b.nom, 'fr'));
     selD.innerHTML = opts(deps, deps.some(u => u.id === garde) ? garde : null);
+    majPostes();
   };
-  selC.onchange = majDeps; majDeps();
+  selC.onchange = majDeps; selD.onchange = majPostes; majDeps();
 }
+// Postes d’une personne dans l’organigramme (le premier est celui affiché dans sa fiche).
+function postesDe(p) { return p?.id ? S.titulaires.filter(t => t.personne_id === p.id).map(t => parId(S.postes, t.poste_id)).filter(Boolean) : []; }
 function ouvrirDomaine(dm) {
   const nouveau = !dm.id;
   dialogue(`<form>
