@@ -4,6 +4,7 @@ import { installerModules } from './modules.js';
 import { installerExtras } from './extras.js';
 import { installerLot5 } from './lot5.js';
 import { installerLot6 } from './lot6.js';
+import { installerLot7 } from './lot7.js';
 
 const sb = createClient(SUPABASE_URL, SUPABASE_KEY, { auth: { persistSession: true, autoRefreshToken: true } });
 
@@ -21,7 +22,7 @@ const TYPES_INTERRUPTION = ['SAP / EWM', 'Équipement / RF', 'Données / rapport
 const S = { session: null, actions: [], projets: [], domaines: [], personnes: [], vue: 'accueil', filtres: {}, agendaPasses: false,
   vehicules: [], entretiens: [], interventions: [], intEnt: [], livres: [], achats: [], abonnements: [], trajets: [], routines: [], notes: [], budget: [], regles: [],
   unites: [], postes: [], titulaires: [], participations: [], reglages: [], journal: [], cahiers: [], push: [], file: [], horsLigne: null };
-let M, X, L, L6; // modules, installés après la définition des fonctions communes
+let M, X, L, L6, L7; // modules, installés après la définition des fonctions communes
 
 const MODULES = [
   { k: 'accueil', l: 'Accueil', g: 'Pilotage', principal: true },
@@ -29,6 +30,7 @@ const MODULES = [
   { k: 'projets', l: 'Projets', g: 'Pilotage', principal: true },
   { k: 'actions', l: 'Actions', g: 'Pilotage', principal: true },
   { k: 'delegations', l: 'Délégations', g: 'Pilotage' },
+  { k: 'engagements', l: 'Engagements', g: 'Pilotage' },
   { k: 'revue', l: 'Revue hebdo', g: 'Pilotage' },
   { k: 'transports', l: 'Transports', g: 'Vie' },
   { k: 'vehicules', l: 'Véhicules', g: 'Vie' },
@@ -106,6 +108,7 @@ const ICONES = {
   carnet: '<path d="M6 3h11v18H6zM9 7h5M9 11h5M3 6h3M3 10h3M3 14h3" fill="none" stroke="currentColor" stroke-width="2"/>',
   organigramme: '<rect x="9" y="3" width="6" height="5" fill="none" stroke="currentColor" stroke-width="2"/><rect x="3" y="16" width="6" height="5" fill="none" stroke="currentColor" stroke-width="2"/><rect x="15" y="16" width="6" height="5" fill="none" stroke="currentColor" stroke-width="2"/><path d="M12 8v4M6 16v-4h12v4" fill="none" stroke="currentColor" stroke-width="2"/>',
   delegations: '<circle cx="8" cy="8" r="3" fill="none" stroke="currentColor" stroke-width="2"/><path d="M3 19c0-3 2.2-5 5-5s5 2 5 5M14 9h7M18 6l3 3-3 3" fill="none" stroke="currentColor" stroke-width="2"/>',
+  engagements: '<path d="M4 5h16v11H10l-5 4v-4H4z" fill="none" stroke="currentColor" stroke-width="2"/><path d="m8.5 10.5 2.5 2.5 4.5-4.5" fill="none" stroke="currentColor" stroke-width="2"/>',
   reglages: '<circle cx="12" cy="12" r="3" fill="none" stroke="currentColor" stroke-width="2"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M4.9 19.1 7 17M17 7l2.1-2.1" stroke="currentColor" stroke-width="2"/>',
   moins: '<circle cx="5" cy="12" r="2" fill="currentColor"/><circle cx="12" cy="12" r="2" fill="currentColor"/><circle cx="19" cy="12" r="2" fill="currentColor"/>',
 };
@@ -216,7 +219,7 @@ function rendre() {
   $('#deco').onclick = async () => { await sb.auth.signOut(); };
   horloge();
   const v = document.createElement('div'); $('#vue').appendChild(v);
-  ({ accueil: vueAccueil, agenda: vueAgenda, projets: vueProjets, projet: vueProjet, actions: vueActions, reperes: vueReperes, ...M.vues, ...X.vues,
+  ({ accueil: vueAccueil, agenda: vueAgenda, projets: vueProjets, projet: vueProjet, actions: vueActions, reperes: vueReperes, ...M.vues, ...X.vues, ...L7.vues,
     reglages: async v => { await X.vues.reglages(v); L.complementReglages(v); } }[S.vue] || vueAccueil)(v);
   brancherLignes(v);
 }
@@ -281,7 +284,7 @@ function calendrierDe(a) {
   const c = cals[i];
   return { nom: c?.nom || a.source_externe || 'Calendrier', couleur: c?.couleur || COULEURS_CAL[Math.max(i, 0) % COULEURS_CAL.length][1] };
 }
-function ligne(a, { montrerProjet = true, heureSeule = false } = {}) {
+function ligne(a, { montrerProjet = true, heureSeule = false, montrerPromis = true } = {}) {
   const p = parId(S.projets, a.projet_id);
   const evt = a.type === 'Événement';
   // Un événement passé ou terminé est grisé (pas barré) : il a eu lieu.
@@ -295,7 +298,9 @@ function ligne(a, { montrerProjet = true, heureSeule = false } = {}) {
   if (a.relance) meta.push(`<span>Relance ${esc(jourDate(a.relance))}</span>`);
   const deleg = parId(S.personnes, a.delegue_a_id); if (deleg) meta.push(`<span>Délégué à ${esc(deleg.nom)}</span>`);
   const att = parId(S.personnes, a.en_attente_de_id); if (att) meta.push(`<span>Attend ${esc(att.nom)}</span>`);
-  if (a.interruption) meta.push(`<span class="pastille interruption" title="Interruption de support opérationnel">🚨 ${esc([a.interruption_dept, a.interruption_type].filter(Boolean).join(' · ') || 'interruption')}</span>${a.demandeur ? `<span>Pour ${esc(a.demandeur)}</span>` : ''}`);
+  const prom = montrerPromis && parId(S.personnes, a.promis_a_id); if (prom) meta.push(`<span class="promis">🤝 Promis à ${esc(prom.nom)}</span>`);
+  else if (montrerPromis && a.interruption && a.demandeur && ouvert(a)) meta.push(`<span class="promis">🤝 Promis à ${esc(a.demandeur)}</span>`);
+  if (a.interruption) meta.push(`<span class="pastille interruption" title="Interruption de support opérationnel">🚨 ${esc([a.interruption_dept, a.interruption_type].filter(Boolean).join(' · ') || 'interruption')}</span>${a.demandeur && !ouvert(a) ? `<span>Pour ${esc(a.demandeur)}</span>` : ''}`);
   else if (a.sur_le_fly) meta.push(`<span class="pastille fly" title="Faite sur le fly">⚡ sur le fly</span>`);
   if (a.motif_blocage) meta.push(`<span>${esc(a.motif_blocage)}</span>`);
   if (a.recurrence?.type) meta.push(a.recurrence.sautee ? '<span class="pastille recur">🔁 sautée</span>' : `<span class="pastille recur" title="${esc(libRecurrence(a.recurrence))}">🔁 ${esc(libRecurrence(a.recurrence, { court: true }))}</span>`);
@@ -427,11 +432,11 @@ const triDate = (a, b) => (a.planifie_debut || '').localeCompare(b.planifie_debu
 const ENCADRES = {
   evenements: 'Aujourd’hui (événements et charge)', conflits: 'Conflits famille et travail', compteurs: 'Compteurs',
   plan: 'Aujourd’hui, je fais', habitudes: 'Habitudes du jour', 'en-cours': 'En cours', planifiees: 'Tâches planifiées · 7 jours',
-  'a-completer': 'À compléter', backlog: 'Backlog et engagements', transports: 'Transports du jour', surveiller: 'À surveiller',
+  'a-completer': 'À compléter', backlog: 'Backlog et engagements', transports: 'Transports du jour', promesses: 'Promesses à tenir', surveiller: 'À surveiller',
   blocages: 'Blocages et relances', projets: 'Projets en mouvement (Kanban)' };
 const ZONES = { haut: 'Haut · pleine largeur', gauche: 'Colonne de gauche', droite: 'Colonne de droite', bas: 'Bas · pleine largeur' };
 const DISPO_DEFAUT = { haut: ['evenements', 'conflits', 'compteurs'], gauche: ['plan', 'habitudes', 'en-cours', 'planifiees', 'a-completer', 'backlog'],
-  droite: ['transports', 'surveiller', 'blocages'], bas: ['projets'] };
+  droite: ['transports', 'promesses', 'surveiller', 'blocages'], bas: ['projets'] };
 function dispositionAccueil() {
   const r = S.reglages.find(x => x.cle === 'disposition_accueil')?.valeur;
   const d = { haut: [], gauche: [], droite: [], bas: [] }, vus = new Set();
@@ -598,6 +603,7 @@ function vueAccueil(v) {
     backlog: `<section class="bloc"><header><h2>Backlog et engagements <span class="nb">${backlog.length}</span></h2></header>
       ${liste(backlog, 'Backlog vide.')}</section>`,
     transports: M.encartTransports(),
+    promesses: L7.encartPromesses(),
     surveiller: M.encartSurveiller(),
     blocages: bloques.length ? `<section class="bloc"><header><h2>Blocages et relances <span class="nb">${bloques.length}</span></h2></header>${liste(bloques, '')}</section>` : '',
     projets: kanbanProjets(actifs),
@@ -606,7 +612,7 @@ function vueAccueil(v) {
   const zone = (z, cls) => `<div class="zone-accueil ${cls}" data-zone="${z}" data-libelle="${esc(ZONES[z])}">${dispo[z].map(k => encadre(k, B[k])).join('')}</div>`;
 
   // Bandeaux contextuels fixés en haut (non déplaçables) : mode hors travail, fermer ma journée, pneus, événements passés.
-  v.innerHTML = `${L6.bandeauMode()}${L6.blocFermeture()}
+  v.innerHTML = `${L7.bandeauReprise()}${L6.bandeauMode()}${L6.blocFermeture()}
     ${M.bandeauRevue()}
     ${L.encartPneus()}
     ${passes.length ? `<div class="bloc signal" style="margin-bottom:22px"><header><h2>${passes.length} événement${passes.length > 1 ? 's' : ''} passé${passes.length > 1 ? 's' : ''} encore ouvert${passes.length > 1 ? 's' : ''}</h2>
@@ -621,6 +627,7 @@ function vueAccueil(v) {
   v.querySelectorAll('[data-aller]').forEach(b => b.onclick = () => { S.vue = b.dataset.aller; rendre(); });
   L.brancherConflits(v);
   L6.brancher(v);
+  L7.brancher(v);
   v.querySelector('.bloc.plan-du-jour')?.setAttribute('data-glisser', '');
   if (!S.reorg) brancherGlisser(v);
   brancherReorg(v);
@@ -896,6 +903,8 @@ function ouvrirCapture() {
       <div class="types-rapides" role="radiogroup" aria-label="Type">${[...TYPES, 'Achat', 'Note'].map((t, i) => `<label><input type="radio" name="type" value="${t}" ${i === 0 ? 'checked' : ''}><span>${t}</span></label>`).join('')}</div>
       <div class="champ quand-capture" data-pour="action"><span>Quand (facultatif)</span><div class="date-heure"><input type="date" name="quand_jour" aria-label="Date"><input type="time" name="quand_heure" aria-label="Heure (facultative)" title="Heure (facultative)"></div></div>
       <label class="champ"><span>Projet</span><select name="projet_id">${opts(S.projets.filter(p => p.statut === 'Actif'), null, { vide: 'Aucun pour l’instant', lib: 'titre' })}</select></label>
+      <label class="champ" data-pour="tache"><span>Promis à (facultatif)</span><select name="promis_a_id">${opts(S.personnes, null, { vide: 'Personne' })}</select></label>
+      <label class="champ cap-promis-pour" data-pour="tache"><span>Promis pour le</span><input type="date" name="promis_pour"></label>
 
       <details class="champ large details-capture" data-pour="action" ${deplie ? 'open' : ''}><summary>Plus de détails <span class="aide">domaine, périmètre, contexte, suivi, répétition</span></summary>
         <div class="corps-details">
@@ -944,6 +953,7 @@ function ouvrirCapture() {
     rafraichir();
   });
   brancherCapture(d);
+  L7.brancherDictee(d);
 }
 // Construit la ligne à insérer à partir du formulaire de capture (détails facultatifs).
 function ligneCapture(fd, projet) {
@@ -957,6 +967,13 @@ function ligneCapture(fd, projet) {
     Object.assign(ligne, { hors_projet: !projet && fd.get('hors_projet') === 'on', dans_perimetre: perim === '' || perim == null ? null : perim === 'true',
       delegue_a_id: perim === 'false' ? vide('delegue_a_id') : null, en_attente_de_id: vide('en_attente_de_id'), relance: vide('relance'), contexte: fd.getAll('contexte') });
     if (fd.get('plan_du_jour') === 'on') ligne.plan_du_jour = aujourdhui();
+    // Promesse : à qui et pour quand (la date promise devient l’échéance).
+    const promis = vide('promis_a_id');
+    if (promis) {
+      if (!L7.colonnePromis()) return { erreur: 'Promis à indisponible : exécute d’abord la migration SQL des engagements' };
+      ligne.promis_a_id = promis;
+      if (fd.get('promis_pour')) ligne.echeance = fd.get('promis_pour');
+    }
   }
   // Statut : choisi, sinon automatique.
   const force = tache ? fd.get('statut') : '';
@@ -967,7 +984,7 @@ function ligneCapture(fd, projet) {
     if (rec.type === 'semaine' && rec.base === 'calendrier' && !rec.jours.length) return { erreur: 'Répétition : coche au moins un jour' };
     if (!colonneRecurrence()) return { erreur: 'Répétition indisponible : exécute d’abord la migration SQL des tâches récurrentes' };
     ligne.recurrence = rec;
-    if (!ligne.planifie_debut) ligne.echeance = premiereOccurrence(rec);
+    if (!ligne.planifie_debut && !ligne.echeance) ligne.echeance = premiereOccurrence(rec);
   }
   return { ligne };
 }
@@ -978,7 +995,7 @@ function brancherCapture(d) {
   const maj = () => {
     const fd = new FormData(f), type = fd.get('type'), action = !['Achat', 'Note'].includes(type), tache = action && type !== 'Événement';
     d.querySelectorAll('[data-pour="action"]').forEach(e => { e.hidden = !action; });
-    d.querySelectorAll('[data-pour="tache"]').forEach(e => { e.hidden = !tache || (e.classList.contains('cap-delegue') && fd.get('dans_perimetre') !== 'false'); });
+    d.querySelectorAll('[data-pour="tache"]').forEach(e => { e.hidden = !tache || (e.classList.contains('cap-delegue') && fd.get('dans_perimetre') !== 'false') || (e.classList.contains('cap-promis-pour') && !fd.get('promis_a_id')); });
     // Avec un projet : domaine hérité (mention) et « Hors projet » sans objet.
     const pid = fd.get('projet_id'), dom = domaineProjet(pid);
     d.querySelector('.cap-domaine').hidden = !!dom;
@@ -1011,18 +1028,25 @@ function ouvrirSurLeFly({ interruption = false } = {}) {
     <div class="tete-d"><h2 id="titreFly">⚡ Fait sur le fly</h2><div><button type="button" class="btn discret" id="histFly">Historique</button><button type="button" class="btn discret" data-fermer aria-label="Fermer">✕</button></div></div>
     <div class="corps">
       <label class="champ large bascule-interruption"><input type="checkbox" name="interruption" ${interruption ? 'checked' : ''}><span>🚨 C’est une interruption (support opérationnel)</span></label>
-      <label class="champ large"><span>Qu’as-tu fait?</span><input name="titre" class="titre-saisie" required autofocus autocomplete="off" placeholder="Ex. Débloqué une commande avec la réception"></label>
+      ${L7.htmlReprise()}
+      <div class="champ large champ-issue"><span>Issue</span><div class="types-rapides" role="radiogroup" aria-label="Issue de l’interruption">
+        <label><input type="radio" name="issue" value="regle" checked><span>Réglé maintenant</span></label>
+        <label><input type="radio" name="issue" value="plus_tard"><span>À faire plus tard (je m’engage)</span></label></div></div>
+      <label class="champ large"><span id="libTitreFly">Qu’as-tu fait?</span><input name="titre" class="titre-saisie" required autofocus autocomplete="off" placeholder="Ex. Débloqué une commande avec la réception"></label>
       <div class="champs-interruption">
         <div class="champ large"><span>Département</span>${puces('interruption_dept', DEPTS_INTERRUPTION)}</div>
         <div class="champ large"><span>Type de demande</span>${puces('interruption_type', TYPES_INTERRUPTION)}</div>
         <label class="champ large"><span>Demandé par (facultatif)</span><input name="demandeur" list="listeDemandeurs" autocomplete="off" placeholder="Ex. chef d’équipe expédition, soir">
           <datalist id="listeDemandeurs">${[...new Set([...S.personnes.map(p => p.nom), ...S.actions.map(a => a.demandeur)].filter(Boolean))].sort().map(n => `<option value="${esc(n)}">`).join('')}</datalist></label>
+        <div class="champ large champ-promis-pour"><span>Promis pour le</span><div class="rangee-dates"><input type="date" name="promis_pour" aria-label="Date promise">
+          <button type="button" class="btn discret" data-date="0">Aujourd’hui</button><button type="button" class="btn discret" data-date="1">Demain</button><button type="button" class="btn discret" data-date="ven">Vendredi</button></div>
+          <p class="aide" style="margin:4px 0 0">Si le demandeur est dans ton répertoire, la promesse lui est reliée dans Engagements.</p></div>
       </div>
-      <div class="champ large"><span>Temps passé</span><div class="types-rapides" role="radiogroup" aria-label="Temps passé">${DUREES.map(d => `<label><input type="radio" name="duree" value="${d}" ${d === 15 ? 'checked' : ''}><span>${d < 60 ? d + ' min' : '1 h'}</span></label>`).join('')}<label><input type="radio" name="duree" value="autre"><span>Autre</span></label></div>
+      <div class="champ large champ-duree"><span>Temps passé</span><div class="types-rapides" role="radiogroup" aria-label="Temps passé">${DUREES.map(d => `<label><input type="radio" name="duree" value="${d}" ${d === 15 ? 'checked' : ''}><span>${d < 60 ? d + ' min' : '1 h'}</span></label>`).join('')}<label><input type="radio" name="duree" value="autre"><span>Autre</span></label></div>
         <input type="number" name="duree_autre" min="1" step="1" placeholder="Minutes" class="duree-autre" aria-label="Autre durée en minutes"></div>
       <label class="champ domaine-fly"><span>Domaine</span><select name="domaine_id">${domaines.map(d => `<option value="${d.id}" ${d.id === defaut ? 'selected' : ''}>${esc(d.nom)}</option>`).join('')}</select></label>
       <label class="champ"><span>Projet (facultatif)</span><select name="projet_id">${opts(S.projets.filter(p => p.statut === 'Actif'), null, { vide: 'Hors projet', lib: 'titre' })}</select></label>
-      <label class="champ"><span>Terminé à</span><input type="datetime-local" name="quand" value="${esc(maintenant)}"></label>
+      <label class="champ champ-quand"><span>Terminé à</span><input type="datetime-local" name="quand" value="${esc(maintenant)}"></label>
       <label class="champ large"><span id="libNotesFly">Pour qui / notes (facultatif)</span><input name="notes" autocomplete="off" placeholder="Ex. demande de Rémi"></label>
     </div>
     <div class="pied"><button type="button" class="btn" data-fermer>Annuler</button><button type="submit" class="btn primaire">Consigner</button></div>
@@ -1032,31 +1056,61 @@ function ouvrirSurLeFly({ interruption = false } = {}) {
     const fin = depuisLocal(fd.get('quand')) || new Date().toISOString();
     const inter = fd.get('interruption') === 'on';
     if (inter && !fd.get('interruption_dept')) { toast('Choisis le département'); return false; }
-    const ligne = { titre: fd.get('titre').trim(), type: 'Tâche', statut: 'Terminé', sur_le_fly: true, realisee_le: fin,
-      duree_reelle_min: duree, domaine_id: domaineProjet(projet?.id) || (inter ? domTravail : fd.get('domaine_id')) || null, projet_id: projet?.id || null, hors_projet: !projet,
-      notes: (fd.get('notes') || '').trim() || null,
+    // « À faire plus tard » : la demande devient une tâche ouverte, promise au demandeur (pas encore faite, donc sans temps passé).
+    const plusTard = inter && fd.get('issue') === 'plus_tard';
+    const demandeur = inter ? ((fd.get('demandeur') || '').trim() || null) : null;
+    const commun = { titre: fd.get('titre').trim(), type: 'Tâche', domaine_id: domaineProjet(projet?.id) || (inter ? domTravail : fd.get('domaine_id')) || null,
+      projet_id: projet?.id || null, hors_projet: !projet, notes: (fd.get('notes') || '').trim() || null,
       interruption: inter, interruption_dept: inter ? fd.get('interruption_dept') : null,
-      interruption_type: inter ? (fd.get('interruption_type') || null) : null, demandeur: inter ? ((fd.get('demandeur') || '').trim() || null) : null };
+      interruption_type: inter ? (fd.get('interruption_type') || null) : null, demandeur };
+    const ligne = plusTard
+      ? { ...commun, statut: 'À faire', echeance: fd.get('promis_pour') || null, ...(L7.colonnePromis() ? { promis_a_id: L7.personneParNom(demandeur)?.id || null } : {}) }
+      : { ...commun, statut: 'Terminé', sur_le_fly: true, realisee_le: fin, duree_reelle_min: duree };
+    // Où j’étais rendu : enregistré d’abord, pour ne rien perdre même si l’envoi de l’interruption est mis en file.
+    const reprise = inter ? await L7.enregistrerReprise(fd) : null;
     if (!navigator.onLine) { X.mettreEnFile('actions', ligne); return; }
     const { error } = await sb.from('actions').insert(ligne);
     if (error) { if (/fetch|network/i.test(error.message)) { X.mettreEnFile('actions', ligne); return; } toast('Échec : ' + error.message); return false; }
-    toast(inter ? 'Interruption consignée 🚨' : 'Consigné ⚡'); rafraichir();
+    const quoi = !inter ? 'Consigné ⚡' : plusTard ? `Promesse notée 🤝${demandeur ? ' · ' + demandeur : ''}` : 'Interruption consignée 🚨';
+    toast(reprise ? `${quoi} · Reprends : ${reprise.geste || reprise.a.titre}` : quoi); rafraichir();
   });
   // Mode interruption : champs dédiés, domaine Travail imposé.
   const caseInt = d.querySelector('[name=interruption]'), blocInt = d.querySelector('.champs-interruption');
+  const blocRep = d.querySelector('.bloc-reprise'), champIssue = d.querySelector('.champ-issue');
   const modeInt = () => {
     const on = caseInt.checked;
-    blocInt.hidden = !on;
+    blocInt.hidden = !on; blocRep.hidden = !on; champIssue.hidden = !on;
     d.querySelector('#titreFly').textContent = on ? '🚨 Interruption' : '⚡ Fait sur le fly';
     d.querySelector('#libNotesFly').textContent = on ? 'Notes (facultatif)' : 'Pour qui / notes (facultatif)';
     d.querySelector('[name=titre]').placeholder = on ? 'Ex. Débloqué un TU en expédition' : 'Ex. Débloqué une commande avec la réception';
     d.querySelector('.domaine-fly').hidden = on || !!domaineProjet(d.querySelector('[name=projet_id]').value);
+    majIssue();
   };
+  // Issue : réglé maintenant (consigné comme fait) ou à faire plus tard (tâche ouverte promise au demandeur).
+  function majIssue() {
+    const plusTard = caseInt.checked && d.querySelector('[name=issue]:checked')?.value === 'plus_tard';
+    d.querySelector('.champ-promis-pour').hidden = !plusTard;
+    d.querySelector('.champ-duree').hidden = plusTard;
+    d.querySelector('.champ-quand').hidden = plusTard;
+    d.querySelector('#libTitreFly').textContent = plusTard ? 'Qu’est-ce qu’on te demande?' : 'Qu’as-tu fait?';
+    if (caseInt.checked) d.querySelector('[name=titre]').placeholder = plusTard ? 'Ex. Sortir le rapport des retours pour l’expédition' : 'Ex. Débloqué un TU en expédition';
+    d.querySelector('[type=submit]').textContent = plusTard ? 'Noter la promesse' : 'Consigner';
+  }
+  d.querySelectorAll('[name=issue]').forEach(r => r.onchange = majIssue);
+  d.querySelectorAll('[data-date]').forEach(b => b.onclick = () => {
+    const auj = aujourdhui(), k = b.dataset.date;
+    const ven = () => { const j = new Date(auj + 'T12:00:00').getDay(); return plusJours(auj, j < 5 ? 5 - j : 12 - j); }; // le vendredi : celui de la semaine prochaine
+    d.querySelector('[name=promis_pour]').value = k === 'ven' ? ven() : plusJours(auj, +k);
+  });
   caseInt.onchange = modeInt;
+  L7.brancherReprise(d);
+  L7.brancherDictee(d);
   d.querySelector('#histFly').onclick = () => { d.close(); S.vue = 'actions'; S.filtres = { type: 'fly' }; history.replaceState(null, '', '#actions'); rendre(); window.scrollTo(0, 0); };
   const selPF = d.querySelector('[name=projet_id]'), champDF = d.querySelector('.domaine-fly');
   selPF.addEventListener('change', () => { champDF.hidden = caseInt.checked || !!domaineProjet(selPF.value); });
   modeInt();
+  const champGeste = d.querySelector('[name=reprise_geste]');
+  if (caseInt.checked && champGeste && !champGeste.closest('.champ').hidden) { champGeste.focus(); champGeste.select(); }
   const autre = d.querySelector('.duree-autre');
   autre.hidden = true;
   d.querySelectorAll('input[name=duree]').forEach(r => r.onchange = () => { autre.hidden = d.querySelector('input[name=duree]:checked').value !== 'autre'; if (!autre.hidden) autre.focus(); });
@@ -1270,6 +1324,7 @@ function ouvrirAction(a) {
         <label class="champ"><span>Dans mon périmètre?</span><select name="dans_perimetre"><option value="">—</option><option value="true" ${a.dans_perimetre === true ? 'selected' : ''}>Oui</option><option value="false" ${a.dans_perimetre === false || (a.dans_perimetre == null && a.delegue_a_id) ? 'selected' : ''}>Non, je délègue</option></select></label>
         <label class="champ champ-delegue"><span>Délégué à</span><select name="delegue_a_id">${opts(S.personnes, a.delegue_a_id)}</select></label>
         <label class="champ"><span>En attente de</span><select name="en_attente_de_id">${opts(S.personnes, a.en_attente_de_id)}</select></label>
+        <label class="champ"><span>Promis à</span><select name="promis_a_id">${opts(S.personnes, a.promis_a_id)}</select></label>
         <label class="champ large"><span>Motif du blocage</span><input name="motif_blocage" value="${esc(a.motif_blocage)}"></label>
         <div class="champ large"><span>Contexte</span><div class="types-rapides">${CONTEXTES.map(c => `<label><input type="checkbox" name="contexte" value="${c}" ${(a.contexte || []).includes(c) ? 'checked' : ''}><span>${c}</span></label>`).join('')}</div></div>
       </fieldset>
@@ -1314,6 +1369,9 @@ function ouvrirAction(a) {
       demande_recue_le: vide('demande_recue_le'), emplacement: vide('emplacement'), departement: vide('departement'),
       compagnie: vide('compagnie'), probleme_signale: vide('probleme_signale'), travaux_realises: vide('travaux_realises'),
     };
+    // Promis à : colonne créée par la migration des engagements.
+    if (L7.colonnePromis()) ligne.promis_a_id = vide('promis_a_id');
+    else if (vide('promis_a_id')) { toast('Promis à indisponible : exécute d’abord la migration SQL des engagements'); return false; }
     if (ligne.statut !== 'Terminé') ligne.realisee_le = null;
     else if (a.statut !== 'Terminé') ligne.realisee_le = a.realisee_le || new Date().toISOString();
     // Répétition : la règle voyage avec chaque occurrence (colonne recurrence, créée par la migration SQL).
@@ -1493,17 +1551,21 @@ async function demarrer(session) {
 }
 
 M = installerModules({ sb, S, $, esc, toast, parId, aujourdhui, plusJours, jourDate, jourLong, cleJour, fmtHeure, versLocal, depuisLocal,
-  dialogue, rafraichir, rendre: () => rendre(), liste, ouvert, enRetard, manquants, carteProjet, ouvrirPersonne, ouvrirAction, MODULES, ico, blocBienEtre: () => L6.blocInterruptions() + L6.blocRevue(),
+  dialogue, rafraichir, rendre: () => rendre(), liste, ouvert, enRetard, manquants, carteProjet, ouvrirPersonne, ouvrirAction, MODULES, ico, blocBienEtre: () => L6.blocInterruptions() + L7.blocRevue() + L6.blocRevue(),
   conflitDe: t => L.conflitDe(t), agendaDe: t => L.agendaDe(t), moiTransport: () => L.moi(), encartPneus: () => L.encartPneus(), creerActionsDepuisNote: (n, txt) => L.creerActionsDepuisNote(n, txt), SUPA_URL: SUPABASE_URL });
 
 L = installerLot5({ sb, S, $, esc, toast, parId, aujourdhui, plusJours, jourDate, jourLong, cleJour, fmtHeure, dialogue, rafraichir, ouvert,
-  rendre: () => rendre(), ouvrirAction, ouvrirPersonne, ficheNote: n => M.ficheNote(n), ficheAchat: a => M.ficheAchat(a), meteo: () => METEO.donnees });
+  rendre: () => rendre(), ouvrirAction, ouvrirPersonne, ficheNote: n => M.ficheNote(n), ficheAchat: a => M.ficheAchat(a), meteo: () => METEO.donnees,
+  personneParNom: n => L7.personneParNom(n), colonnePromis: () => L7.colonnePromis() });
 
 X = installerExtras({ sb, S, $, esc, toast, parId, aujourdhui, plusJours, jourDate, cleJour, dialogue, rafraichir, liste, ouvert, COULEURS_CAL,
   visible: a => L6.visible(a), boutonPlacer: () => L6.boutonPlacer() });
 
 L6 = installerLot6({ sb, S, esc, toast, parId, aujourdhui, plusJours, jourDate, cleJour, fmtHeure, dialogue, rafraichir, rendre: () => rendre(), ouvert, depuisLocal,
   charge: () => L.chargeDuJour(), minutesLocales: d => L.minutesLocales(d) });
+
+L7 = installerLot7({ sb, S, esc, toast, parId, aujourdhui, plusJours, jourDate, cleJour, rafraichir, rendre: () => rendre(), liste, ouvert, enRetard,
+  ouvrirAction, ficheNote: n => M.ficheNote(n), visible: a => L6.visible(a) });
 window.addEventListener('hashchange', () => {
   if (!S.session) return;
   if (location.hash === '#fermer') { history.replaceState(null, '', location.pathname); L6.ouvrirFermeture(); return; }

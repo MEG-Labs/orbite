@@ -109,7 +109,7 @@ export function installerLot5(c) {
   }
 
   /* ================= 4. Compte rendu depuis un événement ================= */
-  const MODELE_CR = 'Participants :\n\nPoints discutés :\n- \n\nDécisions :\n- \n\nActions (une par ligne, « - [ ] » devient une tâche) :\n- [ ] ';
+  const MODELE_CR = 'Participants :\n\nPoints discutés :\n- \n\nDécisions :\n- \n\nActions (une par ligne, « - [ ] » devient une tâche; finir par « @Nom » = je délègue, « → Nom » = je promets) :\n- [ ] ';
   function noteDe(a) { return S.notes.find(n => n.action_id === a.id); }
   async function compteRendu(a) {
     let n = noteDe(a);
@@ -127,12 +127,32 @@ export function installerLot5(c) {
     const lignes = (contenu || '').split('\n');
     const aCreer = lignes.map((l, i) => [i, l.match(/^\s*-\s*\[ \]\s*(.+\S)\s*$/)?.[1]]).filter(([, t]) => t);
     if (!aCreer.length) { toast('Aucune ligne « - [ ] … » à transformer'); return null; }
-    const { error } = await sb.from('actions').insert(aCreer.map(([, titre]) => ({ titre, type: 'Tâche', statut: 'À faire', projet_id: n.projet_id || null, domaine_id: n.domaine_id || null, note_id: n.id, hors_projet: !n.projet_id })));
+    // Fin de ligne « @Nom » : déléguée à cette personne. « → Nom » (ou « -> Nom ») : promise à cette personne.
+    // Un nom absent du répertoire reste dans le titre, pour ne rien perdre.
+    let inconnus = 0, promises = 0, deleguees = 0;
+    const promisOk = c.colonnePromis ? c.colonnePromis() : false;
+    const lignesActions = aCreer.map(([, brut]) => {
+      let titre = brut; const l = { type: 'Tâche', statut: 'À faire', projet_id: n.projet_id || null, domaine_id: n.domaine_id || null, note_id: n.id, hors_projet: !n.projet_id };
+      // Ordre libre en fin de ligne (« … @Rémi → Jean-Pierre » ou l’inverse) : chaque marque est lue une seule fois.
+      const vus = new Set();
+      const lire = () => {
+        const pr = !vus.has('pr') && promisOk && titre.match(/^(.*\S)\s*(?:→|->)\s*([^@→]+?)\s*$/);
+        if (pr) { vus.add('pr'); const p = c.personneParNom?.(pr[2]); if (p) { l.promis_a_id = p.id; titre = pr[1]; promises++; } else inconnus++; return !!p; }
+        const dl = !vus.has('dl') && titre.match(/^(.*\S)\s+@([^@→]+?)\s*$/);
+        if (dl) { vus.add('dl'); const p = c.personneParNom?.(dl[2]); if (p) { l.delegue_a_id = p.id; l.dans_perimetre = false; titre = dl[1]; deleguees++; } else inconnus++; return !!p; }
+        return false;
+      };
+      while (lire()) { /* une marque retirée peut en découvrir une autre */ }
+      return { ...l, titre };
+    });
+    const { error } = await sb.from('actions').insert(lignesActions);
     if (error) { toast('Échec : ' + error.message); return null; }
     aCreer.forEach(([i]) => { lignes[i] = lignes[i].replace('[ ]', '[→]'); });
     const nouveau = lignes.join('\n');
     await sb.from('notes').update({ contenu: nouveau }).eq('id', n.id);
-    toast(`${aCreer.length} tâche${aCreer.length > 1 ? 's' : ''} créée${aCreer.length > 1 ? 's' : ''}`);
+    const details = [promises && `${promises} promise${promises > 1 ? 's' : ''}`, deleguees && `${deleguees} déléguée${deleguees > 1 ? 's' : ''}`,
+      inconnus && `${inconnus} nom${inconnus > 1 ? 's' : ''} absent${inconnus > 1 ? 's' : ''} du répertoire, gardé${inconnus > 1 ? 's' : ''} dans le titre`].filter(Boolean).join(', ');
+    toast(`${aCreer.length} tâche${aCreer.length > 1 ? 's' : ''} créée${aCreer.length > 1 ? 's' : ''}${details ? ' · ' + details : ''}`);
     return nouveau;
   }
 

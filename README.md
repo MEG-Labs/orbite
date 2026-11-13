@@ -15,6 +15,7 @@ Tâches, agenda, projets et organisation de la vie courante. Remplace l'espace N
 | | Projets | Avancement, santé, budget par lots (HT, TTC, réserve, engagé, payé), actions, parties prenantes, achats et notes liés |
 | | Actions | Recherche et filtres sur tout |
 | | Délégations | Ce que j'ai délégué ou attends, par personne, avec relance et courriel de suivi |
+| | Engagements | Ce que j'ai promis aux autres, par personne, avec courriel de suivi; registre des décisions tirées du Carnet |
 | | Revue hebdo | Captures, retards, projets sans suite, charge, abonnements, énergie et charge sur 7 jours, facteur d'estimation, checklist |
 | Vie | Transports | Trajets de la semaine, responsable et statut, génération de la semaine type |
 | | Véhicules | Programme d'entretien saisonnier, interventions, pneus montés, dépenses |
@@ -50,6 +51,14 @@ L'accueil commence par les **événements du jour** (avec la charge de 8 h à 17
 **Fait sur le fly** : le petit bouton ⚡ au-dessus du « + » (raccourci F) consigne une tâche faite sans être planifiée, déjà terminée, avec le temps passé, le domaine (Travail par défaut pendant les heures de travail) et une note. Colonne `actions.sur_le_fly`. Elles comptent comme victoires dans le rituel de fermeture, se filtrent dans Actions (« ⚡ Faites sur le fly ») et sont totalisées dans la revue hebdo.
 
 **Interruptions (support opérationnel)** : touche **I** (ou ⚡ puis « C'est une interruption ») pour consigner en deux clics une demande de support : département, type de demande, demandeur, temps passé. Domaine Travail imposé. Colonnes `actions.interruption`, `interruption_dept`, `interruption_type`, `demandeur`. La revue hebdo affiche le bloc « Interruptions · 7 jours » (par département, type et demandeur, comparé à la semaine précédente, % d'une semaine de travail selon le réglage `heures_travail_semaine`, 40 par défaut) avec un bouton « Copier le résumé » pour un courriel. Filtre « 🚨 Interruptions » dans Actions.
+
+**Ne plus perdre le fil** (lot 7, migration `supabase/migrations/20261113_engagements.sql`) :
+- **Promesses** : champ « Promis à » (colonne `actions.promis_a_id`, l'inverse de « Délégué à ») dans la capture rapide et la fiche d'une action; la date promise est l'échéance. Module **Engagements** › Mes promesses : par personne, en retard d'abord, avec « Me doit N » (ce que cette personne me doit, vers Délégations) et un courriel de suivi qui liste tout ce qui lui est dû. Encadré d'accueil « Promesses à tenir · 7 jours » et bloc 🤝 dans la revue hebdo (en retard, sans date, tenues).
+- **Reprise après interruption** : la touche **I** ouvre d'abord « Avant de répondre : tu étais rendu où? », avec la tâche en cours préremplie (sinon la première du plan du jour) et son prochain geste. À l'enregistrement, le geste est écrit sur la tâche et le réglage `reprise` = `{ action_id, le }` affiche le bandeau **↩ Reprendre** en tête de l'accueil, le jour même. « C'est repris » le retire et passe la tâche à « En cours ».
+- **Demandes reçues en passant** : dans une interruption, « À faire plus tard (je m'engage) » crée une tâche ouverte (pas de temps passé) avec la date promise (raccourcis Aujourd'hui, Demain, Vendredi). Si le demandeur correspond à une personne du répertoire (nom exact, ou prénom unique), elle est reliée par `promis_a_id`; sinon la promesse est suivie sous le nom saisi.
+- **Comptes rendus** : une ligne d'action « - [ ] … @Nom » est déléguée à cette personne, « - [ ] … → Nom » (ou `->`) lui est promise. Un nom absent du répertoire reste dans le titre.
+- **Registre des décisions** : Engagements › Décisions lit, sans copie, les notes de type Décision, les lignes « - » sous un titre « Décisions : » et toute ligne « Décision : … ». Filtre par projet et recherche; toucher une décision ouvre sa note.
+- **Dictée** : bouton micro sur les champs de saisie rapide quand le navigateur offre la reconnaissance vocale (Chrome sur Android et ordinateur), en français canadien. Le son est traité par le service de Chrome, comme la dictée du clavier.
 
 **Carnet et cahiers** : les notes peuvent être rangées dans des cahiers (table `cahiers`, colonne `notes.cahier_id`), facultatif. Un cahier ou une note peut être lié à un projet et à une tâche (`action_id`). La fiche d'un projet et la fiche d'une tâche affichent leurs notes et cahiers liés, avec « + Note » et « + Cahier » pour en créer directement.
 

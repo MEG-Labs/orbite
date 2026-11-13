@@ -816,3 +816,32 @@ dialog .corps { align-content: start; overflow-x: hidden; }
   dialog.petit form { height: auto; }
   dialog.petit .corps { flex: none; }
 }
+
+/* ---------- Lot 7 : engagements, reprise, décisions, dictée ---------- */
+/* Bandeau « Reprendre » : la seule chose qui compte au retour d’une interruption, donc en tête de l’accueil. */
+.bandeau-reprise { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-bottom: 14px; padding: 10px 12px;
+  background: color-mix(in srgb, var(--orange) 10%, var(--coque)); border: 1px solid color-mix(in srgb, var(--orange) 45%, transparent); border-left: 4px solid var(--orange); border-radius: var(--r); }
+.bandeau-reprise > div:first-child { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.bandeau-reprise b { font: 700 13px var(--mono); color: var(--orange-pale); }
+.bandeau-reprise .titre-reprise { font-size: 15px; color: var(--craie); }
+.bandeau-reprise .geste-reprise { font-size: 13.5px; color: var(--craie); opacity: .85; }
+/* Bloc « tu étais rendu où? » du dialogue d’interruption. */
+fieldset.bloc-reprise { border: 1px solid color-mix(in srgb, var(--orange) 40%, transparent); border-left: 3px solid var(--orange); border-radius: var(--r); padding: 8px 12px 12px; margin: 0; }
+fieldset.bloc-reprise legend { color: var(--orange-pale); padding: 0 6px; }
+.champ-issue .types-rapides label:has(input[value=plus_tard]:checked) span { border-color: var(--orange); color: var(--craie); }
+.rangee-dates { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+.rangee-dates input { flex: 1 1 150px; }
+/* Promesses. */
+.ligne .meta .promis { color: var(--orange-pale); }
+.note-engagements { margin: 4px 2px 0; }
+.ligne.decision { cursor: pointer; }
+.ligne.decision .titre { white-space: normal; }
+/* Dictée : bouton micro collé au champ. */
+.saisie-dictee { display: flex; gap: 6px; align-items: stretch; }
+.saisie-dictee > input { flex: 1; min-width: 0; }
+.btn-micro { flex: none; width: 42px; display: grid; place-items: center; background: var(--coque-2); border: 1px solid var(--acier); border-radius: var(--r); color: var(--brume); cursor: pointer; }
+.btn-micro svg { width: 20px; height: 20px; }
+.btn-micro:hover { border-color: var(--brume); color: var(--craie); }
+.btn-micro.ecoute { background: var(--orange); border-color: var(--orange); color: #1A0D04; animation: ecoute-micro 1.2s ease-in-out infinite; }
+@keyframes ecoute-micro { 50% { box-shadow: 0 0 0 4px color-mix(in srgb, var(--orange) 35%, transparent); } }
+@media (max-width: 760px) { .bandeau-reprise .boutons-entete { width: 100%; justify-content: flex-end; } }
