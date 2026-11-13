@@ -9,11 +9,13 @@ export function installerLot7(c) {
     `<section class="bloc ${cls}"><header><h2>${titre}${nb != null ? ` <span class="nb">${nb}</span>` : ''}</h2>${actions}</header>${corps}</section>`;
   const vide = m => `<div class="vide">${m}</div>`;
   const reglage = (k, defaut = null) => S.reglages.find(r => r.cle === k)?.valeur ?? defaut;
+  // Renvoie true si Supabase a bien enregistré; sinon affiche l’erreur (rien n’est changé localement).
   async function ecrireReglage(cle, valeur) {
+    const { error } = await sb.from('reglages').upsert({ cle, valeur });
+    if (error) { toast('Réglage non enregistré : ' + error.message); return false; }
     const r = S.reglages.find(x => x.cle === cle);
     if (r) r.valeur = valeur; else S.reglages.push({ cle, valeur });
-    const { error } = await sb.from('reglages').upsert({ cle, valeur });
-    return !error;
+    return true;
   }
   const pluriel = (n, mot) => `${n} ${mot}${n > 1 ? 's' : ''}`;
   // La migration 20261113_engagements.sql ajoute actions.promis_a_id. Sans elle, les promesses restent désactivées.
@@ -205,7 +207,7 @@ export function installerLot7(c) {
     const geste = (fd.get('reprise_geste') || '').trim() || null;
     try {
       if (geste !== (a.prochain_geste || null)) await sb.from('actions').update({ prochain_geste: geste }).eq('id', a.id);
-      await ecrireReglage('reprise', { action_id: a.id, le: new Date().toISOString() });
+      if (!await ecrireReglage('reprise', { action_id: a.id, le: new Date().toISOString() })) return null;
     } catch { return null; }
     return { a, geste };
   }
@@ -255,7 +257,8 @@ export function installerLot7(c) {
     v.querySelectorAll('[data-reprise-ok]').forEach(b => b.onclick = async () => {
       const a = aReprendre(); b.disabled = true;
       if (a && ['À faire', 'À traiter'].includes(a.statut)) await sb.from('actions').update({ statut: 'En cours' }).eq('id', a.id);
-      await ecrireReglage('reprise', null);
+      // La colonne reglages.valeur n’accepte pas de valeur vide : on marque la reprise comme faite au lieu de l’effacer.
+      if (!await ecrireReglage('reprise', { action_id: null, repris_le: new Date().toISOString() })) { b.disabled = false; return; }
       toast('Bon retour sur ta tâche'); rafraichir();
     });
   }
