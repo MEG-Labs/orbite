@@ -206,11 +206,8 @@ export function installerLot7(c) {
     if (!a) return null;
     const geste = (fd.get('reprise_geste') || '').trim() || null;
     try {
-      // La tâche interrompue passe « En pause » : son chrono s’arrête pendant l’interruption (repart avec « C’est repris »).
-      const champs = {};
-      if (geste !== (a.prochain_geste || null)) champs.prochain_geste = geste;
-      if (a.statut === 'En cours' && 'chrono_debut' in a) champs.statut = 'En pause';
-      if (Object.keys(champs).length) await sb.from('actions').update(champs).eq('id', a.id);
+      // La mise « En pause » et la correction du chrono sont faites ensuite par le lot 10 (retirerTempsAilleurs).
+      if (geste !== (a.prochain_geste || null)) await sb.from('actions').update({ prochain_geste: geste }).eq('id', a.id);
       if (!await ecrireReglage('reprise', { action_id: a.id, le: new Date().toISOString() })) return null;
     } catch { return null; }
     return { a, geste };

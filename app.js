@@ -7,6 +7,7 @@ import { installerLot6 } from './lot6.js';
 import { installerLot7 } from './lot7.js';
 import { installerLot8 } from './lot8.js';
 import { installerLot9 } from './lot9.js';
+import { installerLot10 } from './lot10.js';
 
 const sb = createClient(SUPABASE_URL, SUPABASE_KEY, { auth: { persistSession: true, autoRefreshToken: true } });
 
@@ -17,14 +18,12 @@ const TYPES = ['Tâche', 'Événement', 'Jalon', 'Rappel'];
 const PRIOS = { 1: '1 — Critique', 2: '2 — Haute', 3: '3 — Normale', 4: '4 — Basse' };
 const STATUTS_PROJET = ['À envisager', 'À planifier', 'Actif', 'En pause', 'Terminé', 'Annulé'];
 const CONTEXTES = ['Maison', 'Bureau', 'Téléphone', 'Ordinateur', 'Courses', 'Partout'];
-// Interruptions de support opérationnel (consignées avec ⚡ ou la touche I).
-const DEPTS_INTERRUPTION = ['Réception', 'Expédition', 'Conteneurs', 'Inventaire', 'Maintenance', 'Transport', 'Direction / bureau', 'Autre'];
-const TYPES_INTERRUPTION = ['SAP / EWM', 'Équipement / RF', 'Données / rapport', 'Procédure / question', 'Problème opérationnel', 'Autre'];
+// Interruptions de support opérationnel (consignées avec ⚡ ou la touche I) : choix du menu dans lot10.js (réglage menu_interruption).
 
 const S = { session: null, actions: [], projets: [], domaines: [], personnes: [], vue: 'accueil', filtres: {}, agendaPasses: false,
   vehicules: [], entretiens: [], interventions: [], intEnt: [], livres: [], achats: [], abonnements: [], trajets: [], routines: [], notes: [], budget: [], regles: [],
   unites: [], postes: [], titulaires: [], participations: [], reglages: [], journal: [], cahiers: [], push: [], file: [], horsLigne: null };
-let M, X, L, L6, L7, L8, L9; // modules, installés après la définition des fonctions communes
+let M, X, L, L6, L7, L8, L9, L10; // modules, installés après la définition des fonctions communes
 
 const MODULES = [
   { k: 'accueil', l: 'Accueil', g: 'Pilotage', principal: true },
@@ -226,7 +225,7 @@ function rendre() {
   horloge();
   const v = document.createElement('div'); $('#vue').appendChild(v);
   ({ accueil: vueAccueil, agenda: vueAgenda, projets: vueProjets, projet: vueProjet, actions: vueActions, reperes: vueReperes, ...M.vues, ...X.vues, ...L7.vues, ...L9.vues,
-    reglages: async v => { await X.vues.reglages(v); L.complementReglages(v); L9.complementReglages(v); } }[S.vue] || vueAccueil)(v);
+    reglages: async v => { await X.vues.reglages(v); L.complementReglages(v); L9.complementReglages(v); L10.complementReglages(v); } }[S.vue] || vueAccueil)(v);
   brancherLignes(v);
 }
 
@@ -1110,7 +1109,8 @@ function ouvrirSurLeFly({ interruption = false } = {}) {
   const hors = L6.horsTravail();
   const domaines = S.domaines.filter(d => d.actif !== false).sort((a, b) => (a.ordre ?? 99) - (b.ordre ?? 99));
   const defaut = hors ? (S.domaines.find(d => d.nom === 'Personnel')?.id || '') : domTravail;
-  const DUREES = [5, 15, 30, 60];
+  const MENU = L10.menu();
+  const DUREES = MENU.durees, dureeDefaut = DUREES.includes(15) ? 15 : DUREES[0];
   const maintenant = versLocal(new Date().toISOString());
   const puces = (nom, valeurs) => `<div class="types-rapides" role="radiogroup">${valeurs.map(x => `<label><input type="radio" name="${nom}" value="${esc(x)}"><span>${esc(x)}</span></label>`).join('')}</div>`;
   const d = dialogue(`<form>
@@ -1123,15 +1123,16 @@ function ouvrirSurLeFly({ interruption = false } = {}) {
         <label><input type="radio" name="issue" value="plus_tard"><span>À faire plus tard (je m’engage)</span></label></div></div>
       <label class="champ large"><span id="libTitreFly">Qu’as-tu fait?</span><input name="titre" class="titre-saisie" required autofocus autocomplete="off" placeholder="Ex. Débloqué une commande avec la réception"></label>
       <div class="champs-interruption">
-        <div class="champ large"><span>Département</span>${puces('interruption_dept', DEPTS_INTERRUPTION)}</div>
-        <div class="champ large"><span>Type de demande</span>${puces('interruption_type', TYPES_INTERRUPTION)}</div>
+        <div class="champ large"><span>Département</span>${puces('interruption_dept', MENU.depts)}</div>
+        <div class="champ large"><span>Type de demande</span>${puces('interruption_type', MENU.types)}</div>
+        ${MENU.demandeurs.length ? `<div class="champ large"><span>Demandeurs fréquents</span><div class="types-rapides demandeurs-rapides">${MENU.demandeurs.map(n => `<button type="button" class="puce-demandeur" data-demandeur="${esc(n)}">${esc(n)}</button>`).join('')}</div></div>` : ''}
         <label class="champ large"><span>Demandé par (facultatif)</span><input name="demandeur" list="listeDemandeurs" autocomplete="off" placeholder="Ex. chef d’équipe expédition, soir">
           <datalist id="listeDemandeurs">${[...new Set([...S.personnes.map(p => p.nom), ...S.actions.map(a => a.demandeur)].filter(Boolean))].sort().map(n => `<option value="${esc(n)}">`).join('')}</datalist></label>
         <div class="champ large champ-promis-pour"><span>Promis pour le</span><div class="rangee-dates"><input type="date" name="promis_pour" aria-label="Date promise">
           <button type="button" class="btn discret" data-date="0">Aujourd’hui</button><button type="button" class="btn discret" data-date="1">Demain</button><button type="button" class="btn discret" data-date="ven">Vendredi</button></div>
           <p class="aide" style="margin:4px 0 0">Si le demandeur est dans ton répertoire, la promesse lui est reliée dans Engagements.</p></div>
       </div>
-      <div class="champ large champ-duree"><span>Temps passé</span><div class="types-rapides" role="radiogroup" aria-label="Temps passé">${DUREES.map(d => `<label><input type="radio" name="duree" value="${d}" ${d === 15 ? 'checked' : ''}><span>${d < 60 ? d + ' min' : '1 h'}</span></label>`).join('')}<label><input type="radio" name="duree" value="autre"><span>Autre</span></label></div>
+      <div class="champ large champ-duree"><span>Temps passé</span><div class="types-rapides" role="radiogroup" aria-label="Temps passé">${DUREES.map(d => `<label><input type="radio" name="duree" value="${d}" ${d === dureeDefaut ? 'checked' : ''}><span>${esc(L10.libDuree(d))}</span></label>`).join('')}<label><input type="radio" name="duree" value="autre"><span>Autre</span></label></div>
         <input type="number" name="duree_autre" min="1" step="1" placeholder="Minutes" class="duree-autre" aria-label="Autre durée en minutes"></div>
       <label class="champ domaine-fly"><span>Domaine</span><select name="domaine_id">${domaines.map(d => `<option value="${d.id}" ${d.id === defaut ? 'selected' : ''}>${esc(d.nom)}</option>`).join('')}</select></label>
       <label class="champ"><span>Projet (facultatif)</span><select name="projet_id">${opts(S.projets.filter(p => p.statut === 'Actif'), null, { vide: 'Hors projet', lib: 'titre' })}</select></label>
@@ -1157,11 +1158,16 @@ function ouvrirSurLeFly({ interruption = false } = {}) {
       : { ...commun, statut: 'Terminé', sur_le_fly: true, realisee_le: fin, duree_reelle_min: duree };
     // Où j’étais rendu : enregistré d’abord, pour ne rien perdre même si l’envoi de l’interruption est mis en file.
     const reprise = inter ? await L7.enregistrerReprise(fd) : null;
+    // Le temps passé ailleurs (interruption réglée ou fait sur le fly) est retiré des chronos qui tournaient pendant ce temps;
+    // la tâche choisie dans « tu étais rendu où? » passe « En pause ».
+    const intervalle = !plusTard && duree ? { debut: new Date(new Date(fin).getTime() - duree * 6e4).toISOString(), fin } : null;
+    let retraits = [];
+    try { if (intervalle || reprise) retraits = await L10.retirerTempsAilleurs(intervalle, reprise?.a?.id || null); } catch { }
     if (!navigator.onLine) { X.mettreEnFile('actions', ligne); return; }
     const { error } = await sb.from('actions').insert(ligne);
     if (error) { if (/fetch|network/i.test(error.message)) { X.mettreEnFile('actions', ligne); return; } toast('Échec : ' + error.message); return false; }
     const quoi = !inter ? 'Consigné ⚡' : plusTard ? `Promesse notée 🤝${demandeur ? ' · ' + demandeur : ''}` : 'Interruption consignée 🚨';
-    toast(reprise ? `${quoi} · Reprends : ${reprise.geste || reprise.a.titre}` : quoi); rafraichir();
+    toast((reprise ? `${quoi} · Reprends : ${reprise.geste || reprise.a.titre}` : quoi) + L10.texteRetire(retraits)); rafraichir();
   });
   // Mode interruption : champs dédiés, domaine Travail imposé.
   const caseInt = d.querySelector('[name=interruption]'), blocInt = d.querySelector('.champs-interruption');
@@ -1186,6 +1192,10 @@ function ouvrirSurLeFly({ interruption = false } = {}) {
     d.querySelector('[type=submit]').textContent = plusTard ? 'Noter la promesse' : 'Consigner';
   }
   d.querySelectorAll('[name=issue]').forEach(r => r.onchange = majIssue);
+  d.querySelectorAll('[data-demandeur]').forEach(b => b.onclick = () => {
+    const ch = d.querySelector('[name=demandeur]'); ch.value = b.dataset.demandeur;
+    d.querySelectorAll('[data-demandeur]').forEach(x => x.classList.toggle('choisi', x === b));
+  });
   d.querySelectorAll('[data-date]').forEach(b => b.onclick = () => {
     const auj = aujourdhui(), k = b.dataset.date;
     const ven = () => { const j = new Date(auj + 'T12:00:00').getDay(); return plusJours(auj, j < 5 ? 5 - j : 12 - j); }; // le vendredi : celui de la semaine prochaine
@@ -1735,6 +1745,7 @@ L9 = installerLot9({ sb, S, esc, toast, parId, aujourdhui, jourDate, cleJour, fm
   ouvrirPersonne, ouvrirDomaine, ouvrirAction, ficheUnite: u => M.ficheUnite(u), vueOrganigramme: v => M.vues.organigramme(v),
   creerActionsDepuisNote: (n, t) => L.creerActionsDepuisNote(n, t), rechargerActions: () => charger() });
 
+L10 = installerLot10({ sb, S, esc, toast, parId, dialogue, rendre: () => rendre() });
 L8 = installerLot8({ sb, S, esc, toast, parId, aujourdhui, plusJours, rafraichir, rendre: () => rendre(), carteProjet, sante, STATUTS_PROJET, PRIOS });
 window.addEventListener('hashchange', () => {
   if (!S.session) return;
