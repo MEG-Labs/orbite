@@ -145,8 +145,8 @@ export function installerExtras(c) {
             <ul class="lignes" id="listeSauv"><li class="ligne"><span class="aide">Chargement…</span></li></ul>
             <div class="rangee"><button class="btn" id="sauvMaint">Sauvegarder maintenant</button><button class="btn primaire" id="exportXlsx">Télécharger en Excel</button></div></div>`)}
           ${bloc('Jira', null, `<div class="reglage">
-            <p>Les actions dont la référence externe ressemble à <code>CANAC-734</code> ont un lien direct vers Jira.${jiraActif ? ' Leur statut Jira est relu chaque heure les jours de semaine.' : ''}</p>
-            ${jiraActif ? '' : `<p class="aide">Pour afficher aussi le statut Jira, crée un jeton API Atlassian (id.atlassian.com › Sécurité › Jetons API), puis ajoute-le dans Supabase, projet orbite › Edge Functions › Secrets : <code>JIRA_COURRIEL</code> (ton courriel Atlassian) et <code>JIRA_JETON</code>. Vérifie d’abord que la politique de Canac le permet.</p>`}</div>`)}
+            <p>Les actions dont la référence externe ressemble à <code>PROJ-734</code> ont un lien direct vers Jira (réglage <code>jira_domaine</code>, ex. monequipe.atlassian.net).${jiraActif ? ' Leur statut Jira est relu chaque heure les jours de semaine.' : ''}</p>
+            ${jiraActif ? '' : `<p class="aide">Pour afficher aussi le statut Jira, crée un jeton API Atlassian (id.atlassian.com › Sécurité › Jetons API), puis ajoute-le dans Supabase, projet orbite › Edge Functions › Secrets : <code>JIRA_COURRIEL</code> (ton courriel Atlassian) et <code>JIRA_JETON</code>. Vérifie d’abord que la politique de ton employeur le permet.</p>`}</div>`)}
           ${bloc('Hors ligne', null, `<div class="reglage"><p>Sans réseau, ORBITE affiche la dernière copie de tes données. Les captures faites hors ligne sont envoyées dès le retour du réseau${S.file.length ? ` (${S.file.length} en attente)` : ''}.</p></div>`)}
         </div>
       </div>`;

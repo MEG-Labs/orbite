@@ -1,4 +1,4 @@
-// Statut Jira des actions dont la référence externe ressemble à CANAC-123.
+// Statut Jira des actions dont la référence externe ressemble à PROJ-123.
 // Inactive tant que les secrets JIRA_COURRIEL et JIRA_JETON ne sont pas définis dans Supabase (Edge Functions > Secrets).
 import { admin, autorise, reglage, cors, json } from './commun.ts';
 
@@ -8,7 +8,8 @@ Deno.serve(async req => {
   if (!await autorise(req, sb)) return json({ erreur: 'non autorisé' }, 401);
   const courriel = Deno.env.get('JIRA_COURRIEL'), jeton = Deno.env.get('JIRA_JETON');
   if (!courriel || !jeton) return json({ actif: false, raison: 'Secrets JIRA_COURRIEL et JIRA_JETON absents' });
-  const domaine = (await reglage(sb, 'jira_domaine')) || 'canac.atlassian.net';
+  const domaine = await reglage(sb, 'jira_domaine');
+  if (!domaine) return json({ actif: false, raison: 'Réglage jira_domaine absent (ex. monequipe.atlassian.net)' });
   const { data: actions } = await sb.from('actions').select('id,reference_externe').not('reference_externe', 'is', null);
   const cibles = (actions || []).filter(a => /^[A-Z][A-Z0-9]+-\d+$/.test(a.reference_externe.trim()));
   if (!cibles.length) return json({ actif: true, maj: 0 });

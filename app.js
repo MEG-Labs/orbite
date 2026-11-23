@@ -384,8 +384,10 @@ function ligne(a, { montrerProjet = true, heureSeule = false, montrerPromis = tr
   if (a.motif_blocage) meta.push(`<span>${esc(a.motif_blocage)}</span>`);
   if (a.recurrence?.type) meta.push(a.recurrence.sautee ? '<span class="pastille recur">🔁 sautée</span>' : `<span class="pastille recur" title="${esc(libRecurrence(a.recurrence))}">🔁 ${esc(libRecurrence(a.recurrence, { court: true }))}</span>`);
   if (a.reference_externe && /^[A-Z][A-Z0-9]+-\d+$/.test(a.reference_externe.trim())) {
-    const dom = S.reglages.find(r => r.cle === 'jira_domaine')?.valeur || 'canac.atlassian.net';
-    meta.push(`<a class="lien-jira" href="https://${esc(dom)}/browse/${esc(a.reference_externe.trim())}" target="_blank" rel="noopener">${esc(a.reference_externe.trim())}${a.statut_jira ? ' · ' + esc(a.statut_jira) : ''}</a>`);
+    // Domaine Jira : réglage `jira_domaine` (ex. monequipe.atlassian.net). Sans réglage, la clé s’affiche sans lien.
+    const dom = S.reglages.find(r => r.cle === 'jira_domaine')?.valeur;
+    const lib = `${esc(a.reference_externe.trim())}${a.statut_jira ? ' · ' + esc(a.statut_jira) : ''}`;
+    meta.push(dom ? `<a class="lien-jira" href="https://${esc(dom)}/browse/${esc(a.reference_externe.trim())}" target="_blank" rel="noopener">${lib}</a>` : `<span class="lien-jira" title="Ajoute le réglage jira_domaine pour un lien direct">${lib}</span>`);
   }
   const cal = calendrierDe(a);
   if (cal) meta.push(`<span class="pastille pastille-cal" style="--cal:${esc(cal.couleur)}">${esc(cal.nom)}</span>`);
@@ -1009,7 +1011,7 @@ function ouvrirCapture() {
             <label class="champ" data-pour="tache"><span>En attente de</span><select name="en_attente_de_id">${opts(S.personnes, null)}</select></label>
             <label class="champ" data-pour="tache"><span>Relance</span><input type="date" name="relance"></label>
             <label class="champ"><span>Lieu ou lien</span><input name="lieu" autocomplete="off"></label>
-            <label class="champ"><span>Référence externe</span><input name="reference_externe" autocomplete="off" placeholder="CANAC-123, billet…"></label>
+            <label class="champ"><span>Référence externe</span><input name="reference_externe" autocomplete="off" placeholder="PROJ-123, billet…"></label>
             <label class="champ large"><span>Notes</span><textarea name="notes" rows="3"></textarea></label>
           </fieldset>
           ${champsRecurrence({})}
@@ -1418,7 +1420,7 @@ function ouvrirAction(a) {
 
       <fieldset><legend>Détails</legend>
         <label class="champ"><span>Lieu ou lien</span><input name="lieu" value="${esc(a.lieu)}"></label>
-        <label class="champ"><span>Référence externe</span><input name="reference_externe" value="${esc(a.reference_externe)}" placeholder="CANAC-123, billet…"></label>
+        <label class="champ"><span>Référence externe</span><input name="reference_externe" value="${esc(a.reference_externe)}" placeholder="PROJ-123, billet…"></label>
         ${a.lieu && /^https?:\/\//.test(a.lieu) ? `<p class="champ large" style="margin:0"><a href="${esc(a.lieu)}" target="_blank" rel="noopener">Ouvrir le lien</a></p>` : ''}
         <label class="champ large"><span>Notes</span><textarea name="notes">${esc(a.notes)}</textarea></label>
       </fieldset>

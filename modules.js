@@ -253,7 +253,7 @@ export function installerModules(c) {
     brancher(v, '[data-achat]', el => ficheAchat(parId(S.achats, el.dataset.achat)));
   }
   function ficheAchat(a) {
-    const magasins = [...new Set(['Canac', ...S.achats.map(x => x.magasin).filter(Boolean)])];
+    const magasins = [...new Set([...S.achats.map(x => x.magasin).filter(Boolean)])];
     const postes = () => S.budget.slice().sort((x, y) => (x.lot || '').localeCompare(y.lot || '') || x.poste.localeCompare(y.poste))
       .map(l => [l.id, `${parId(S.projets, l.projet_id)?.titre || ''} · ${(l.lot || '').replace(/^\d+ · /, '')} · ${l.poste}`]);
     const pied = `<div class="champ large facture"><span>Photo ou PDF de la facture</span>
