@@ -11,8 +11,8 @@ import { installerLot9 } from './lot9.js';
 const sb = createClient(SUPABASE_URL, SUPABASE_KEY, { auth: { persistSession: true, autoRefreshToken: true } });
 
 /* ================= Constantes ================= */
-const STATUTS = ['À traiter', 'À faire', 'En cours', 'En attente', 'Bloqué', 'Terminé', 'Annulé'];
-const OUVERTS = ['À traiter', 'À faire', 'En cours', 'En attente', 'Bloqué'];
+const STATUTS = ['À traiter', 'À faire', 'En cours', 'En pause', 'En attente', 'Bloqué', 'Terminé', 'Annulé'];
+const OUVERTS = ['À traiter', 'À faire', 'En cours', 'En pause', 'En attente', 'Bloqué'];
 const TYPES = ['Tâche', 'Événement', 'Jalon', 'Rappel'];
 const PRIOS = { 1: '1 — Critique', 2: '2 — Haute', 3: '3 — Normale', 4: '4 — Basse' };
 const STATUTS_PROJET = ['À envisager', 'À planifier', 'Actif', 'En pause', 'Terminé', 'Annulé'];
@@ -290,6 +290,78 @@ function calendrierDe(a) {
   const c = cals[i];
   return { nom: c?.nom || a.source_externe || 'Calendrier', couleur: c?.couleur || COULEURS_CAL[Math.max(i, 0) % COULEURS_CAL.length][1] };
 }
+/* ---------- Lecteur de statut (▶ ⏸ ⏮) et chronomètre ---------- */
+// ▶ Démarrer : passe la tâche « En cours » (le chrono démarre côté serveur, déclencheur actions_chrono).
+// ⏸ Pause : « En cours » → « En pause » (le chrono s’arrête et les minutes s’ajoutent à « Durée réelle »).
+// ⏮ Annuler : remet l’état d’avant le dernier changement de statut (statut, date de réalisation, chrono, durée réelle),
+//   tant que ce changement date d’aujourd’hui. Un 2e ⏮ rétablit. Migration : supabase/migrations/20261123_lecteur_statuts.sql.
+const colonneChrono = () => !S.actions.length || 'chrono_debut' in S.actions[0];
+const dureeTxt = m => m < 60 ? `${m} min` : `${Math.floor(m / 60)} h ${String(m % 60).padStart(2, '0')}`;
+const minutesChrono = a => (a.duree_reelle_min || 0) + (a.statut === 'En cours' && a.chrono_debut ? Math.max(0, Math.round((Date.now() - new Date(a.chrono_debut)) / 6e4)) : 0);
+function texteChrono(a) {
+  const m = minutesChrono(a);
+  return `⏱ ${m < 1 && a.chrono_debut ? '< 1 min' : dureeTxt(m)}${a.duree_min ? ` / ${dureeTxt(a.duree_min)} prévues` : ''}`;
+}
+function chronoHtml(a) {
+  if (a.type === 'Événement' || !ouvert(a)) return '';
+  const tourne = a.statut === 'En cours' && a.chrono_debut;
+  if (!tourne && !a.duree_reelle_min) return '';
+  const depasse = a.duree_min && minutesChrono(a) > a.duree_min;
+  const veille = tourne && cleJour(a.chrono_debut) < aujourdhui();
+  const titre = tourne ? `Chrono en marche depuis ${veille ? jourDate(cleJour(a.chrono_debut)) + ' ' : ''}${fmtHeure.format(new Date(a.chrono_debut))} (temps total, séances précédentes comprises)` : 'Temps passé jusqu’ici (chrono arrêté)';
+  return `<span class="chrono${tourne ? ' tourne' : ''}${depasse ? ' depasse' : ''}${veille ? ' veille' : ''}" title="${esc(titre)}"${tourne ? ` data-chrono="${a.id}"` : ''}>${esc(texteChrono(a))}</span>`;
+}
+function annulable(a) {
+  const p = a.etat_precedent;
+  return p && p.statut && p.statut !== a.statut && p.le && cleJour(p.le) === aujourdhui() && !a.recurrence?.sautee ? p : null;
+}
+function lecteur(a) {
+  if (a.type === 'Événement' || !colonneChrono()) return '';
+  const svg = d => `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="${d}" fill="currentColor"/></svg>`;
+  const SYM = { demarrer: svg('M7 4.5v15l12.5-7.5z'), pause: svg('M6.5 5h4v14h-4zM13.5 5h4v14h-4z'), annuler: svg('M5 5h2.5v14H5zM19.5 5v14L8.5 12z') };
+  const b = (quoi, _sym, lib) => `<button type="button" class="lect lect-${quoi}" data-lecteur="${quoi}" data-id="${a.id}" title="${esc(lib)}" aria-label="${esc(lib + ' : ' + a.titre)}">${SYM[quoi]}</button>`;
+  const boutons = [];
+  const p = annulable(a);
+  if (p) boutons.push(b('annuler', '⏮', `Annuler : revenir à « ${p.statut} » (changé à ${fmtHeure.format(new Date(p.le))})`));
+  if (a.statut === 'En cours') boutons.push(b('pause', '⏸', 'Mettre en pause'));
+  else if (ouvert(a)) boutons.push(b('demarrer', '▶', a.statut === 'En pause' ? 'Reprendre (passer « En cours »)' : 'Démarrer (passer « En cours »)'));
+  return boutons.length ? `<span class="lecteur">${boutons.join('')}</span>` : '';
+}
+async function actionLecteur(a, quoi, bouton) {
+  if (!a) return;
+  bouton.disabled = true;
+  let ok = false, msg = '';
+  if (quoi === 'demarrer') {
+    ok = await majAction(a.id, { statut: 'En cours' });
+    const n = S.actions.filter(x => x.statut === 'En cours' && x.type !== 'Événement' && x.id !== a.id).length + 1;
+    const lim = +(S.reglages.find(r => r.cle === 'limite_en_cours')?.valeur ?? 3);
+    msg = `▶ « ${a.titre} » en cours${n > lim ? ` · ${n} en cours pour une limite de ${lim}` : ''}`;
+  } else if (quoi === 'pause') {
+    const m = a.chrono_debut ? Math.round((Date.now() - new Date(a.chrono_debut)) / 6e4) : 0;
+    ok = await majAction(a.id, { statut: 'En pause' });
+    msg = `⏸ « ${a.titre} » en pause${a.chrono_debut ? ` · +${dureeTxt(m)} (total ${dureeTxt((a.duree_reelle_min || 0) + m)})` : ''}`;
+    if (m > 8 * 60) msg += ' · chrono ouvert longtemps : corrige la durée réelle dans la fiche au besoin';
+  } else if (quoi === 'annuler') {
+    const p = annulable(a); if (!p) { bouton.disabled = false; return; }
+    ok = await majAction(a.id, { statut: p.statut, realisee_le: p.realisee_le ?? null, chrono_debut: p.chrono_debut ?? null, duree_reelle_min: p.duree_reelle_min ?? null });
+    // Tâche récurrente qu’on « dé-termine » : l’occurrence suivante créée au même moment, encore intacte, est retirée
+    // (elle sera recréée si la tâche est terminée de nouveau).
+    if (ok && a.statut === 'Terminé' && a.recurrence) {
+      const s = S.actions.find(x => x.recurrence_precedent_id === a.id && x.statut === 'À faire' && Math.abs(new Date(x.cree_le) - new Date(p.le)) < 10e3);
+      if (s) await sb.from('actions').delete().eq('id', s.id);
+    }
+    msg = `⏮ « ${a.titre} » : retour à « ${p.statut} »`;
+  }
+  if (!ok) { bouton.disabled = false; return; }
+  toast(msg); rafraichir();
+}
+// Chronos en marche : mis à jour chaque 30 s sans redessiner la page.
+setInterval(() => document.querySelectorAll('[data-chrono]').forEach(el => {
+  const a = parId(S.actions, el.dataset.chrono); if (!a) return;
+  el.textContent = texteChrono(a);
+  el.classList.toggle('depasse', !!(a.duree_min && minutesChrono(a) > a.duree_min));
+}), 30e3);
+
 function ligne(a, { montrerProjet = true, heureSeule = false, montrerPromis = true } = {}) {
   const p = parId(S.projets, a.projet_id);
   const evt = a.type === 'Événement';
@@ -297,7 +369,8 @@ function ligne(a, { montrerProjet = true, heureSeule = false, montrerPromis = tr
   const passe = evt && a.statut !== 'Annulé' && (!ouvert(a) || new Date(a.planifie_fin || a.planifie_debut) < new Date());
   const ferme = !ouvert(a) && !passe;
   const meta = [];
-  if (a.statut !== 'À faire' && !evt) meta.push(`<span class="pastille st-${esc(a.statut)}">${esc(a.statut)}</span>`);
+  if (a.statut !== 'À faire' && !evt) meta.push(`<span class="pastille st-${esc(a.statut)}" data-st="${esc(a.statut)}">${esc(a.statut)}</span>`);
+  const chrono = chronoHtml(a); if (chrono) meta.push(chrono);
   if (a.priorite && a.priorite <= 2) meta.push(`<span class="pastille prio-${a.priorite}">P${a.priorite}</span>`);
   if (montrerProjet && p) meta.push(`<span>${esc(p.titre)}</span>`);
   if (a.echeance) meta.push(`<span class="${enRetard(a) ? 'retard' : ''}">Échéance ${esc(jourDate(a.echeance))}${enRetard(a) ? ' · en retard' : ''}</span>`);
@@ -324,7 +397,7 @@ function ligne(a, { montrerProjet = true, heureSeule = false, montrerPromis = tr
       ${meta.length ? `<div class="meta">${meta.join('')}</div>` : ''}
       ${a.prochain_geste && ouvert(a) ? `<div class="geste">▸ ${esc(a.prochain_geste)}</div>` : ''}
     </div>
-    <div class="droite">${esc(quand(a, heureSeule))}</div>
+    <div class="droite">${lecteur(a)}${esc(quand(a, heureSeule))}</div>
   </li>`;
 }
 function liste(items, vide, opts) {
@@ -411,6 +484,7 @@ function brancherGlisser(v) {
 }
 
 function brancherLignes(racine) {
+  racine.querySelectorAll('[data-lecteur]').forEach(b => b.onclick = e => { e.stopPropagation(); actionLecteur(parId(S.actions, b.dataset.id), b.dataset.lecteur, b); });
   racine.querySelectorAll('[data-coche]').forEach(b => b.onclick = async e => {
     e.stopPropagation();
     const a = parId(S.actions, b.dataset.coche);
@@ -563,6 +637,7 @@ function vueAccueil(v) {
   const vis = S.actions.filter(L6.visible);
   const taches = vis.filter(a => a.type !== 'Événement');
   const enCours = taches.filter(a => a.statut === 'En cours').sort(triOuvert);
+  const enPause = taches.filter(a => a.statut === 'En pause').sort(triOuvert);
   const backlog = taches.filter(a => ['À faire', 'À traiter'].includes(a.statut)).sort(triOuvert);
   const bloques = vis.filter(a => ['Bloqué', 'En attente'].includes(a.statut) || (ouvert(a) && a.relance && a.relance <= auj));
   const retards = vis.filter(enRetard);
@@ -601,8 +676,9 @@ function vueAccueil(v) {
     </section>`,
     plan: X.blocPlan(),
     habitudes: M.blocHabitudes(),
-    'en-cours': `<section class="bloc" data-depot="en-cours"><header><h2>En cours <span class="nb">${enCours.length}</span></h2></header>${L6.avertEnCours(enCours.length)}
-      ${liste(enCours, 'Rien en cours. Passe une tâche du backlog à « En cours » pour la retrouver ici.')}</section>`,
+    'en-cours': `<section class="bloc" data-depot="en-cours"><header><h2>En cours <span class="nb">${enCours.length}</span>${enPause.length ? ` <span class="nb nb-pause" title="${enPause.length} en pause">· ${enPause.length} en pause</span>` : ''}</h2></header>${L6.avertEnCours(enCours.length)}
+      ${liste(enCours, enPause.length ? 'Rien en cours. ▶ sur une tâche en pause pour la reprendre.' : 'Rien en cours. ▶ sur une tâche du backlog (ou glisse-la ici) pour la commencer.')}
+      ${enPause.length ? `<h3 class="sous-titre-pause">En pause</h3>${liste(enPause, '')}` : ''}</section>`,
     planifiees: `<section class="bloc" data-glisser><header><h2>Tâches planifiées · 7 jours <span class="nb">${semaine.length}</span></h2><button class="btn discret" data-aller="agenda">Agenda</button></header>
       ${liste(semaine, 'Aucune tâche planifiée cette semaine.')}</section>`,
     'a-completer': aCompleter.length ? `<section class="bloc"><header><h2>À compléter <span class="nb">${aCompleter.length}</span></h2></header>${liste(aCompleter.slice(0, 8), '')}</section>` : '',
@@ -1322,7 +1398,7 @@ function ouvrirAction(a) {
         <div class="champ"><span>Échéance</span><input type="date" name="echeance" value="${a.echeance || ''}" aria-label="Échéance">${L8.boutonsDate('echeance')}</div>
         <label class="champ"><span>Relance</span><input type="date" name="relance" value="${a.relance || ''}"></label>
         <label class="champ"><span>Durée prévue (min)</span><input type="number" min="0" step="1" name="duree_min" value="${a.duree_min ?? ''}"></label>
-        <label class="champ"><span>Durée réelle (min)</span><input type="number" min="0" step="1" name="duree_reelle_min" value="${a.duree_reelle_min ?? ''}"></label>
+        <label class="champ"><span>Durée réelle (min)${a.statut === 'En cours' && a.chrono_debut ? ` <small class="note-chrono" title="Ajoutées à la durée réelle quand la tâche quittera « En cours »">⏱ + ${Math.max(0, Math.round((Date.now() - new Date(a.chrono_debut)) / 6e4))} min en cours</small>` : ''}</span><input type="number" min="0" step="1" name="duree_reelle_min" value="${a.duree_reelle_min ?? ''}"></label>
       </fieldset>
 
       ${a.uid_externe ? '' : champsRecurrence(a)}

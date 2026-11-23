@@ -957,3 +957,37 @@ fieldset.bloc-reprise legend { color: var(--orange-pale); padding: 0 6px; }
 .conversion-cies .reglage p { margin: 0; }
 /* L’organigramme est un sous-onglet : son grand titre est déjà porté par « Parties prenantes ». */
 .sous-vue-org > .entete-vue h1 { display: none; }
+
+/* ---------- Lecteur de statut (▶ ⏸ ⏮) et chronomètre ---------- */
+.ligne .droite { display: flex; flex-direction: column; align-items: flex-end; gap: 4px; }
+.lecteur { display: inline-flex; gap: 4px; }
+.lect {
+  width: 30px; height: 26px; display: inline-grid; place-items: center; padding: 0;
+  font: 13px/1 var(--sans); color: var(--craie); background: transparent;
+  border: 1px solid var(--acier); border-radius: var(--r); cursor: pointer;
+}
+.lect:hover { background: var(--coque-2); }
+.lect:disabled { opacity: .4; cursor: wait; }
+.lect-demarrer:hover { border-color: var(--vert); color: var(--vert); }
+.lect-pause { border-color: #5A4C8C; color: #B9A3FF; }
+.lect-pause:hover { border-color: #B9A3FF; }
+.lect-annuler { color: var(--brume); }
+.lect-annuler:hover { border-color: var(--jaune); color: var(--jaune); }
+@media (hover: none) { .lect { width: 36px; height: 32px; font-size: 15px; } }
+.ligne .meta .chrono { font-family: var(--mono); }
+.ligne .meta .chrono.tourne { color: #B9A3FF; }
+.ligne .meta .chrono.tourne::before { content: ""; display: inline-block; width: 6px; height: 6px; margin-right: 5px; vertical-align: middle; border-radius: 50%; background: currentColor; animation: chrono-pouls 2s ease-in-out infinite; }
+.ligne .meta .chrono.depasse { color: var(--orange-pale); }
+.ligne .meta .chrono.veille { color: var(--jaune); }
+@keyframes chrono-pouls { 50% { opacity: .25; } }
+@media (prefers-reduced-motion: reduce) { .ligne .meta .chrono.tourne::before { animation: none; } }
+.sous-titre-pause { margin: 0; padding: 8px 14px 2px; font: 600 12px var(--mono); text-transform: uppercase; letter-spacing: .06em; color: var(--brume); border-top: 1px solid #1A3A4E; }
+h2 .nb-pause { margin-left: 4px; }
+.note-chrono { font-weight: 400; color: #B9A3FF; }
+/* Couleurs de statut (attribut data-st : les noms à deux mots ne fonctionnent pas comme classes CSS). */
+.pastille[data-st="En cours"] { color: #B9A3FF; border-color: #5A4C8C; }
+.pastille[data-st="En pause"] { color: var(--brume); border-color: var(--acier); border-style: dashed; }
+.pastille[data-st="En attente"] { color: var(--jaune); border-color: #7A6123; }
+.pastille[data-st="À traiter"] { color: var(--orange-pale); border-color: #7C4421; }
+.lect svg { width: 13px; height: 13px; display: block; }
+@media (hover: none) { .lect svg { width: 15px; height: 15px; } }

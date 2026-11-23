@@ -5,7 +5,7 @@
 import webpush from 'npm:web-push@3.6.7';
 import { admin, secret, reglage, autorise, cors, json, cleJour, heureLocale, fmtHeure, plusJours, argent } from './commun.ts';
 
-const OUVERTS = ['À traiter', 'À faire', 'En cours', 'En attente', 'Bloqué'];
+const OUVERTS = ['À traiter', 'À faire', 'En cours', 'En pause', 'En attente', 'Bloqué'];
 
 Deno.serve(async req => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: cors });

@@ -512,7 +512,7 @@ export function installerModules(c) {
   const lienAction = id => { const a = id && parId(S.actions, id); return a ? `<span class="lien-obj">✓ ${esc(a.titre)}</span>` : ''; };
   const lienProjet = id => { const p = id && parId(S.projets, id); return p ? `<span class="lien-obj">▸ ${esc(p.titre)}</span>` : ''; };
   // Tâches proposées pour un lien : ouvertes, plus celle déjà liée.
-  const actionsLiables = courant => S.actions.filter(a => a.id === courant || (['À traiter', 'À faire', 'En cours', 'En attente', 'Bloqué'].includes(a.statut) && a.type !== 'Routine'))
+  const actionsLiables = courant => S.actions.filter(a => a.id === courant || (['À traiter', 'À faire', 'En cours', 'En pause', 'En attente', 'Bloqué'].includes(a.statut) && a.type !== 'Routine'))
     .sort((a, b) => a.titre.localeCompare(b.titre));
 
   function ligneNote(n, { cahier = true } = {}) {

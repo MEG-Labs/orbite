@@ -78,7 +78,7 @@ export function installerLot6(c) {
   function restants() {
     const auj = aujourdhui();
     const vus = new Set();
-    return S.actions.filter(a => ouvert(a) && a.type !== 'Événement' && (a.plan_du_jour === auj || a.statut === 'En cours'))
+    return S.actions.filter(a => ouvert(a) && a.type !== 'Événement' && (a.plan_du_jour === auj || ['En cours', 'En pause'].includes(a.statut)))
       .filter(a => !vus.has(a.id) && vus.add(a.id))
       .sort((a, b) => (b.plan_du_jour === auj) - (a.plan_du_jour === auj));
   }
@@ -126,7 +126,9 @@ export function installerLot6(c) {
         const champs = {};
         if (geste !== (a.prochain_geste || null)) champs.prochain_geste = geste;
         if (quand === 'demain') champs.plan_du_jour = demain;
-        if (quand === 'backlog') { champs.plan_du_jour = null; if (a.statut === 'En cours') champs.statut = 'À faire'; }
+        if (quand === 'backlog') { champs.plan_du_jour = null; if (['En cours', 'En pause'].includes(a.statut)) champs.statut = 'À faire'; }
+        // Fermer la journée arrête les chronos : une tâche laissée « En cours » passe « En pause » (le temps s’arrête ce soir).
+        else if (a.statut === 'En cours' && a.chrono_debut) champs.statut = 'En pause';
         if (Object.keys(champs).length) maj.push(sb.from('actions').update(champs).eq('id', a.id));
       });
       maj.push(sb.from('journal_jours').upsert({ date: auj, fierte: (fd.get('fierte') || '').trim() || null, energie: fd.get('energie') ? +fd.get('energie') : null,

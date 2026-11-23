@@ -177,7 +177,7 @@ export function installerLot7(c) {
     const ouvertes = S.actions.filter(a => ouvert(a) && !['Événement', 'Routine'].includes(a.type) && !a.interruption);
     const enCours = ouvertes.filter(a => a.statut === 'En cours').sort(triEcheance);
     const plan = ouvertes.filter(a => a.plan_du_jour === auj && a.statut !== 'En cours');
-    const reste = ouvertes.filter(a => !enCours.includes(a) && !plan.includes(a) && ['À faire', 'À traiter'].includes(a.statut)).sort(triEcheance).slice(0, 12);
+    const reste = ouvertes.filter(a => !enCours.includes(a) && !plan.includes(a) && ['À faire', 'À traiter', 'En pause'].includes(a.statut)).sort(triEcheance).slice(0, 12);
     return { enCours, plan, reste, defaut: enCours[0] || plan[0] || null };
   }
   function htmlReprise() {
@@ -206,7 +206,11 @@ export function installerLot7(c) {
     if (!a) return null;
     const geste = (fd.get('reprise_geste') || '').trim() || null;
     try {
-      if (geste !== (a.prochain_geste || null)) await sb.from('actions').update({ prochain_geste: geste }).eq('id', a.id);
+      // La tâche interrompue passe « En pause » : son chrono s’arrête pendant l’interruption (repart avec « C’est repris »).
+      const champs = {};
+      if (geste !== (a.prochain_geste || null)) champs.prochain_geste = geste;
+      if (a.statut === 'En cours' && 'chrono_debut' in a) champs.statut = 'En pause';
+      if (Object.keys(champs).length) await sb.from('actions').update(champs).eq('id', a.id);
       if (!await ecrireReglage('reprise', { action_id: a.id, le: new Date().toISOString() })) return null;
     } catch { return null; }
     return { a, geste };
@@ -256,7 +260,7 @@ export function installerLot7(c) {
     v.querySelectorAll('[data-reprise-ouvrir]').forEach(b => b.onclick = () => { const a = aReprendre(); if (a) c.ouvrirAction(a); });
     v.querySelectorAll('[data-reprise-ok]').forEach(b => b.onclick = async () => {
       const a = aReprendre(); b.disabled = true;
-      if (a && ['À faire', 'À traiter'].includes(a.statut)) await sb.from('actions').update({ statut: 'En cours' }).eq('id', a.id);
+      if (a && ['À faire', 'À traiter', 'En pause'].includes(a.statut)) await sb.from('actions').update({ statut: 'En cours' }).eq('id', a.id);
       // La colonne reglages.valeur n’accepte pas de valeur vide : on marque la reprise comme faite au lieu de l’effacer.
       if (!await ecrireReglage('reprise', { action_id: null, repris_le: new Date().toISOString() })) { b.disabled = false; return; }
       toast('Bon retour sur ta tâche'); rafraichir();
