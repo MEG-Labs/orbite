@@ -962,9 +962,92 @@ export function installerModules(c) {
     brancher(v, '[data-poste]', el => fichePoste(parId(S.postes, el.dataset.poste)));
     brancher(v, '[data-unite]', el => ficheUnite(parId(S.unites, el.dataset.unite)));
   }
+  /* Hiérarchie : chaque compagnie a la sienne. Le supérieur d’un poste est choisi parmi les postes de la même compagnie
+     (celle de l’unité du poste), sans ses subordonnés (pas de boucle). */
+  const subordonnes = id => { const r = new Set(); let plus = true; while (plus) { plus = false; S.postes.forEach(x => { if (x.superieur_id && (x.superieur_id === id || r.has(x.superieur_id)) && !r.has(x.id) && x.id !== id) { r.add(x.id); plus = true; } }); } return r; };
+  const cheminUnite = id => { const n = []; let u = parId(S.unites, id), g = 0; while (u && g++ < 20) { n.unshift(u.nom); u = u.parent_id && parId(S.unites, u.parent_id); } return n; };
+  const titulairesNoms = pid => S.titulaires.filter(t => t.poste_id === pid).map(t => parId(S.personnes, t.personne_id)?.nom).filter(Boolean);
+  function superieursPossibles(p, uniteId) {
+    const cie = uniteId && compagnieDe(uniteId);
+    if (!cie) return [];
+    const exclus = p.id ? subordonnes(p.id) : new Set();
+    return S.postes.filter(x => x.id !== p.id && !exclus.has(x.id) && x.unite_id && compagnieDe(x.unite_id) === cie)
+      .sort((a, b) => (a.niveau || 99) - (b.niveau || 99) || a.titre.localeCompare(b.titre, 'fr'));
+  }
+  function brancherHierarchie(d, p) {
+    const selU = d.querySelector('[name=unite_id]'), selS = d.querySelector('[name=superieur_id]');
+    // Unités regroupées par compagnie, avec leur chemin (Compagnie › Direction › Département).
+    const valU = selU.value;
+    const racines = S.unites.filter(u => !u.parent_id).sort((a, b) => a.nom.localeCompare(b.nom, 'fr'));
+    selU.innerHTML = '<option value="">— Choisis l’unité (définit la compagnie)</option>' + racines.map(r => {
+      const membres = [...sousUnites(r.id)].map(id => parId(S.unites, id)).filter(Boolean)
+        .map(u => [u, cheminUnite(u.id)]).sort((a, b) => a[1].join(' › ').localeCompare(b[1].join(' › '), 'fr'));
+      return `<optgroup label="${esc(r.nom)}">${membres.map(([u, ch]) => `<option value="${u.id}" ${u.id === valU ? 'selected' : ''}>${esc(ch.length > 1 ? ch.slice(1).join(' › ') : u.nom + ' (compagnie)')}</option>`).join('')}</optgroup>`;
+    }).join('');
+    const aide = document.createElement('p'); aide.className = 'aide aide-hierarchie'; aide.style.margin = '4px 0 0';
+    selS.closest('label').appendChild(aide);
+    // Dernier supérieur choisi : revient s’il redevient possible (ex. retour à la compagnie d’origine).
+    let voulu = selS.value;
+    selS.addEventListener('change', () => { voulu = selS.value; });
+    const remplir = () => {
+      const avant = voulu, liste = superieursPossibles(p, selU.value);
+      const cie = selU.value && parId(S.unites, compagnieDe(selU.value));
+      selS.disabled = !selU.value;
+      selS.innerHTML = `<option value="">${selU.value ? '— Aucun (sommet de la hiérarchie)' : '— Choisis d’abord l’unité'}</option>` + liste.map(x => {
+        const noms = titulairesNoms(x.id), u = parId(S.unites, x.unite_id);
+        return `<option value="${x.id}" ${x.id === avant ? 'selected' : ''}>${esc(x.titre)}${u ? ' — ' + esc(u.nom) : ''}${noms.length ? ' · ' + esc(noms.join(', ')) : x.statut === 'Vacant' ? ' · (vacant)' : ''}</option>`;
+      }).join('');
+      const perdu = avant && !liste.some(x => x.id === avant);
+      aide.textContent = !selU.value ? 'La hiérarchie est propre à chaque compagnie : choisis l’unité du poste pour voir ses supérieurs possibles.'
+        : perdu ? `Le supérieur choisi n’est pas dans ${cie?.nom || 'cette compagnie'} : à choisir de nouveau.`
+        : `Postes de ${cie?.nom || 'la compagnie'} seulement${p.id ? ' (ses subordonnés sont exclus)' : ''}.`;
+    };
+    // Titulaires : personnes de la compagnie du poste (rattachées à la compagnie ou à l’un de ses départements)
+    // et personnes sans compagnie. Une personne déjà titulaire mais d’une autre compagnie reste affichée (⚠)
+    // pour ne pas être retirée sans le vouloir.
+    const selT = d.querySelector('[name=_tit]');
+    let titChoisis = new Set([...selT.selectedOptions].map(o => o.value));
+    selT.addEventListener('change', () => { titChoisis = new Set([...selT.selectedOptions].map(o => o.value)); });
+    const lbT = selT.closest('label').querySelector('span');
+    const cieDePersonne = x => x.compagnie_id ? compagnieDe(x.compagnie_id) : x.departement_id ? compagnieDe(x.departement_id) : null;
+    const remplirTit = () => {
+      const cieId = selU.value && compagnieDe(selU.value), cie = cieId && parId(S.unites, cieId);
+      const tri = l => l.sort((a, b) => a.nom.localeCompare(b.nom, 'fr'));
+      const opt = (x, suffixe = '') => `<option value="${x.id}" ${titChoisis.has(x.id) ? 'selected' : ''}>${esc(x.nom)}${suffixe}</option>`;
+      const pers = S.personnes.filter(x => x.nature !== 'Organisation');
+      const groupe = (lib, l, suf) => l.length ? `<optgroup label="${esc(lib)}">${tri(l).map(x => opt(x, suf)).join('')}</optgroup>` : '';
+      if (!cieId) { selT.innerHTML = groupe('Toutes les personnes', pers); lbT.textContent = 'Titulaires (choisis l’unité pour ne voir que sa compagnie · Ctrl ou Cmd pour plusieurs)'; return; }
+      const deCie = pers.filter(x => cieDePersonne(x) === cieId), sans = pers.filter(x => !cieDePersonne(x));
+      const autres = pers.filter(x => cieDePersonne(x) && cieDePersonne(x) !== cieId && titChoisis.has(x.id));
+      selT.innerHTML = groupe(cie?.nom || 'Compagnie', deCie) + groupe('Sans compagnie', sans) + groupe('Autre compagnie (déjà titulaire)', autres, ' ⚠');
+      lbT.textContent = `Titulaires : ${cie?.nom || 'compagnie'} et personnes sans compagnie (Ctrl ou Cmd pour plusieurs)`;
+    };
+    selU.addEventListener('change', remplir);
+    selU.addEventListener('change', remplirTit);
+    remplir(); remplirTit();
+  }
+  // Unité parente : regroupée par compagnie, sans l’unité elle-même ni ses sous-unités (pas de boucle).
+  function brancherUniteParente(d, u) {
+    const sel = d.querySelector('[name=parent_id]'); if (!sel) return;
+    const val = sel.value;
+    const exclus = u.id ? sousUnites(u.id) : new Set();
+    const racines = S.unites.filter(x => !x.parent_id).sort((a, b) => a.nom.localeCompare(b.nom, 'fr'));
+    sel.innerHTML = '<option value="">— Aucune (c’est une compagnie, au sommet)</option>' + racines.filter(r => !exclus.has(r.id)).map(r => {
+      const membres = [...sousUnites(r.id)].filter(id => !exclus.has(id)).map(id => parId(S.unites, id)).filter(Boolean)
+        .map(x => [x, cheminUnite(x.id)]).sort((a, b) => a[1].join(' › ').localeCompare(b[1].join(' › '), 'fr'));
+      return `<optgroup label="${esc(r.nom)}">${membres.map(([x, ch]) => `<option value="${x.id}" ${x.id === val ? 'selected' : ''}>${esc(ch.length > 1 ? ch.slice(1).join(' › ') : x.nom + ' (compagnie)')}</option>`).join('')}</optgroup>`;
+    }).join('');
+    const aide = document.createElement('p'); aide.className = 'aide'; aide.style.margin = '4px 0 0';
+    aide.textContent = u.id ? 'L’unité elle-même et ses sous-unités sont exclues (pas de boucle).' : 'Choisis l’unité dont elle relève; elle fera partie de la même compagnie.';
+    sel.closest('label').appendChild(aide);
+  }
   function fichePoste(p) {
+    // Nouveau poste depuis un organigramme filtré sur une compagnie ou une unité : l’unité est préremplie.
+    if (!p.id && !p.unite_id && S.filtres.orgUnite && parId(S.unites, S.filtres.orgUnite)) p = { ...p, unite_id: S.filtres.orgUnite };
     const tit = p.id ? S.titulaires.filter(t => t.poste_id === p.id).map(t => t.personne_id) : [];
-    fiche({ titre: p.id ? p.titre : 'Nouveau poste', table: 'postes', ligne: { ...p, _tit: tit }, champs: [
+    const d = fiche({ titre: p.id ? p.titre : 'Nouveau poste', table: 'postes', ligne: { ...p, _tit: tit }, avant: val => {
+      if (val.superieur_id && !superieursPossibles(p, val.unite_id).some(x => x.id === val.superieur_id)) { toast('Le supérieur doit être un poste de la même compagnie'); return false; }
+    }, champs: [
       { k: 'titre', l: 'Poste', req: true, large: true, titre: true },
       { k: 'niveau', l: 'Niveau', t: 'select', num: true, o: Object.entries(NIVEAUX).map(([k, l]) => [k, `${pad(k)} — ${l}`]) },
       { k: 'statut', l: 'Statut', t: 'select', o: ['Pourvu', 'Vacant', 'À renseigner'], req: true },
@@ -977,14 +1060,18 @@ export function installerModules(c) {
       const ids = fd.getAll('_tit');
       if (ids.length) await sb.from('postes_titulaires').insert(ids.map(pid => ({ poste_id: id, personne_id: pid })));
     } });
+    brancherHierarchie(d, p);
   }
   function ficheUnite(u) {
-    fiche({ titre: u.id ? u.nom : 'Nouvelle unité', table: 'unites', ligne: u, champs: [
+    const d = fiche({ titre: u.id ? u.nom : 'Nouvelle unité', table: 'unites', ligne: u, champs: [
       { k: 'nom', l: 'Unité', req: true, large: true, titre: true },
       { k: 'categorie', l: 'Catégorie', t: 'select', o: ['Organisation', 'Division', 'Direction', 'Site', 'Département', 'Équipe'], req: true },
       { k: 'code', l: 'Code' }, { k: 'parent_id', l: 'Unité parente', t: 'ref', o: () => S.unites.filter(x => x.id !== u.id) },
       { k: 'mandat', l: 'Mandat', t: 'textarea', rows: 3 }, { k: 'actif', l: 'Active', t: 'bool' },
-    ] });
+    ], avant: val => {
+      if (u.id && val.parent_id && sousUnites(u.id).has(val.parent_id)) { toast('Une unité ne peut pas relever d’elle-même ni de ses sous-unités'); return false; }
+    } });
+    brancherUniteParente(d, u);
   }
 
   /* ================= Plus (menu mobile) ================= */
