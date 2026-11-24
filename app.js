@@ -9,6 +9,7 @@ import { installerLot8 } from './lot8.js';
 import { installerLot9 } from './lot9.js';
 import { installerLot10 } from './lot10.js';
 import { installerLot11 } from './lot11.js';
+import { installerLot12 } from './lot12.js';
 
 const sb = createClient(SUPABASE_URL, SUPABASE_KEY, { auth: { persistSession: true, autoRefreshToken: true } });
 
@@ -24,7 +25,7 @@ const CONTEXTES = ['Maison', 'Bureau', 'Téléphone', 'Ordinateur', 'Courses', '
 const S = { session: null, actions: [], projets: [], domaines: [], personnes: [], vue: 'accueil', filtres: {}, agendaPasses: false,
   vehicules: [], entretiens: [], interventions: [], intEnt: [], livres: [], achats: [], abonnements: [], trajets: [], routines: [], notes: [], budget: [], regles: [],
   unites: [], postes: [], titulaires: [], participations: [], reglages: [], journal: [], cahiers: [], push: [], file: [], horsLigne: null };
-let M, X, L, L6, L7, L8, L9, L10, L11; // modules, installés après la définition des fonctions communes
+let M, X, L, L6, L7, L8, L9, L10, L11, L12; // modules, installés après la définition des fonctions communes
 
 const MODULES = [
   { k: 'accueil', l: 'Accueil', g: 'Pilotage', principal: true },
@@ -209,7 +210,7 @@ function rendre() {
     <header class="bandeau">
       <div class="marque">${LOGO}ORBITE</div>
       <div class="devise">Processus de soutien. Projets logistiques. Le reste, <u>je délègue</u>.</div>
-      <div class="outils-tete">${L11.boutonPlancher()}<button class="btn-recherche" id="btnRecherche" aria-label="Chercher partout" title="Chercher partout (Ctrl+K)"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5" fill="none" stroke="currentColor" stroke-width="2"/><path d="m15.5 15.5 5 5" stroke="currentColor" stroke-width="2" stroke-linecap="square"/></svg><span>Chercher</span><kbd>Ctrl K</kbd></button></div>
+      <div class="outils-tete">${L12.bouton()}${L11.boutonPlancher()}<button class="btn-recherche" id="btnRecherche" aria-label="Chercher partout" title="Chercher partout (Ctrl+K)"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5" fill="none" stroke="currentColor" stroke-width="2"/><path d="m15.5 15.5 5 5" stroke="currentColor" stroke-width="2" stroke-linecap="square"/></svg><span>Chercher</span><kbd>Ctrl K</kbd></button></div>
       <div class="horloge" id="horloge"></div>
       ${L9.barreOnglets()}
     </header>
@@ -234,6 +235,8 @@ function rendre() {
     reglages: async v => { await X.vues.reglages(v); L.complementReglages(v); L9.complementReglages(v); L10.complementReglages(v); } }[S.vue] || vueAccueil)(v);
   brancherLignes(v);
   L11.brancherPlancher(app);
+  L12.brancherBouton(app);
+  L12.maj(); // mode présentation ouvert : il suit les changements
 }
 
 function horloge() {
@@ -1758,6 +1761,9 @@ L9 = installerLot9({ sb, S, esc, toast, parId, aujourdhui, jourDate, cleJour, fm
 
 L10 = installerLot10({ sb, S, esc, toast, parId, dialogue, rendre: () => rendre(), noterSeance: (...x) => L11.noterSeance(...x) });
 L11 = installerLot11({ sb, S, esc, toast, parId, dialogue, rendre: () => rendre(), rafraichir, aujourdhui, plusJours, cleJour, jourDate, jourLong, fmtHeure, ouvrirAction, depuisLocal, versLocal });
+L12 = installerLot12({ S, esc, toast, parId, aujourdhui, plusJours, cleJour, jourDate, fmtHeure, liste, ouvert, enRetard, brancherLignes, triOuvert,
+  visible: a => L6.visible(a), blocCharge: () => L.blocCharge(), plancher: () => L11.plancher(), brancherPlancher: r => L11.brancherPlancher(r),
+  resumeJour: j => L11.resumeJour(j), ouvrirSurLeFly, ouvrirCapture });
 L8 = installerLot8({ sb, S, esc, toast, parId, aujourdhui, plusJours, rafraichir, rendre: () => rendre(), carteProjet, sante, STATUTS_PROJET, PRIOS });
 window.addEventListener('hashchange', () => {
   if (!S.session) return;

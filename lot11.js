@@ -379,6 +379,17 @@ export function installerLot11(c) {
     await sb.from('seances').delete().eq('action_id', actionId).gte('cree_le', new Date(new Date(depuis).getTime() - 5e3).toISOString());
   }
 
-  return { charger, vues: { bacs: vueBacs, feuille: vueFeuille }, brancherAvert, bacsDe, boutonPlancher, bandeauPlancher, brancherPlancher, partir, retour, plancher,
+  // Résumé d’une journée (mode présentation) : totaux par type et temps par tâche.
+  async function resumeJour(jour = aujourdhui()) {
+    if (!S.lot11) return null;
+    const { el, sansHeure } = await elementsDuJour(jour);
+    const passes = el.filter(e => !e.aVenir), tot = t => passes.filter(e => e.type === t).reduce((s, e) => s + e.min, 0);
+    const parTache = new Map();
+    passes.filter(e => e.type === 'chrono').forEach(e => { const k = e.a?.id || e.seance?.action_id || '?'; const x = parTache.get(k) || { a: e.a, min: 0, enCours: false }; x.min += e.min; x.enCours ||= !!e.enCours; parTache.set(k, x); });
+    sansHeure.forEach(a => parTache.set(a.id, { a, min: a.duree_reelle_min }));
+    return { couvert: couvert(el), taches: tot('chrono') + sansHeure.reduce((s, a) => s + a.duree_reelle_min, 0), interruptions: tot('interruption'), fly: tot('fly'), reunions: tot('evenement'), plancher: tot('plancher'),
+      parTache: [...parTache.values()].sort((x, y) => y.min - x.min) };
+  }
+  return { charger, resumeJour, vues: { bacs: vueBacs, feuille: vueFeuille }, brancherAvert, bacsDe, boutonPlancher, bandeauPlancher, brancherPlancher, partir, retour, plancher,
     noterSeance, annulerSeances, seancesActives: () => S.lot11 };
 }

@@ -109,3 +109,9 @@ input:focus, select:focus, textarea:focus { border-color: var(--cyan); box-shado
 .lect-pause { border-color: var(--magenta, #FF2E88); color: var(--magenta, #FF2E88); }
 .onglet.epingle::after { background: var(--cyan); box-shadow: 0 0 6px var(--cyan); }
 .menu-onglet { border-radius: 0; border-color: var(--trait-fort); }
+.presentation { background: var(--nuit, #07060D); }
+.pr-tuile { border-radius: 0; border-color: var(--trait-fort); }
+.pr-chrono.tourne, .pr-date b { color: var(--cyan); text-shadow: var(--lueur-c); }
+.btn-presentation { border-radius: 0; }
+.pr-heure-grande { color: var(--cyan); text-shadow: var(--lueur-c); }
+.pr-minuterie { border-radius: 0; border-color: var(--trait-fort); }

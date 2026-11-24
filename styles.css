@@ -1064,3 +1064,100 @@ h2 .nb-pause { margin-left: 4px; }
 @media (max-width: 760px) { .ft-grad { margin-left: 90px; } .ft-piste { grid-template-columns: 90px minmax(0, 1fr); } .ft-calque { left: calc(14px + 90px); } }
 .ft-ligne .heure { white-space: nowrap; font-size: 13px; }
 @media (max-width: 760px) { .ft-grad span.impaire { display: none; } }
+
+/* ---------- Lot 12 : mode présentation ---------- */
+.btn-presentation { display: grid; place-items: center; width: 34px; height: 33px; padding: 0; background: var(--nuit); border: 1px solid var(--acier); color: var(--brume); border-radius: var(--r); cursor: pointer; }
+.btn-presentation:hover { border-color: var(--orange); color: var(--craie); }
+.btn-presentation svg { width: 17px; height: 17px; }
+body.en-presentation { overflow: hidden; }
+.presentation { position: fixed; inset: 0; z-index: 900; background: var(--nuit); color: var(--craie); display: flex; flex-direction: column; gap: 14px; padding: 18px 22px; }
+#toast { z-index: 950; }
+.pr-barre-haut { display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
+.pr-date { display: flex; align-items: baseline; gap: 14px; }
+.pr-date b { font: 700 34px/1 var(--mono); }
+.pr-date span { font: 15px var(--mono); color: var(--brume); text-transform: capitalize; }
+.pr-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+.pr-grille { flex: 1; min-height: 0; display: grid; gap: 14px; grid-template-columns: minmax(0, 1.35fr) minmax(0, 1fr); grid-template-rows: minmax(0, 1.25fr) minmax(0, 1fr);
+  grid-template-areas: "vedette journee" "alertes chiffres"; overflow: auto; }
+.pr-tuile { display: flex; flex-direction: column; min-height: 0; background: var(--coque); border: 1px solid var(--acier); border-radius: var(--r-carte, 5px); overflow: hidden; }
+.pr-tuile > header { display: flex; align-items: center; justify-content: space-between; padding: 10px 16px; border-bottom: 1px solid #1A3A4E; }
+.pr-tuile > header h2 { margin: 0; font: 700 13px var(--mono); letter-spacing: .08em; text-transform: uppercase; color: var(--brume); }
+.pr-corps { flex: 1; min-height: 0; overflow: auto; padding: 12px 16px 14px; }
+.pr-corps .lignes { margin: 0 -16px; }
+.pr-vedette { grid-area: vedette; border-top: 3px solid #8E7BE0; }
+.pr-journee { grid-area: journee; }
+.pr-alertes { grid-area: alertes; }
+.pr-chiffres-jour { grid-area: chiffres; }
+.pr-titre-tache { font: 700 clamp(24px, 2.6vw, 38px)/1.15 var(--sans); overflow-wrap: anywhere; }
+.pr-sous-tache { color: var(--brume); font: 14px var(--mono); margin-top: 6px; }
+.pr-chrono { font: 700 clamp(56px, 7.5vw, 112px)/1 var(--mono); letter-spacing: .02em; margin: 14px 0 8px; color: var(--brume); font-variant-numeric: tabular-nums; }
+.pr-chrono.tourne { color: #B9A3FF; }
+.pr-chrono.depasse { color: var(--orange-pale); }
+.pr-jauge { height: 8px; background: #1A3A4E; border-radius: 4px; overflow: hidden; max-width: 560px; }
+.pr-jauge i { display: block; height: 100%; background: #8E7BE0; }
+.pr-chrono.depasse ~ .pr-jauge i { background: var(--orange); }
+.pr-prevu { font: 13px var(--mono); color: var(--brume); margin-top: 6px; }
+.pr-geste { margin-top: 12px; font-size: 18px; color: var(--craie); }
+.pr-ligne-vedette { margin: 12px -16px 0 !important; border-top: 1px solid #1A3A4E; }
+.pr-sous { margin: 16px 0 4px; font: 700 12px var(--mono); letter-spacing: .06em; text-transform: uppercase; color: var(--brume); }
+.pr-rien p { margin: 0 0 4px; font-size: 22px; }
+.pr-heure { font: 700 18px var(--mono); color: var(--orange-pale); }
+.pr-evt { display: grid; gap: 2px; padding: 10px 12px; border: 1px solid var(--acier); border-left: 3px solid #4C9BE8; margin-bottom: 10px; }
+.pr-evt.actuel { border-left-color: var(--orange); background: rgba(242, 107, 33, .08); }
+.pr-evt.libre { border-left-color: var(--vert); }
+.pr-evt span { font: 12.5px var(--mono); color: var(--brume); }
+.pr-evt em { font-style: normal; color: var(--orange-pale); }
+.pr-evt b { font-size: 20px; }
+.pr-evt small { color: var(--brume); }
+.pr-suite { display: flex; flex-wrap: wrap; gap: 4px 14px; font: 12.5px var(--mono); color: var(--brume); margin: -4px 0 10px; }
+.pr-plancher { display: flex; justify-content: space-between; align-items: center; gap: 10px; padding: 8px 12px; margin-bottom: 10px; background: #2A230F; border: 1px solid var(--jaune); }
+.pr-chiffres { display: grid; grid-template-columns: repeat(auto-fit, minmax(104px, 1fr)); gap: 8px; margin-bottom: 12px; }
+.pr-chiffre { border: 1px solid var(--acier); padding: 8px 10px; display: grid; gap: 2px; }
+.pr-chiffre b { font: 700 clamp(18px, 1.7vw, 26px)/1.1 var(--mono); white-space: nowrap; }
+.pr-chiffre span { font-size: 12.5px; color: var(--brume); }
+.pr-chiffre.alerte b { color: var(--rouge); } .pr-chiffre.attention b { color: var(--jaune); } .pr-chiffre.bien b { color: var(--vert); } .pr-chiffre.calme b { color: var(--brume); }
+.pr-barres { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+.pr-barres li { display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr) auto; gap: 10px; align-items: center; font-size: 13.5px; }
+.pr-barre-lib { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.pr-barre { height: 10px; background: #1A3A4E; border-radius: 3px; overflow: hidden; }
+.pr-barre i { display: block; height: 100%; background: #8E7BE0; }
+.pr-barres b { font: 13px var(--mono); }
+.pr-victoires { display: flex; flex-wrap: wrap; gap: 4px 14px; margin-top: 12px; font-size: 13px; color: var(--vert); }
+@media (max-width: 900px) {
+  .presentation { padding: 12px; overflow: auto; }
+  .pr-grille { display: flex; flex-direction: column; overflow: visible; }
+  .pr-tuile { flex: none; }
+  .pr-corps { overflow: visible; }
+}
+/* Mode présentation : grande horloge, date, compte à rebours, minuterie */
+.pr-barre-haut { align-items: flex-start; }
+.pr-horloge { display: grid; gap: 2px; min-width: 0; }
+.pr-heure-grande { font: 700 clamp(48px, 6.2vw, 96px)/.95 var(--mono); letter-spacing: .01em; font-variant-numeric: tabular-nums; }
+.pr-date-jour { font: 600 clamp(15px, 1.4vw, 20px)/1.3 var(--sans); color: var(--craie); }
+.pr-date-jour::first-letter { text-transform: uppercase; }
+.pr-droite { display: flex; flex-direction: column; align-items: flex-end; gap: 8px; }
+.pr-actions .btn { padding: 6px 10px; font-size: 13px; }
+@media (max-width: 900px) { .pr-droite { align-items: stretch; width: 100%; } }
+.pr-compte { display: grid; gap: 2px; font: 13.5px/1.35 var(--mono); color: var(--brume); margin-top: 4px; }
+.pr-compte b { color: var(--craie); font-weight: 600; }
+.pr-compte em { font-style: normal; color: var(--orange-pale); }
+.pr-compte em.bientot { color: var(--rouge); font-weight: 700; }
+.pr-compte-actuel b { color: var(--orange-pale); }
+.pr-minuterie { display: grid; gap: 6px; padding: 10px 12px; border: 1px solid var(--acier); background: var(--coque); border-radius: var(--r-carte, 5px); min-width: 300px; }
+.pr-min-affiche { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; }
+.pr-min-temps { font: 700 clamp(30px, 3.2vw, 46px)/1 var(--mono); font-variant-numeric: tabular-nums; color: var(--brume); }
+.pr-minuterie.etat-marche .pr-min-temps { color: var(--vert); }
+.pr-minuterie.etat-pause .pr-min-temps { color: var(--jaune); }
+.pr-minuterie.etat-fini { border-color: var(--rouge); animation: pr-alarme 1s steps(2) infinite; }
+.pr-minuterie.etat-fini .pr-min-temps { color: var(--rouge); }
+@keyframes pr-alarme { 50% { background: rgba(229, 72, 77, .25); } }
+@media (prefers-reduced-motion: reduce) { .pr-minuterie.etat-fini { animation: none; background: rgba(229, 72, 77, .2); } }
+.pr-min-etat { font: 12px var(--mono); color: var(--brume); text-transform: uppercase; letter-spacing: .06em; }
+.pr-min-jauge { height: 5px; background: #1A3A4E; border-radius: 3px; overflow: hidden; }
+.pr-min-jauge i { display: block; height: 100%; background: var(--vert); transition: width .25s linear; }
+.pr-minuterie.etat-pause .pr-min-jauge i { background: var(--jaune); }
+.pr-min-boutons { display: flex; flex-wrap: wrap; gap: 5px; align-items: center; }
+.pr-min-boutons .btn { padding: 4px 9px; font-size: 12.5px; }
+.pr-min-libre { display: inline-flex; gap: 3px; }
+.pr-min-libre input { width: 64px; padding: 4px 6px; font: 12.5px var(--mono); }
+@media (max-width: 900px) { .pr-minuterie { min-width: 0; width: 100%; } }
