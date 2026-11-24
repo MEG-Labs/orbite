@@ -108,14 +108,85 @@ export function installerLot5(c) {
       <div class="charge-graduations" aria-hidden="true">${Array.from({ length: (JOUR_A - JOUR_DE) / 60 + 1 }, (_, k) => `<span style="left:${pct(JOUR_DE + k * 60)}%">${JOUR_DE / 60 + k} h</span>`).join('')}</div></div>`;
   }
 
-  /* ================= 4. Compte rendu depuis un événement ================= */
-  const MODELE_CR = 'Participants :\n\nPoints discutés :\n- \n\nDécisions :\n- \n\nActions (une par ligne, « - [ ] » devient une tâche; finir par « @Nom » = je délègue, « → Nom » = je promets) :\n- [ ] ';
+  /* ================= 4. Note de rencontre depuis un événement : préparation, puis compte rendu ================= */
+  // Une seule note par événement : « Préparation » en haut (objectif, ordre du jour, documents, contexte tiré d’ORBITE),
+  // « Compte rendu » en bas (participants, décisions, actions « - [ ] »). Créée par le bouton de la fiche de l’événement.
+  // Patron modifiable dans Réglages (réglage `patron_rencontre`). Variables : {titre} {date} {heure} {lieu} {projet} {contexte}.
+  const PATRON_RENCONTRE = `## Préparation
+Objectif :
+Résultat attendu (décision, livrable) :
+
+Ordre du jour / questions :
+- 
+
+Documents / à apporter :
+- 
+
+{contexte}
+
+## Compte rendu
+Participants :
+
+Points discutés :
+- 
+
+Décisions :
+- 
+
+Actions (une par ligne, « - [ ] » devient une tâche; finir par « @Nom » = je délègue, « → Nom » = je promets) :
+- [ ] `;
+  const patronRencontre = () => { const p = reglage('patron_rencontre'); return typeof p === 'string' && p.trim() ? p : PATRON_RENCONTRE; };
   function noteDe(a) { return S.notes.find(n => n.action_id === a.id); }
+  const finEvt = a => new Date(a.planifie_fin || a.planifie_debut || Date.now()).getTime();
+  // Libellé du bouton de la fiche : Préparer avant la fin de la rencontre, Compte rendu après.
+  const libRencontre = a => { const n = noteDe(a), apres = a.planifie_debut && finEvt(a) < Date.now(); return n ? (apres ? 'Ouvrir le compte rendu' : 'Ouvrir la préparation') : (apres ? 'Compte rendu' : 'Préparer'); };
+  // Contexte tiré d’ORBITE au moment de la préparation (texte figé dans la note : il ne se met pas à jour tout seul).
+  function contexteRencontre(a) {
+    const lignes = [], ech = x => x.echeance ? `, échéance ${jourDate(x.echeance)}` : '';
+    const p = parId(S.projets, a.projet_id);
+    if (p) {
+      lignes.push(`Projet : ${p.titre}${p.statut ? ` (${p.statut})` : ''}`);
+      const ouv = S.actions.filter(x => x.projet_id === p.id && x.id !== a.id && ouvert(x) && x.type !== 'Événement')
+        .sort((x, y) => (x.echeance || '9').localeCompare(y.echeance || '9')).slice(0, 8);
+      if (ouv.length) { lignes.push('Tâches ouvertes du projet :'); ouv.forEach(x => lignes.push(`- ${x.titre} (${x.statut}${ech(x)})`)); }
+    }
+    // Participants reconnus : nom complet d’une fiche de Parties prenantes dans le titre, le lieu ou les notes de l’événement.
+    const texte = ' ' + sansAccent([a.titre, a.lieu, a.notes].join(' ')).replace(/[^a-z0-9]+/g, ' ') + ' ';
+    const gens = S.personnes.filter(x => x.nature !== 'Organisation' && x.nom && x.nom.trim().includes(' ')
+      && texte.includes(' ' + sansAccent(x.nom).replace(/[^a-z0-9]+/g, ' ').trim() + ' '));
+    gens.forEach(x => {
+      const promis = S.actions.filter(t => ouvert(t) && t.promis_a_id === x.id);
+      const deleg = S.actions.filter(t => ouvert(t) && (t.delegue_a_id === x.id || t.en_attente_de_id === x.id));
+      if (!promis.length && !deleg.length) return;
+      lignes.push(`Avec ${x.nom} :`);
+      promis.forEach(t => lignes.push(`- Je lui dois : ${t.titre}${ech(t)}`));
+      deleg.forEach(t => lignes.push(`- Il ou elle me doit : ${t.titre}${ech(t)}`));
+    });
+    // Dernière rencontre du même nom (événement récurrent ou importé) qui a une note : ses suivis encore ouverts.
+    const meme = sansAccent(a.titre).trim();
+    const prec = S.actions.filter(x => x.type === 'Événement' && x.id !== a.id && sansAccent(x.titre).trim() === meme && x.planifie_debut
+      && (!a.planifie_debut || x.planifie_debut < a.planifie_debut) && noteDe(x)).sort((x, y) => y.planifie_debut.localeCompare(x.planifie_debut))[0];
+    if (prec) {
+      const n = noteDe(prec);
+      lignes.push(`Dernière rencontre : ${jourDate(cleJour(prec.planifie_debut))} (note « ${n.titre} »)`);
+      const suivis = S.actions.filter(t => t.note_id === n.id && ouvert(t));
+      suivis.forEach(t => lignes.push(`- Suivi encore ouvert : ${t.titre}${ech(t)}`));
+      const dec = (n.contenu || '').split('\n'); const i = dec.findIndex(l => /^\s*d[ée]cisions?\s*:/i.test(l));
+      if (i >= 0) dec.slice(i + 1).filter(l => /^\s*-\s+\S/.test(l) && !/^\s*-\s*\[/.test(l)).slice(0, 5).forEach(l => lignes.push(`- Décidé la dernière fois : ${l.replace(/^\s*-\s+/, '')}`));
+    }
+    return lignes.length ? `### Contexte (ORBITE, ${jourDate(aujourdhui())})\n${lignes.join('\n')}` : '';
+  }
+  function remplirPatron(a) {
+    const vals = { titre: a.titre || '', date: a.planifie_debut ? jourLong(cleJour(a.planifie_debut)) : '', heure: a.planifie_debut && !a.journee_entiere ? hm(a.planifie_debut) : '',
+      lieu: a.lieu || '', projet: parId(S.projets, a.projet_id)?.titre || '', contexte: contexteRencontre(a) };
+    return patronRencontre().replace(/\{(titre|date|heure|lieu|projet|contexte)\}/g, (_, k) => vals[k])
+      .replace(/\n{3,}/g, '\n\n'); // contexte vide : pas de grand trou
+  }
   async function compteRendu(a) {
     let n = noteDe(a);
     if (!n) {
-      const ligne = { titre: `CR — ${a.titre}`, type: 'Compte rendu', date: a.planifie_debut ? cleJour(a.planifie_debut) : aujourdhui(),
-        projet_id: a.projet_id || null, domaine_id: a.domaine_id || null, action_id: a.id, contenu: MODELE_CR };
+      const ligne = { titre: `Rencontre — ${a.titre}`, type: 'Compte rendu', date: a.planifie_debut ? cleJour(a.planifie_debut) : aujourdhui(),
+        projet_id: a.projet_id || null, domaine_id: a.domaine_id || null, action_id: a.id, contenu: remplirPatron(a) };
       const { data, error } = await sb.from('notes').insert(ligne).select('*').single();
       if (error) return toast('Échec : ' + error.message);
       S.notes.push(data); n = data;
@@ -169,6 +240,21 @@ export function installerLot5(c) {
         <button class="btn primaire" id="ajRegle">Ajouter</button></div>
       <div class="rangee"><button class="btn" id="appRegles" ${regles.length ? '' : 'disabled'}>Appliquer aux événements existants</button><span class="aide">${sansProjet} événement${sansProjet > 1 ? 's' : ''} ouvert${sansProjet > 1 ? 's' : ''} sans projet</span></div></div>`);
   }
+  function blocPatron() {
+    const perso = typeof reglage('patron_rencontre') === 'string' && reglage('patron_rencontre').trim();
+    return bloc('📝 Patron de rencontre', null, `<div class="reglage"><p>Texte de la note créée par « Préparer » dans la fiche d’un événement : la préparation en haut, le compte rendu en bas, dans la même note.${perso ? '' : ' <i>(patron d’origine)</i>'}</p>
+      <p class="aide">Variables remplacées à la création : <code>{titre}</code> <code>{date}</code> <code>{heure}</code> <code>{lieu}</code> <code>{projet}</code> et <code>{contexte}</code> (projet et ses tâches ouvertes, ce que tu dois aux participants reconnus et ce qu’ils te doivent, suivis et décisions de la dernière rencontre du même nom). « ## » = titre, « - » = puce, « - [ ] » = tâche à créer. Garde « Décisions : » suivi de lignes « - » pour le registre des décisions.</p>
+      <textarea id="patronRencontre" rows="16" spellcheck="true" style="width:100%;font:13px/1.45 var(--mono)">${esc(patronRencontre())}</textarea>
+      <div class="rangee" style="margin-top:8px"><button class="btn primaire" id="enrPatron">Enregistrer le patron</button><button class="btn discret" id="defPatron">Revenir au patron d’origine</button></div></div>`);
+  }
+  function brancherPatron(v) {
+    const ta = v.querySelector('#patronRencontre'); if (!ta) return;
+    v.querySelector('#enrPatron').onclick = async () => {
+      const t = ta.value.replace(/\r/g, '');
+      if (await ecrire('patron_rencontre', t.trim() ? t : PATRON_RENCONTRE)) { const r = S.reglages.find(x => x.cle === 'patron_rencontre'); if (r) r.valeur = t; else S.reglages.push({ cle: 'patron_rencontre', valeur: t }); toast('Patron enregistré : les prochaines notes de rencontre l’utiliseront'); }
+    };
+    v.querySelector('#defPatron').onclick = () => { ta.value = PATRON_RENCONTRE; toast('Patron d’origine remis dans la case : « Enregistrer » pour confirmer'); };
+  }
   function blocMoi() {
     const choix = [...new Set(['Papa', 'Maman', 'Mamie', ...S.trajets.map(t => t.responsable).filter(Boolean)])];
     return bloc('Transports', null, `<div class="reglage"><p>Qui es-tu dans les trajets? Sert à repérer les conflits avec ton agenda et à t’envoyer tes rappels de trajet.</p>
@@ -181,7 +267,8 @@ export function installerLot5(c) {
   }
   function complementReglages(v) {
     const col = v.querySelectorAll('.grille > .colonne')[1] || v;
-    col.insertAdjacentHTML('beforeend', blocRegles() + blocMoi());
+    col.insertAdjacentHTML('beforeend', blocRegles() + blocMoi() + blocPatron());
+    brancherPatron(v);
     $('#ajRegle').onclick = async () => {
       const motif = $('#motifRegle').value.trim(), projet_id = $('#projetRegle').value;
       if (!motif || !projet_id) return toast('Indique un mot-clé et un projet');
@@ -319,6 +406,6 @@ export function installerLot5(c) {
     inp.focus();
   }
 
-  return { conflitDe, agendaDe, moi, blocConflits, brancherConflits, blocCharge, chargeDuJour, minutesLocales, noteDe, compteRendu, creerActionsDepuisNote, complementReglages,
+  return { conflitDe, agendaDe, moi, blocConflits, brancherConflits, blocCharge, chargeDuJour, minutesLocales, noteDe, compteRendu, libRencontre, creerActionsDepuisNote, complementReglages,
     blocLigneTemps, brancherLigneTemps, encartPneus, alertePneus, ouvrirRecherche };
 }

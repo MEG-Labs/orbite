@@ -1459,7 +1459,7 @@ function ouvrirAction(a) {
     </div>
     <div class="pied">
       ${nouveau ? '' : '<button type="button" class="btn danger gauche" id="suppr">Supprimer</button>'}
-      ${!nouveau && a.type === 'Événement' ? `<button type="button" class="btn" id="cr">${L.noteDe(a) ? 'Ouvrir le compte rendu' : 'Compte rendu'}</button>` : ''}
+      ${!nouveau && a.type === 'Événement' ? `<button type="button" class="btn" id="cr" title="Note de rencontre : préparation en haut, compte rendu en bas">${esc(L.libRencontre(a))}</button>` : ''}
       ${a.note_id && parId(S.notes, a.note_id) ? '<button type="button" class="btn discret" id="voirNote">Note d’origine</button>' : ''}
       ${!nouveau && a.recurrence && ouvert(a) ? '<button type="button" class="btn" id="sauter" title="Passer à l’occurrence suivante sans marquer celle-ci comme faite">Sauter cette fois</button>' : ''}
       <button type="button" class="btn" data-fermer>Annuler</button><button type="submit" class="btn primaire">Enregistrer</button>

@@ -92,7 +92,7 @@ L'accueil commence par les **événements du jour** (avec la charge de 8 h à 17
 
 Autres outils :
 - **Recherche globale** : Ctrl+K ou / sur ordinateur, loupe dans le bandeau sur téléphone.
-- **Compte rendu** depuis un événement : note liée au projet; les lignes « - [ ] … » deviennent des tâches.
+- **Note de rencontre** depuis un événement (bouton « Préparer » de la fiche, « Compte rendu » une fois la rencontre passée; « Ouvrir la préparation / le compte rendu » si la note existe) : une seule note « Rencontre — titre », liée à l'événement et à son projet. En haut **Préparation** (objectif, résultat attendu, ordre du jour / questions, documents à apporter, contexte), en bas **Compte rendu** (participants, points discutés, décisions, actions). Le **contexte** est écrit par ORBITE au moment de la création (texte figé) : projet et ses tâches ouvertes, ce que je dois aux participants reconnus et ce qu'ils me doivent (nom complet d'une fiche de Parties prenantes dans le titre, le lieu ou les notes de l'événement), suivis encore ouverts et décisions de la dernière rencontre du même nom qui a une note. Patron modifiable dans Réglages › 📝 Patron de rencontre (réglage `patron_rencontre`; variables `{titre}` `{date}` `{heure}` `{lieu}` `{projet}` `{contexte}`). Rien n'est créé automatiquement (les événements importés restent sans note). Les lignes « - [ ] … » deviennent des tâches; les comptes rendus déjà créés ne changent pas.
 - **Classement automatique** (Réglages) : un mot-clé dans le titre d'un événement le relie à un projet.
 - **Ligne de temps** des jalons dans chaque projet.
 - **Achats reliés au budget** : un achat commandé engage le poste, reçu il le passe à « Payé »; photo ou PDF de facture en stockage privé `factures`.
