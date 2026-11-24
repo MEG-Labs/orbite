@@ -411,7 +411,7 @@ a.lien-jira { color: #7FB3FF; text-decoration: none; font-family: var(--mono); f
 .pied-note { display: flex; flex-wrap: wrap; gap: 8px 14px; align-items: center; }
 .facture input[type=file] { color: var(--brume); font-size: 13px; }
 /* Recherche */
-.btn-recherche { display: flex; align-items: center; gap: 8px; margin-left: auto; margin-right: 18px; background: var(--nuit); border: 1px solid var(--acier); color: var(--brume); font: 13px var(--mono); padding: 7px 10px; border-radius: var(--r); cursor: pointer; }
+.btn-recherche { display: flex; align-items: center; gap: 8px; background: var(--nuit); border: 1px solid var(--acier); color: var(--brume); font: 13px var(--mono); padding: 7px 10px; border-radius: var(--r); cursor: pointer; }
 .btn-recherche:hover { border-color: var(--orange); color: var(--craie); }
 .btn-recherche svg { width: 16px; height: 16px; }
 .btn-recherche kbd { font: 11px var(--mono); border: 1px solid var(--acier); padding: 1px 5px; color: var(--brume); }
@@ -1007,3 +1007,60 @@ h2 .nb-pause { margin-left: 4px; }
 .menu-int-rangee { display: flex; gap: 2px; align-items: center; }
 .menu-int-rangee input { flex: 1 1 auto; min-width: 0; }
 .menu-int-rangee .btn.discret { padding: 4px 7px; }
+
+/* ---------- Onglets épinglés ---------- */
+.onglet.epingle { flex: none; min-width: 0; width: 42px; padding: 0; justify-content: center; }
+.onglet.epingle::after { content: ""; position: absolute; top: 4px; right: 5px; width: 5px; height: 5px; border-radius: 50%; background: var(--orange); }
+.onglet.dernier-epingle { margin-right: 8px; }
+.menu-onglet { position: fixed; z-index: 1000; min-width: 230px; display: grid; padding: 4px; background: var(--coque); border: 1px solid var(--acier); border-radius: var(--r-carte, 5px); box-shadow: 0 8px 24px rgba(0, 0, 0, .35); }
+.menu-onglet button { text-align: left; background: none; border: 0; padding: 8px 10px; color: var(--craie); font: 13px var(--sans); border-radius: var(--r); cursor: pointer; }
+.menu-onglet button:hover, .menu-onglet button:focus-visible { background: var(--coque-2); outline: none; }
+@media (max-width: 760px) { .onglet.epingle { width: 38px; } }
+
+/* ---------- Lot 11 : en-tête (plancher + recherche) ---------- */
+.outils-tete { display: flex; align-items: center; gap: 8px; margin-left: auto; margin-right: 18px; }
+.btn-plancher { display: flex; align-items: center; gap: 6px; background: var(--nuit); border: 1px solid var(--acier); color: var(--brume); font: 13px var(--mono); padding: 7px 10px; border-radius: var(--r); cursor: pointer; white-space: nowrap; }
+.btn-plancher:hover { border-color: var(--orange); color: var(--craie); }
+.btn-plancher.actif { border-color: var(--jaune); color: var(--jaune); background: #2A230F; }
+.btn-plancher.actif b { font-weight: 700; }
+@media (max-width: 760px) { .outils-tete { margin-right: 0; gap: 6px; } .btn-plancher { padding: 7px; } .btn-plancher:not(.actif) .lib { display: none; } }
+.bandeau-plancher { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; background: #2A230F; border: 1px solid var(--jaune); border-left-width: 3px; padding: 10px 14px; margin-bottom: 16px; }
+.bandeau-plancher .aide-plancher { display: block; font-size: 12.5px; color: var(--brume); margin-top: 3px; }
+.choix-plancher { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; }
+.choix-plancher .champ.case { margin: 0; }
+
+/* ---------- Lot 11 : bacs à sable ---------- */
+.avert-bac { margin: 0; grid-column: 1 / -1; padding: 7px 10px; border: 1px solid #7A6123; border-left: 3px solid var(--jaune); background: #2A230F; color: var(--craie); font-size: 13px; }
+.historique-bac { margin: 0; padding-left: 18px; font-size: 13.5px; display: grid; gap: 3px; }
+.moi-bac { display: flex; align-items: center; gap: 6px; margin: 0; }
+.moi-bac span { white-space: nowrap; color: var(--brume); font-size: 13px; }
+.ligne.bac .droite { white-space: normal; }
+
+/* ---------- Lot 11 : feuille de temps ---------- */
+.ft-nav { align-items: center; }
+.ft-nav input[type=date] { max-width: 170px; }
+.ft-totaux { grid-template-columns: repeat(6, minmax(0, 1fr)); }
+.ft-totaux .compteur { cursor: default; }
+.ft-totaux .ft-couvert b { color: var(--orange-pale); }
+.ft-note { margin: -8px 0 16px; }
+@media (max-width: 900px) { .ft-totaux { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+.ft-temps { position: relative; padding: 12px 14px 14px; }
+.ft-grad { position: relative; height: 16px; margin-left: 150px; font: 11px var(--mono); color: var(--brume); }
+.ft-grad span { position: absolute; transform: translateX(-50%); white-space: nowrap; }
+.ft-piste { display: grid; grid-template-columns: 150px minmax(0, 1fr); align-items: center; height: 26px; }
+.ft-lib { font: 12px var(--mono); color: var(--brume); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; padding-right: 8px; }
+.ft-rail { position: relative; height: 18px; border-bottom: 1px solid #1A3A4E; z-index: 1; }
+.ft-bloc { position: absolute; top: 2px; bottom: 2px; border-radius: 2px; min-width: 3px; }
+.ft-bloc.en-cours { background-image: repeating-linear-gradient(45deg, transparent 0 4px, rgba(255, 255, 255, .25) 4px 8px); }
+.ft-bloc.a-venir { opacity: .35; }
+.ft-tache { background: #8E7BE0; } .pastille.ft-tache { background: none; color: #B9A3FF; border-color: #5A4C8C; }
+.ft-inter { background: var(--rouge); } .pastille.ft-inter { background: none; color: var(--rouge); border-color: #7C2A2D; }
+.ft-fly { background: var(--orange); } .pastille.ft-fly { background: none; color: var(--orange-pale); border-color: #7C4421; }
+.ft-evt { background: #4C9BE8; } .pastille.ft-evt { background: none; color: #8CC2F5; border-color: #2C5A86; }
+.ft-plancher { background: var(--jaune); } .pastille.ft-plancher { background: none; color: var(--jaune); border-color: #7A6123; }
+.ft-calque { position: absolute; top: 28px; bottom: 14px; left: calc(14px + 150px); right: 14px; pointer-events: none; }
+.ft-heure { position: absolute; top: 0; bottom: 0; width: 1px; background: #1A3A4E; }
+.ft-maintenant { position: absolute; top: -4px; bottom: 0; width: 2px; margin-left: -1px; background: var(--orange); z-index: 2; }
+@media (max-width: 760px) { .ft-grad { margin-left: 90px; } .ft-piste { grid-template-columns: 90px minmax(0, 1fr); } .ft-calque { left: calc(14px + 90px); } }
+.ft-ligne .heure { white-space: nowrap; font-size: 13px; }
+@media (max-width: 760px) { .ft-grad span.impaire { display: none; } }

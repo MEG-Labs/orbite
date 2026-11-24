@@ -107,3 +107,5 @@ input:focus, select:focus, textarea:focus { border-color: var(--cyan); box-shado
 .lect { border-radius: 0; border-color: var(--trait-fort); }
 .lect-demarrer:hover { border-color: var(--cyan); color: var(--cyan); box-shadow: 0 0 8px rgba(0, 229, 255, .35); }
 .lect-pause { border-color: var(--magenta, #FF2E88); color: var(--magenta, #FF2E88); }
+.onglet.epingle::after { background: var(--cyan); box-shadow: 0 0 6px var(--cyan); }
+.menu-onglet { border-radius: 0; border-color: var(--trait-fort); }

@@ -7,6 +7,7 @@
 //    La tâche choisie dans « tu étais rendu où? » passe en plus « En pause ».
 export function installerLot10(c) {
   const { sb, S, esc, toast, parId, dialogue, rendre } = c;
+  const noterSeance = (...x) => c.noterSeance ? c.noterSeance(...x) : null; // feuille de temps (lot 11)
 
   /* ================= 1. Menu d’interruption ================= */
   const DEFAUT = {
@@ -128,21 +129,29 @@ export function installerLot10(c) {
     const fin = intervalle ? Math.min(new Date(intervalle.fin).getTime(), maintenant) : maintenant;
     const enMarche = S.actions.filter(a => a.statut === 'En cours' && a.chrono_debut && a.type !== 'Événement');
     const faits = [];
+    const iso = t => new Date(t).toISOString();
     for (const a of enMarche) {
       const debChrono = new Date(a.chrono_debut).getTime();
       const retire = Math.max(0, Math.round((fin - Math.max(deb, debChrono)) / 6e4));
-      let champs = null;
+      // Parties du chrono hors de l’interruption : avant (chrono → début de l’interruption) et après (fin → maintenant).
+      const avantFin = Math.min(deb, maintenant), apresDeb = Math.max(fin, debChrono);
+      const minAvant = avantFin > debChrono ? Math.round((avantFin - debChrono) / 6e4) : 0;
+      let champs = null, seances = [];
       if (a.id === pauser) {
         // Pause avec le temps corrigé : on règle nous-mêmes durée et chrono (le déclencheur n’ajoute alors rien).
-        const ecoule = Math.max(0, Math.round((maintenant - debChrono) / 6e4));
-        champs = { statut: 'En pause', chrono_debut: null, duree_reelle_min: (a.duree_reelle_min || 0) + Math.max(0, ecoule - retire) };
+        const minApres = maintenant > apresDeb ? Math.round((maintenant - apresDeb) / 6e4) : 0;
+        champs = { statut: 'En pause', chrono_debut: null, duree_reelle_min: (a.duree_reelle_min || 0) + minAvant + minApres };
+        if (minAvant) seances.push([iso(debChrono), iso(avantFin)]);
+        if (minApres) seances.push([iso(apresDeb), iso(maintenant)]);
       } else if (retire > 0) {
-        // Chrono qui continue : on décale son départ d’autant (sans dépasser maintenant).
-        champs = { chrono_debut: new Date(Math.min(debChrono + retire * 6e4, maintenant)).toISOString() };
+        // Chrono qui continue : la partie d’avant l’interruption devient une séance, le chrono repart à la fin de l’interruption.
+        champs = { chrono_debut: iso(Math.min(apresDeb, maintenant)), duree_reelle_min: (a.duree_reelle_min || 0) + minAvant };
+        if (minAvant) seances.push([iso(debChrono), iso(avantFin)]);
       }
       if (!champs) continue;
       const { error } = await sb.from('actions').update(champs).eq('id', a.id);
       if (error) { toast(`Chrono de « ${a.titre} » non corrigé : ${error.message}`); continue; }
+      for (const [d0, d1] of seances) await noterSeance(a.id, d0, d1);
       if (retire > 0) faits.push({ a, retire });
     }
     // Tâche choisie qui n’avait pas de chrono en marche (ex. « En cours » sans chrono) : simple pause.

@@ -8,6 +8,7 @@ import { installerLot7 } from './lot7.js';
 import { installerLot8 } from './lot8.js';
 import { installerLot9 } from './lot9.js';
 import { installerLot10 } from './lot10.js';
+import { installerLot11 } from './lot11.js';
 
 const sb = createClient(SUPABASE_URL, SUPABASE_KEY, { auth: { persistSession: true, autoRefreshToken: true } });
 
@@ -23,7 +24,7 @@ const CONTEXTES = ['Maison', 'Bureau', 'Téléphone', 'Ordinateur', 'Courses', '
 const S = { session: null, actions: [], projets: [], domaines: [], personnes: [], vue: 'accueil', filtres: {}, agendaPasses: false,
   vehicules: [], entretiens: [], interventions: [], intEnt: [], livres: [], achats: [], abonnements: [], trajets: [], routines: [], notes: [], budget: [], regles: [],
   unites: [], postes: [], titulaires: [], participations: [], reglages: [], journal: [], cahiers: [], push: [], file: [], horsLigne: null };
-let M, X, L, L6, L7, L8, L9, L10; // modules, installés après la définition des fonctions communes
+let M, X, L, L6, L7, L8, L9, L10, L11; // modules, installés après la définition des fonctions communes
 
 const MODULES = [
   { k: 'accueil', l: 'Accueil', g: 'Pilotage', principal: true },
@@ -33,6 +34,7 @@ const MODULES = [
   { k: 'delegations', l: 'Délégations', g: 'Pilotage' },
   { k: 'engagements', l: 'Engagements', g: 'Pilotage' },
   { k: 'revue', l: 'Revue hebdo', g: 'Pilotage' },
+  { k: 'feuille', l: 'Feuille de temps', g: 'Pilotage' },
   { k: 'transports', l: 'Transports', g: 'Vie' },
   { k: 'vehicules', l: 'Véhicules', g: 'Vie' },
   { k: 'achats', l: 'Achats', g: 'Vie' },
@@ -41,6 +43,7 @@ const MODULES = [
   { k: 'routines', l: 'Routines', g: 'Vie' },
   { k: 'carnet', l: 'Carnet', g: 'Repères' },
   { k: 'parties', l: 'Parties prenantes', g: 'Repères' },
+  { k: 'bacs', l: 'Bacs à sable', g: 'Repères' },
   { k: 'reglages', l: 'Réglages', g: 'Repères' },
 ];
 
@@ -111,6 +114,8 @@ const ICONES = {
   parties: '<rect x="3" y="8" width="8" height="13" fill="none" stroke="currentColor" stroke-width="2"/><path d="M5.5 12h3M5.5 16h3" stroke="currentColor" stroke-width="2"/><circle cx="17" cy="9" r="3" fill="none" stroke="currentColor" stroke-width="2"/><path d="M12.5 21c0-3 2-5 4.5-5s4.5 2 4.5 5" fill="none" stroke="currentColor" stroke-width="2"/>',
   engagements: '<path d="M4 5h16v11H10l-5 4v-4H4z" fill="none" stroke="currentColor" stroke-width="2"/><path d="m8.5 10.5 2.5 2.5 4.5-4.5" fill="none" stroke="currentColor" stroke-width="2"/>',
   reglages: '<circle cx="12" cy="12" r="3" fill="none" stroke="currentColor" stroke-width="2"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M4.9 19.1 7 17M17 7l2.1-2.1" stroke="currentColor" stroke-width="2"/>',
+  feuille: '<rect x="4" y="3" width="16" height="18" fill="none" stroke="currentColor" stroke-width="2"/><path d="M8 8h8M8 12h5M8 16h3" stroke="currentColor" stroke-width="2"/><circle cx="16.5" cy="16.5" r="3" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M16.5 15v1.6l1 .8" stroke="currentColor" stroke-width="1.4"/>',
+  bacs: '<path d="M3 14h18l-2 6H5zM6 14l1.5-6h9L18 14" fill="none" stroke="currentColor" stroke-width="2"/><circle cx="12" cy="5" r="2" fill="none" stroke="currentColor" stroke-width="2"/>',
   moins: '<circle cx="5" cy="12" r="2" fill="currentColor"/><circle cx="12" cy="12" r="2" fill="currentColor"/><circle cx="19" cy="12" r="2" fill="currentColor"/>',
 };
 const ico = n => `<svg viewBox="0 0 24 24" aria-hidden="true">${ICONES[n]}</svg>`;
@@ -176,6 +181,7 @@ async function charger() {
     const { error } = await sb.from('trajets').update({ statut: 'Fait' }).in('id', trajetsPasses.map(t => t.id));
     if (!error) trajetsPasses.forEach(t => { t.statut = 'Fait'; });
   }
+  await L11.charger();
   try { localStorage.setItem('orbite-cache', JSON.stringify({ le: new Date().toISOString(), donnees: Object.fromEntries(cles.map(k => [k, S[k]])) })); } catch { }
 }
 async function rafraichir() { await charger(); rendre(); }
@@ -203,7 +209,7 @@ function rendre() {
     <header class="bandeau">
       <div class="marque">${LOGO}ORBITE</div>
       <div class="devise">Processus de soutien. Projets logistiques. Le reste, <u>je délègue</u>.</div>
-      <button class="btn-recherche" id="btnRecherche" aria-label="Chercher partout" title="Chercher partout (Ctrl+K)"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5" fill="none" stroke="currentColor" stroke-width="2"/><path d="m15.5 15.5 5 5" stroke="currentColor" stroke-width="2" stroke-linecap="square"/></svg><span>Chercher</span><kbd>Ctrl K</kbd></button>
+      <div class="outils-tete">${L11.boutonPlancher()}<button class="btn-recherche" id="btnRecherche" aria-label="Chercher partout" title="Chercher partout (Ctrl+K)"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5" fill="none" stroke="currentColor" stroke-width="2"/><path d="m15.5 15.5 5 5" stroke="currentColor" stroke-width="2" stroke-linecap="square"/></svg><span>Chercher</span><kbd>Ctrl K</kbd></button></div>
       <div class="horloge" id="horloge"></div>
       ${L9.barreOnglets()}
     </header>
@@ -224,9 +230,10 @@ function rendre() {
   $('#deco').onclick = async () => { await sb.auth.signOut(); };
   horloge();
   const v = document.createElement('div'); $('#vue').appendChild(v);
-  ({ accueil: vueAccueil, agenda: vueAgenda, projets: vueProjets, projet: vueProjet, actions: vueActions, reperes: vueReperes, ...M.vues, ...X.vues, ...L7.vues, ...L9.vues,
+  ({ accueil: vueAccueil, agenda: vueAgenda, projets: vueProjets, projet: vueProjet, actions: vueActions, reperes: vueReperes, ...M.vues, ...X.vues, ...L7.vues, ...L9.vues, ...L11.vues,
     reglages: async v => { await X.vues.reglages(v); L.complementReglages(v); L9.complementReglages(v); L10.complementReglages(v); } }[S.vue] || vueAccueil)(v);
   brancherLignes(v);
+  L11.brancherPlancher(app);
 }
 
 function horloge() {
@@ -343,6 +350,8 @@ async function actionLecteur(a, quoi, bouton) {
   } else if (quoi === 'annuler') {
     const p = annulable(a); if (!p) { bouton.disabled = false; return; }
     ok = await majAction(a.id, { statut: p.statut, realisee_le: p.realisee_le ?? null, chrono_debut: p.chrono_debut ?? null, duree_reelle_min: p.duree_reelle_min ?? null });
+    // Feuille de temps : la séance écrite par le changement annulé est retirée (sinon elle compterait deux fois).
+    if (ok) await L11.annulerSeances(a.id, p.le);
     // Tâche récurrente qu’on « dé-termine » : l’occurrence suivante créée au même moment, encore intacte, est retirée
     // (elle sera recréée si la tâche est terminée de nouveau).
     if (ok && a.statut === 'Terminé' && a.recurrence) {
@@ -695,7 +704,7 @@ function vueAccueil(v) {
   const zone = (z, cls) => `<div class="zone-accueil ${cls}" data-zone="${z}" data-libelle="${esc(ZONES[z])}">${dispo[z].map(k => encadre(k, B[k])).join('')}</div>`;
 
   // Bandeaux contextuels fixés en haut (non déplaçables) : mode hors travail, fermer ma journée, pneus, événements passés.
-  v.innerHTML = `${L7.bandeauReprise()}${L6.bandeauMode()}${L6.blocFermeture()}
+  v.innerHTML = `${L11.bandeauPlancher()}${L7.bandeauReprise()}${L6.bandeauMode()}${L6.blocFermeture()}
     ${M.bandeauRevue()}
     ${L.encartPneus()}
     ${passes.length ? `<div class="bloc signal" style="margin-bottom:22px"><header><h2>${passes.length} événement${passes.length > 1 ? 's' : ''} passé${passes.length > 1 ? 's' : ''} encore ouvert${passes.length > 1 ? 's' : ''}</h2>
@@ -941,6 +950,8 @@ function depuisLocal(val) { // valeur datetime-local (heure de Toronto) -> ISO
 }
 const minuitLocal = jour => depuisLocal(jour + 'T00:00');
 
+// Formulaires avec un titre de tâche ou de projet : avertissement « processus de quelqu’un d’autre » (bacs à sable, lot 11).
+function dialogueAvert(html, onsubmit) { const d = dialogue(html, onsubmit); try { L11.brancherAvert(d); } catch { } return d; }
 function dialogue(html, onsubmit) {
   const d = document.createElement('dialog');
   d.innerHTML = html;
@@ -984,7 +995,7 @@ function ouvrirCapture() {
   let deplie = false; try { deplie = localStorage.getItem(CLE_DETAILS) === '1'; } catch { }
   const auj = aujourdhui();
   const nbPlan = S.actions.filter(a => a.plan_du_jour === auj && ouvert(a)).length;
-  const d = dialogue(`<form>
+  const d = dialogueAvert(`<form>
     <div class="tete-d"><h2>Capture rapide</h2><button type="button" class="btn discret" data-fermer aria-label="Fermer">✕</button></div>
     <div class="corps">
       <label class="champ large"><span>Quoi?</span><input name="titre" class="titre-saisie" required autofocus autocomplete="off" placeholder="Un titre suffit"></label>
@@ -1113,7 +1124,7 @@ function ouvrirSurLeFly({ interruption = false } = {}) {
   const DUREES = MENU.durees, dureeDefaut = DUREES.includes(15) ? 15 : DUREES[0];
   const maintenant = versLocal(new Date().toISOString());
   const puces = (nom, valeurs) => `<div class="types-rapides" role="radiogroup">${valeurs.map(x => `<label><input type="radio" name="${nom}" value="${esc(x)}"><span>${esc(x)}</span></label>`).join('')}</div>`;
-  const d = dialogue(`<form>
+  const d = dialogueAvert(`<form>
     <div class="tete-d"><h2 id="titreFly">⚡ Fait sur le fly</h2><div><button type="button" class="btn discret" id="histFly">Historique</button><button type="button" class="btn discret" data-fermer aria-label="Fermer">✕</button></div></div>
     <div class="corps">
       <label class="champ large bascule-interruption"><input type="checkbox" name="interruption" ${interruption ? 'checked' : ''}><span>🚨 C’est une interruption (support opérationnel)</span></label>
@@ -1392,7 +1403,7 @@ function ouvrirAction(a) {
   const jourFin = a.planifie_fin && !a.journee_entiere ? cleJour(a.planifie_fin) : '';
   const hFin = a.planifie_fin && !a.journee_entiere ? versLocal(a.planifie_fin).slice(11, 16) : '';
   const m = manquants(a);
-  const d = dialogue(`<form>
+  const d = dialogueAvert(`<form>
     <div class="tete-d"><h2>${nouveau ? 'Nouvelle action' : 'Action #' + a.ref}</h2><button type="button" class="btn discret" data-fermer aria-label="Fermer">✕</button></div>
     <div class="corps">
       <label class="champ large"><span>Titre</span><input name="titre" class="titre-saisie" required value="${esc(a.titre)}" ${nouveau ? 'autofocus' : ''}></label>
@@ -1527,7 +1538,7 @@ function ouvrirAction(a) {
 /* ---------- Fiche projet ---------- */
 function ouvrirProjet(p) {
   const nouveau = !p.id;
-  const d = dialogue(`<form>
+  const d = dialogueAvert(`<form>
     <div class="tete-d"><h2>${nouveau ? 'Nouveau projet' : 'Modifier le projet'}</h2><button type="button" class="btn discret" data-fermer aria-label="Fermer">✕</button></div>
     <div class="corps">
       <label class="champ large"><span>Nom</span><input name="titre" class="titre-saisie" required value="${esc(p.titre)}" ${nouveau ? 'autofocus' : ''}></label>
@@ -1745,7 +1756,8 @@ L9 = installerLot9({ sb, S, esc, toast, parId, aujourdhui, jourDate, cleJour, fm
   ouvrirPersonne, ouvrirDomaine, ouvrirAction, ficheUnite: u => M.ficheUnite(u), vueOrganigramme: v => M.vues.organigramme(v),
   creerActionsDepuisNote: (n, t) => L.creerActionsDepuisNote(n, t), rechargerActions: () => charger() });
 
-L10 = installerLot10({ sb, S, esc, toast, parId, dialogue, rendre: () => rendre() });
+L10 = installerLot10({ sb, S, esc, toast, parId, dialogue, rendre: () => rendre(), noterSeance: (...x) => L11.noterSeance(...x) });
+L11 = installerLot11({ sb, S, esc, toast, parId, dialogue, rendre: () => rendre(), rafraichir, aujourdhui, plusJours, cleJour, jourDate, jourLong, fmtHeure, ouvrirAction, depuisLocal, versLocal });
 L8 = installerLot8({ sb, S, esc, toast, parId, aujourdhui, plusJours, rafraichir, rendre: () => rendre(), carteProjet, sante, STATUTS_PROJET, PRIOS });
 window.addEventListener('hashchange', () => {
   if (!S.session) return;
@@ -1767,6 +1779,7 @@ document.addEventListener('keydown', e => {
   if (S.session && ((e.key.toLowerCase() === 'k' && (e.ctrlKey || e.metaKey)) || (e.key === '/' && !document.querySelector('dialog[open]') && !(/INPUT|TEXTAREA|SELECT/.test(document.activeElement.tagName) || document.activeElement.isContentEditable)))) { e.preventDefault(); return L.ouvrirRecherche(); }
   if (e.key.toLowerCase() === 'f' && !e.ctrlKey && !e.metaKey && !e.altKey && S.session && !document.querySelector('dialog[open]') && !(/INPUT|TEXTAREA|SELECT/.test(document.activeElement.tagName) || document.activeElement.isContentEditable)) { e.preventDefault(); ouvrirSurLeFly(); }
   if (e.key.toLowerCase() === 'i' && !e.ctrlKey && !e.metaKey && !e.altKey && S.session && !document.querySelector('dialog[open]') && !(/INPUT|TEXTAREA|SELECT/.test(document.activeElement.tagName) || document.activeElement.isContentEditable)) { e.preventDefault(); ouvrirSurLeFly({ interruption: true }); }
+  if (e.key.toLowerCase() === 'p' && !e.ctrlKey && !e.metaKey && !e.altKey && S.session && S.lot11 && !document.querySelector('dialog[open]') && !(/INPUT|TEXTAREA|SELECT/.test(document.activeElement.tagName) || document.activeElement.isContentEditable)) { e.preventDefault(); L11.plancher() ? L11.retour() : L11.partir(); }
   if (e.key.toLowerCase() === 'n' && S.session && !document.querySelector('dialog[open]') && !(/INPUT|TEXTAREA|SELECT/.test(document.activeElement.tagName) || document.activeElement.isContentEditable)) { e.preventDefault(); ouvrirCapture(); }
 });
 document.addEventListener('visibilitychange', () => { if (!document.hidden && S.session && !document.querySelector('dialog[open]') && !L9.editionEnCours()) rafraichir().then(() => M.proposerRevue()).catch(() => {}); });

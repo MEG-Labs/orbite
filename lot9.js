@@ -34,13 +34,71 @@ export function installerLot9(c) {
     S.vue = ALIAS[t.vue] || t.vue || 'accueil'; S.filtres = t.filtres || {}; S.projetId = t.projetId || null; S.noteId = t.noteId || null; S.reorg = false;
     if (t.vue === 'organigramme') S.filtres.sous = 'organigramme';
   }
+  /* Onglets épinglés (t.epingle) : toujours à gauche, compacts (icône seule), sans ×.
+     L’épingle verrouille la PAGE (module, projet, note, page d’une compagnie) : y naviguer vers une autre page ouvre
+     un nouvel onglet et l’onglet épinglé reste où il est. Filtres et sous-onglets de la page restent modifiables sur place.
+     Les fiches (tâche, personne, poste…) s’ouvrent en fenêtre par-dessus, sans changer d’onglet.
+     Épingler / désépingler : clic droit sur l’onglet (appui long sur écran tactile). */
+  const clePage = (vue, projetId, noteId, f) => [vue, projetId || '', noteId || '', vue === 'parties' && f?.sous !== 'personnes' && f?.sous !== 'organigramme' ? f?.compagnieId || '' : ''].join('|');
+  const nbEpingles = () => O.liste.filter(t => t.epingle).length;
   // Appelé au début de chaque rendu : l’état affiché devient celui de l’onglet actif.
   function synchro() {
     if (ALIAS[S.vue]) { if (S.vue === 'organigramme') S.filtres = { ...S.filtres, sous: 'organigramme' }; S.vue = ALIAS[S.vue]; }
     if (S.vue !== 'note') S.noteId = null;
     const t = actif(); if (!t) return;
+    if (t.epingle) {
+      const avant = clePage(t.vue, t.projetId, t.noteId, t.filtresSauves || t.filtres);
+      if (avant !== clePage(S.vue, S.projetId, S.noteId, S.filtres)) {
+        // Navigation depuis un onglet épinglé : la nouvelle page part dans un nouvel onglet (juste après les épinglés).
+        t.filtres = propre(t.filtresSauves || {}); t.defil = synchro.defil ?? t.defil;
+        const n = { id: nouvelId(), vue: S.vue, filtres: S.filtres, projetId: S.projetId || null, noteId: S.noteId || null, defil: 0 };
+        const i = O.liste.indexOf(t);
+        O.liste.splice(Math.max(i + 1, nbEpingles()), 0, n);
+        O.actif = n.id;
+        requestAnimationFrame(() => window.scrollTo(0, 0));
+        sauver(); return;
+      }
+      t.filtresSauves = propre(S.filtres);
+    }
     Object.assign(t, { vue: S.vue, filtres: S.filtres, projetId: S.projetId || null, noteId: S.noteId || null });
     sauver();
+  }
+  // Position de défilement de l’onglet épinglé, mémorisée avant un clic qui pourrait naviguer.
+  document.addEventListener('click', () => { if (actif()?.epingle) synchro.defil = window.scrollY; }, true);
+  function epingler(id, oui) {
+    const t = O.liste.find(x => x.id === id); if (!t) return;
+    if (t.id === O.actif) synchro();
+    const i = O.liste.indexOf(t); O.liste.splice(i, 1);
+    t.epingle = oui;
+    if (oui) t.filtresSauves = propre(t.filtres); else delete t.filtresSauves;
+    O.liste.splice(nbEpingles(), 0, t); // à la fin des épinglés, ou au début des autres
+    sauver(); majBarre();
+    toast(oui ? `📌 « ${titreOnglet(t)} » épinglé : naviguer ailleurs ouvrira un nouvel onglet` : `« ${titreOnglet(t)} » désépinglé`);
+  }
+  function menuOnglet(id, x, y) {
+    document.querySelector('.menu-onglet')?.remove();
+    const t = O.liste.find(o => o.id === id); if (!t) return;
+    const m = document.createElement('div');
+    m.className = 'menu-onglet'; m.setAttribute('role', 'menu');
+    m.innerHTML = `<button type="button" role="menuitem" data-m="epingle">${t.epingle ? 'Désépingler' : '📌 Épingler l’onglet'}</button>
+      <button type="button" role="menuitem" data-m="dupliquer">Dupliquer</button>
+      <button type="button" role="menuitem" data-m="fermer">Fermer${t.epingle ? ' (épinglé)' : ''}</button>
+      ${O.liste.length > 1 ? '<button type="button" role="menuitem" data-m="autres">Fermer les autres onglets non épinglés</button>' : ''}`;
+    document.body.appendChild(m);
+    const r = m.getBoundingClientRect();
+    m.style.left = Math.max(8, Math.min(x, innerWidth - r.width - 8)) + 'px'; m.style.top = Math.min(y, innerHeight - r.height - 8) + 'px';
+    const fin = () => { m.remove(); document.removeEventListener('pointerdown', dehors, true); document.removeEventListener('keydown', esc_, true); };
+    const dehors = e => { if (!m.contains(e.target)) fin(); };
+    const esc_ = e => { if (e.key === 'Escape') { e.stopPropagation(); fin(); } };
+    setTimeout(() => { document.addEventListener('pointerdown', dehors, true); document.addEventListener('keydown', esc_, true); });
+    m.onclick = e => {
+      const k = e.target.closest('[data-m]')?.dataset.m; if (!k) return; fin();
+      if (k === 'epingle') epingler(id, !t.epingle);
+      else if (k === 'dupliquer') { if (t.id === O.actif) synchro(); ouvrir({ vue: t.vue, filtres: propre(t.epingle ? t.filtresSauves : t.filtres), projetId: t.projetId, noteId: t.noteId }); }
+      else if (k === 'fermer') fermer(id, { force: true });
+      else if (k === 'autres') { O.liste.filter(o => !o.epingle && o.id !== id).map(o => o.id).forEach(o => fermer(o)); }
+    };
+    m.querySelector('button').focus();
   }
   function restaurer(hash) {
     try { const o = JSON.parse(localStorage.getItem(CLE_ONG) || 'null'); if (o?.liste?.length) O = o; } catch { }
@@ -55,13 +113,15 @@ export function installerLot9(c) {
     if (t.vue === 'projet') return parId(S.projets, t.projetId)?.titre || 'Projet';
     if (t.vue === 'note') return (brouillons[t.noteId]?.titre || parId(S.notes, t.noteId)?.titre || '').trim() || 'Nouvelle note';
     if (t.vue === 'plus') return 'Plus';
+    if (t.vue === 'parties' && t.filtres?.compagnieId && !['personnes', 'organigramme'].includes(t.filtres.sous)) return parId(S.unites, t.filtres.compagnieId)?.nom || 'Compagnie';
     return MODULES.find(m => m.k === (ALIAS[t.vue] || t.vue))?.l || 'Accueil';
   }
   const icoOnglet = t => t.vue === 'note' ? ico('carnet') : t.vue === 'projet' ? ico('projets') : MODULES.some(m => m.k === t.vue) ? ico(t.vue) : ico('accueil');
   function barreOnglets() {
     return `<div class="barre-onglets" role="tablist" aria-label="Onglets ouverts">
-      ${O.liste.map(t => { const ti = titreOnglet(t), a = t.id === O.actif;
-        return `<div class="onglet${a ? ' actif' : ''}" role="tab" aria-selected="${a}" tabindex="${a ? 0 : -1}" data-onglet="${t.id}" title="${esc(ti)}">${icoOnglet(t)}<span>${esc(ti)}</span>
+      ${O.liste.map((t, i) => { const ti = titreOnglet(t), a = t.id === O.actif;
+        if (t.epingle) return `<div class="onglet epingle${a ? ' actif' : ''}${O.liste[i + 1] && !O.liste[i + 1].epingle ? ' dernier-epingle' : ''}" role="tab" aria-selected="${a}" tabindex="${a ? 0 : -1}" data-onglet="${t.id}" title="📌 ${esc(ti)} (épinglé · clic droit pour désépingler)" aria-label="${esc(ti)}, épinglé">${icoOnglet(t)}</div>`;
+        return `<div class="onglet${a ? ' actif' : ''}" role="tab" aria-selected="${a}" tabindex="${a ? 0 : -1}" data-onglet="${t.id}" title="${esc(ti)} (clic droit : épingler)">${icoOnglet(t)}<span>${esc(ti)}</span>
           <button type="button" class="fermer-onglet" data-fermer-onglet="${t.id}" aria-label="Fermer l’onglet ${esc(ti)}" title="Fermer">×</button></div>`; }).join('')}
       <button type="button" class="nouvel-onglet" data-nouvel-onglet aria-label="Nouvel onglet" title="Nouvel onglet">+</button></div>`;
   }
@@ -75,11 +135,17 @@ export function installerLot9(c) {
     b.querySelectorAll('[data-onglet]').forEach(el => {
       el.onclick = e => { if (e.target.closest('[data-fermer-onglet]')) return; if (el.dataset.onglet !== O.actif) activer(el.dataset.onglet); };
       el.onauxclick = e => { if (e.button === 1) { e.preventDefault(); fermer(el.dataset.onglet); } };
+      el.oncontextmenu = e => { e.preventDefault(); menuOnglet(el.dataset.onglet, e.clientX, e.clientY); };
+      // Appui long (tactile) : même menu.
+      el.addEventListener('touchstart', e => { const p = e.touches[0]; el._appui = setTimeout(() => { el._long = true; if (navigator.vibrate) navigator.vibrate(15); menuOnglet(el.dataset.onglet, p.clientX, p.clientY + 12); }, 500); }, { passive: true });
+      ['touchend', 'touchmove', 'touchcancel'].forEach(ev => el.addEventListener(ev, () => clearTimeout(el._appui), { passive: true }));
+      el.addEventListener('click', e => { if (el._long) { el._long = false; e.stopImmediatePropagation(); e.preventDefault(); } }, true);
       el.onmousedown = e => { if (e.button === 1) e.preventDefault(); };
       el.onkeydown = e => {
         const i = O.liste.findIndex(t => t.id === el.dataset.onglet);
         if (e.key === 'ArrowRight' || e.key === 'ArrowLeft') { const s = O.liste[(i + (e.key === 'ArrowRight' ? 1 : -1) + O.liste.length) % O.liste.length]; activer(s.id); requestAnimationFrame(() => document.querySelector(`[data-onglet="${s.id}"]`)?.focus()); }
         if (e.key === 'Delete') fermer(el.dataset.onglet);
+        if (e.key === 'ContextMenu' || (e.shiftKey && e.key === 'F10')) { e.preventDefault(); const r = el.getBoundingClientRect(); menuOnglet(el.dataset.onglet, r.left, r.bottom + 4); }
       };
     });
     b.querySelectorAll('[data-fermer-onglet]').forEach(x => x.onclick = e => { e.stopPropagation(); fermer(x.dataset.fermerOnglet); });
@@ -100,14 +166,16 @@ export function installerLot9(c) {
     synchro();
     const t = { id: nouvelId(), vue: 'accueil', filtres: {}, projetId: null, noteId: null, ...etat };
     const i = O.liste.findIndex(x => x.id === O.actif);
-    O.liste.splice(i + 1, 0, t);
+    O.liste.splice(Math.max(i + 1, nbEpingles()), 0, t); // jamais au milieu des onglets épinglés
     if (arrierePlan) { sauver(); majBarre(); toast(`« ${titreOnglet(t)} » ouvert dans un nouvel onglet`); } else activer(t.id);
     return t;
   }
-  function fermer(id) {
+  function fermer(id, { force = false } = {}) {
     const t = O.liste.find(x => x.id === id); if (!t) return;
+    // Un onglet épinglé ne se ferme que par son menu (clic droit › Fermer), pas par le clic du milieu ni Suppr.
+    if (t.epingle && !force) { toast('Onglet épinglé : clic droit › Désépingler ou Fermer'); return; }
     if (id === O.actif) avantRendre();
-    if (O.liste.length === 1) { Object.assign(t, { vue: 'accueil', filtres: {}, projetId: null, noteId: null, defil: 0 }); appliquer(t); history.replaceState(null, '', location.pathname); rendre(); sauver(); return; }
+    if (O.liste.length === 1) { Object.assign(t, { vue: 'accueil', filtres: {}, projetId: null, noteId: null, defil: 0, epingle: false }); delete t.filtresSauves; appliquer(t); history.replaceState(null, '', location.pathname); rendre(); sauver(); return; }
     const i = O.liste.indexOf(t); O.liste.splice(i, 1);
     if (id === O.actif) { O.actif = null; const s = O.liste[Math.min(i, O.liste.length - 1)]; O.actif = s.id; appliquer(s); history.replaceState(null, '', S.vue === 'accueil' ? location.pathname : '#' + S.vue); rendre(); requestAnimationFrame(() => window.scrollTo(0, s.defil || 0)); }
     else majBarre();
