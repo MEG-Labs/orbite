@@ -10,6 +10,7 @@ import { installerLot9 } from './lot9.js';
 import { installerLot10 } from './lot10.js';
 import { installerLot11 } from './lot11.js';
 import { installerLot12 } from './lot12.js';
+import { installerLot13 } from './lot13.js';
 
 const sb = createClient(SUPABASE_URL, SUPABASE_KEY, { auth: { persistSession: true, autoRefreshToken: true } });
 
@@ -25,7 +26,7 @@ const CONTEXTES = ['Maison', 'Bureau', 'Téléphone', 'Ordinateur', 'Courses', '
 const S = { session: null, actions: [], projets: [], domaines: [], personnes: [], vue: 'accueil', filtres: {}, agendaPasses: false,
   vehicules: [], entretiens: [], interventions: [], intEnt: [], livres: [], achats: [], abonnements: [], trajets: [], routines: [], notes: [], budget: [], regles: [],
   unites: [], postes: [], titulaires: [], participations: [], reglages: [], journal: [], cahiers: [], push: [], file: [], horsLigne: null };
-let M, X, L, L6, L7, L8, L9, L10, L11, L12; // modules, installés après la définition des fonctions communes
+let M, X, L, L6, L7, L8, L9, L10, L11, L12, L13; // modules, installés après la définition des fonctions communes
 
 const MODULES = [
   { k: 'accueil', l: 'Accueil', g: 'Pilotage', principal: true },
@@ -182,7 +183,7 @@ async function charger() {
     const { error } = await sb.from('trajets').update({ statut: 'Fait' }).in('id', trajetsPasses.map(t => t.id));
     if (!error) trajetsPasses.forEach(t => { t.statut = 'Fait'; });
   }
-  await L11.charger();
+  await Promise.all([L11.charger(), L13.charger()]);
   try { localStorage.setItem('orbite-cache', JSON.stringify({ le: new Date().toISOString(), donnees: Object.fromEntries(cles.map(k => [k, S[k]])) })); } catch { }
 }
 async function rafraichir() { await charger(); rendre(); }
@@ -686,6 +687,7 @@ function vueAccueil(v) {
       ${cpt(bloques.length, 'Bloquées ou relances', 'attention', 'bloques')}
       ${cpt(aTrier.length, 'À trier', 'attention', 'trier')}
       ${cpt(actifs.length, 'Projets actifs', 'calme', 'projets')}
+      ${L13.compteur()}
     </section>`,
     plan: X.blocPlan(),
     habitudes: M.blocHabitudes(),
@@ -727,6 +729,7 @@ function vueAccueil(v) {
   if (!S.reorg) brancherGlisser(v);
   brancherReorg(v);
   M.brancherHabitudes(v);
+  L13.brancher(v);
   const pt = v.querySelector('details.plus-tard'); if (pt) pt.ontoggle = () => { S.evtOuverts = pt.open; };
   const cp = v.querySelector('#choisirPlan'); if (cp) cp.onclick = () => X.choisirPlan();
   v.querySelectorAll('[data-cible]').forEach(b => b.onclick = () => {
@@ -1763,7 +1766,8 @@ L10 = installerLot10({ sb, S, esc, toast, parId, dialogue, rendre: () => rendre(
 L11 = installerLot11({ sb, S, esc, toast, parId, dialogue, rendre: () => rendre(), rafraichir, aujourdhui, plusJours, cleJour, jourDate, jourLong, fmtHeure, ouvrirAction, depuisLocal, versLocal });
 L12 = installerLot12({ S, esc, toast, parId, aujourdhui, plusJours, cleJour, jourDate, fmtHeure, liste, ouvert, enRetard, brancherLignes, triOuvert,
   visible: a => L6.visible(a), blocCharge: () => L.blocCharge(), plancher: () => L11.plancher(), brancherPlancher: r => L11.brancherPlancher(r),
-  resumeJour: j => L11.resumeJour(j), ouvrirSurLeFly, ouvrirCapture });
+  resumeJour: j => L11.resumeJour(j), ouvrirSurLeFly, ouvrirCapture, chiffreCafe: () => L13.chiffre(), brancherCafe: r => L13.brancher(r) });
+L13 = installerLot13({ sb, S, esc, toast, aujourdhui, cleJour, fmtHeure });
 L8 = installerLot8({ sb, S, esc, toast, parId, aujourdhui, plusJours, rafraichir, rendre: () => rendre(), carteProjet, sante, STATUTS_PROJET, PRIOS });
 window.addEventListener('hashchange', () => {
   if (!S.session) return;

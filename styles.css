@@ -1161,3 +1161,24 @@ body.en-presentation { overflow: hidden; }
 .pr-min-libre { display: inline-flex; gap: 3px; }
 .pr-min-libre input { width: 64px; padding: 4px 6px; font: 12.5px var(--mono); }
 @media (max-width: 900px) { .pr-minuterie { min-width: 0; width: 100%; } }
+
+/* ---------- Compteur de cafés (lot 13) ---------- */
+/* Accueil : 7e tuile de l'encadré « Compteurs », plus large (elle porte ses boutons). Pas cliquable en entier, seulement ses boutons. */
+.compteurs:has(> .compteur-cafe) { grid-template-columns: repeat(6, 1fr) minmax(210px, 1.5fr); }
+.compteur-cafe { cursor: default; display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
+.compteur-cafe:hover { background: var(--coque); }
+.cafe-texte { display: grid; gap: 2px; min-width: 0; }
+.compteur-cafe small, .pr-cafe small { font-size: 12px; color: var(--brume); font-variant-numeric: tabular-nums; }
+.cafe-boutons { display: flex; gap: 6px; flex-wrap: wrap; }
+.cafe-boutons .btn { padding: 6px 12px; min-height: 38px; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.cafe-boutons .btn:disabled { opacity: .45; cursor: not-allowed; }
+/* Téléphone, tablette, ou encadré placé dans une colonne : la tuile café prend toute une rangée sous les six autres. */
+@media (max-width: 1080px) {
+  .compteurs:has(> .compteur-cafe) { grid-template-columns: repeat(3, 1fr); }
+  .compteur-cafe { grid-column: 1 / -1; }
+}
+.grille .compteurs:has(> .compteur-cafe) { grid-template-columns: repeat(3, 1fr); }
+.grille .compteur-cafe { grid-column: 1 / -1; }
+@media (max-width: 760px) { .cafe-boutons .btn { min-height: 44px; padding: 8px 14px; } }
+/* Mode présentation : chiffre de la tuile « Chiffres du jour », boutons dessous. */
+.pr-cafe .cafe-boutons { margin-top: 6px; }

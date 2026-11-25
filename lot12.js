@@ -179,6 +179,7 @@ export function installerLot12(c) {
         ${ch(inter.length, `Interruption${inter.length > 1 ? 's' : ''}${r ? ` · ${esc(dureeTxt(r.interruptions))}` : ''}`, inter.length ? 'attention' : 'calme')}
         ${ch(r ? esc(dureeTxt(r.reunions)) : '—', 'Réunions')}
         ${ch(r ? esc(dureeTxt(r.couvert)) : '—', 'Temps couvert')}
+        ${c.chiffreCafe?.() || ''}
       </div>
       ${r?.parTache.length ? `<ul class="pr-barres">${(() => { const max = Math.max(...r.parTache.map(x => x.min), 1); return r.parTache.slice(0, 6).map(x => `<li><span class="pr-barre-lib">${esc(x.a?.titre || 'Tâche supprimée')}${x.enCours ? ' ●' : ''}</span><span class="pr-barre"><i style="width:${Math.max(2, x.min / max * 100)}%"></i></span><b>${esc(dureeTxt(x.min))}</b></li>`).join(''); })()}</ul>`
         : vide(S.lot11 ? 'Aucune séance de chrono aujourd’hui.' : 'La feuille de temps demande la migration du lot 11.')}
@@ -219,6 +220,7 @@ export function installerLot12(c) {
     brancherLignes(racine);
     brancherMinuterie(racine);
     c.brancherPlancher?.(racine);
+    c.brancherCafe?.(racine);
     racine.querySelector('[data-pr="fly"]').onclick = () => c.ouvrirSurLeFly();
     racine.querySelector('[data-pr="inter"]').onclick = () => c.ouvrirSurLeFly({ interruption: true });
     racine.querySelector('[data-pr="capture"]').onclick = () => c.ouvrirCapture();
@@ -228,7 +230,7 @@ export function installerLot12(c) {
     if (!c.resumeJour || (!force && Date.now() - resumeLe < 60e3)) return;
     resumeLe = Date.now();
     try { resume = await c.resumeJour(aujourdhui()); } catch { resume = null; }
-    if (racine) { const t = racine.querySelector('.pr-chiffres-jour'); if (t) { t.outerHTML = chiffres(); brancherLignes(racine); } }
+    if (racine) { const t = racine.querySelector('.pr-chiffres-jour'); if (t) { t.outerHTML = chiffres(); brancherLignes(racine); c.brancherCafe?.(racine); } }
   }
   // Chaque seconde : heure, chrono vedette, compte à rebours. Chaque minute : tout le tableau (et le résumé du jour).
   function tic() {

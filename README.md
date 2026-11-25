@@ -113,8 +113,15 @@ Données importées de Notion le 6 novembre 2026 (colonne `notion_id` pour la tr
 - **Tâche en cours** : la plus récemment démarrée, en grand (titre, projet, échéance, chrono h:mm:ss, jauge réel contre prévu, prochain geste), avec ses boutons ▶ ⏸ ⏮ et la case; puis les autres tâches en cours et celles en pause.
 - **Ma journée** : rencontre en cours, prochaine rencontre avec compte à rebours, la suite de la journée, barre de charge 8 h–17 h, plancher en cours, « Aujourd'hui, je fais ».
 - **Engagements et alertes** : promesses dues d'ici demain, retards, relances, bloquées ou en attente, à trier; les six plus urgentes en liste.
-- **Chiffres du jour** : victoires, temps sur mes tâches, interruptions (nombre et minutes), réunions, temps couvert (feuille de temps, lot 11), temps par tâche en barres, dernières victoires.
+- **Chiffres du jour** : victoires, temps sur mes tâches, interruptions (nombre et minutes), réunions, temps couvert (feuille de temps, lot 11), cafés du jour avec ☕ +1 et −1 (lot 13), temps par tâche en barres, dernières victoires.
 - On agit sans sortir : ▶ ⏸ ⏮, cocher, toucher une ligne pour sa fiche, boutons Plancher, Fly, Interruption, Capture (et leurs touches P, F, I, N). Respecte le mode hors travail, sauf pour les tâches en cours ou en pause. Sur téléphone, les tuiles s'empilent.
+
+**Compteur de cafés ☕** (lot 13, `lot13.js`, migration `supabase/migrations/20261125_cafes.sql`) : 7e tuile de l'encadré « Compteurs » de l'accueil, et chiffre de la tuile « Chiffres du jour » du mode présentation.
+- **☕ +1** compte un café à l'heure du clic; **−1** retire le plus récent de la journée (grisé à 0). Sous le nombre : l'heure du dernier café.
+- Le compte = les cafés d'aujourd'hui (heure de Toronto). Il revient à 0 à minuit (au plus une minute après, sans recharger). Rien n'est effacé : chaque café reste dans la table `cafes` (`pris_le`), c'est l'historique (requête d'exemple dans la migration).
+- Suit le compte sur tous les appareils : rechargé à l'ouverture d'ORBITE et chaque fois qu'on y revient. Les clics rapides s'enregistrent un à la fois, dans l'ordre; si Supabase refuse (hors ligne, par exemple), le nombre revient en arrière et un message le dit.
+- Sur téléphone, tablette ou si l'encadré « Compteurs » est placé dans une colonne, la tuile café prend toute une rangée sous les six autres.
+- Sans la migration, le compteur reste caché.
 
 ## Automatisations (Supabase)
 
