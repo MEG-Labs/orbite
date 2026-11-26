@@ -1188,7 +1188,7 @@ body.en-presentation { overflow: hidden; }
 .boutons-tete-d { display: flex; gap: 4px; align-items: center; flex-shrink: 0; }
 #pleinePage { font: 12.5px var(--mono); white-space: nowrap; }
 /* Page : documentation à gauche (≈ 2/3), propriétés à droite (≈ 1/3); empilées sous 1100 px. */
-.page-tache { max-width: 1480px; }
+.page-tache { max-width: none; } /* toute la largeur : la colonne des champs reste collée à droite */
 .page-tache .ref-tache { font: 12.5px var(--mono); color: var(--brume); margin-top: 2px; }
 .page-tache .titre-note { margin-bottom: 14px; }
 .page-tache .avert-bac { margin: -6px 0 12px; }
