@@ -115,6 +115,7 @@ Données importées de Notion le 6 novembre 2026 (colonne `notion_id` pour la tr
 - **Engagements et alertes** : promesses dues d'ici demain, retards, relances, bloquées ou en attente, à trier; les six plus urgentes en liste.
 - **Chiffres du jour** : victoires, temps sur mes tâches, interruptions (nombre et minutes), réunions, temps couvert (feuille de temps, lot 11), cafés du jour avec ☕ +1 et −1 (lot 13), temps par tâche en barres, dernières victoires.
 - On agit sans sortir : ▶ ⏸ ⏮, cocher, toucher une ligne pour sa fiche, boutons Plancher, Fly, Interruption, Capture (et leurs touches P, F, I, N). Respecte le mode hors travail, sauf pour les tâches en cours ou en pause. Sur téléphone, les tuiles s'empilent.
+- **Hauteurs** : deux colonnes indépendantes; chaque encadré prend la hauteur de son contenu, sans barre de défilement à l'intérieur, et le dernier de chaque colonne s'étire jusqu'au bas de l'écran. Si le tout dépasse l'écran, le tableau se resserre automatiquement (2 crans : horloge, chrono, titres et espacements plus petits). En dernier recours seulement, le tableau entier défile d'un bloc.
 
 **Compteur de cafés ☕** (lot 13, `lot13.js`, migration `supabase/migrations/20261125_cafes.sql`) : 7e tuile de l'encadré « Compteurs » de l'accueil, et chiffre de la tuile « Chiffres du jour » du mode présentation.
 - **☕ +1** compte un café à l'heure du clic; **−1** retire le plus récent de la journée (grisé à 0). Sous le nombre : l'heure du dernier café.

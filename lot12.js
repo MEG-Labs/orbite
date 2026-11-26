@@ -211,12 +211,11 @@ export function installerLot12(c) {
         </div>
       </div>
       <div class="pr-grille">
-        ${vedette(enCours, enPause)}
-        ${journee()}
-        ${alertes()}
-        ${chiffres()}
+        <div class="pr-col">${vedette(enCours, enPause)}${alertes()}</div>
+        <div class="pr-col">${journee()}${chiffres()}</div>
       </div>`;
     racine.querySelector('.pr-grille').scrollTop = defil;
+    ajuster();
     brancherLignes(racine);
     brancherMinuterie(racine);
     c.brancherPlancher?.(racine);
@@ -230,7 +229,7 @@ export function installerLot12(c) {
     if (!c.resumeJour || (!force && Date.now() - resumeLe < 60e3)) return;
     resumeLe = Date.now();
     try { resume = await c.resumeJour(aujourdhui()); } catch { resume = null; }
-    if (racine) { const t = racine.querySelector('.pr-chiffres-jour'); if (t) { t.outerHTML = chiffres(); brancherLignes(racine); c.brancherCafe?.(racine); } }
+    if (racine) { const t = racine.querySelector('.pr-chiffres-jour'); if (t) { t.outerHTML = chiffres(); brancherLignes(racine); c.brancherCafe?.(racine); ajuster(); } }
   }
   // Chaque seconde : heure, chrono vedette, compte à rebours. Chaque minute : tout le tableau (et le résumé du jour).
   function tic() {
@@ -243,6 +242,20 @@ export function installerLot12(c) {
     racine.querySelectorAll('[data-pr-compte]').forEach(el => { const m = Math.round((new Date(el.dataset.prCompte) - n) / 6e4); el.textContent = m <= 0 ? 'maintenant' : m < 60 ? `dans ${m} min` : `dans ${dureeTxt(m)}`; });
     if (n.getSeconds() === 0 && !(racine.contains(document.activeElement) && document.activeElement.tagName === 'INPUT')) { dessiner(); majResume(); }
   }
+
+  // Pas de barre de défilement dans le tableau : chaque encadré prend la hauteur de son contenu.
+  // Si le tout dépasse quand même l'écran, on resserre (2 crans : textes et espacements plus petits).
+  // En dernier recours seulement (contenu très long), le tableau entier défile d'un seul bloc.
+  function ajuster() {
+    if (!racine || matchMedia('(max-width: 900px)').matches) return;
+    const g = racine.querySelector('.pr-grille'); if (!g) return;
+    const deborde = () => g.scrollHeight > g.clientHeight + 2;
+    racine.classList.remove('pr-compact', 'pr-tres-compact');
+    if (deborde()) racine.classList.add('pr-compact');
+    if (deborde()) racine.classList.add('pr-tres-compact');
+  }
+  let attenteAjuster = null;
+  window.addEventListener('resize', () => { clearTimeout(attenteAjuster); attenteAjuster = setTimeout(ajuster, 150); });
 
   function ouvrir() {
     if (racine) return;

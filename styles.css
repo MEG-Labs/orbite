@@ -1077,17 +1077,17 @@ body.en-presentation { overflow: hidden; }
 .pr-date b { font: 700 34px/1 var(--mono); }
 .pr-date span { font: 15px var(--mono); color: var(--brume); text-transform: capitalize; }
 .pr-actions { display: flex; gap: 8px; flex-wrap: wrap; }
-.pr-grille { flex: 1; min-height: 0; display: grid; gap: 14px; grid-template-columns: minmax(0, 1.35fr) minmax(0, 1fr); grid-template-rows: minmax(0, 1.25fr) minmax(0, 1fr);
-  grid-template-areas: "vedette journee" "alertes chiffres"; overflow: auto; }
-.pr-tuile { display: flex; flex-direction: column; min-height: 0; background: var(--coque); border: 1px solid var(--acier); border-radius: var(--r-carte, 5px); overflow: hidden; }
+/* Deux colonnes indépendantes : chaque encadré prend la hauteur de son contenu (pas de défilement dedans);
+   le dernier encadré de chaque colonne s'étire pour finir au bas de l'écran. */
+.pr-grille { flex: 1; min-height: 0; display: grid; gap: 14px; grid-template-columns: minmax(0, 1.35fr) minmax(0, 1fr); align-items: stretch; overflow-y: auto; }
+.pr-col { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+.pr-tuile { display: flex; flex-direction: column; flex: none; background: var(--coque); border: 1px solid var(--acier); border-radius: var(--r-carte, 5px); }
+.pr-col > .pr-tuile:last-child { flex: 1 0 auto; }
 .pr-tuile > header { display: flex; align-items: center; justify-content: space-between; padding: 10px 16px; border-bottom: 1px solid #1A3A4E; }
 .pr-tuile > header h2 { margin: 0; font: 700 13px var(--mono); letter-spacing: .08em; text-transform: uppercase; color: var(--brume); }
-.pr-corps { flex: 1; min-height: 0; overflow: auto; padding: 12px 16px 14px; }
+.pr-corps { flex: 1; padding: 12px 16px 14px; }
 .pr-corps .lignes { margin: 0 -16px; }
-.pr-vedette { grid-area: vedette; border-top: 3px solid #8E7BE0; }
-.pr-journee { grid-area: journee; }
-.pr-alertes { grid-area: alertes; }
-.pr-chiffres-jour { grid-area: chiffres; }
+.pr-vedette { border-top: 3px solid #8E7BE0; }
 .pr-titre-tache { font: 700 clamp(24px, 2.6vw, 38px)/1.15 var(--sans); overflow-wrap: anywhere; }
 .pr-sous-tache { color: var(--brume); font: 14px var(--mono); margin-top: 6px; }
 .pr-chrono { font: 700 clamp(56px, 7.5vw, 112px)/1 var(--mono); letter-spacing: .02em; margin: 14px 0 8px; color: var(--brume); font-variant-numeric: tabular-nums; }
@@ -1112,7 +1112,7 @@ body.en-presentation { overflow: hidden; }
 .pr-suite { display: flex; flex-wrap: wrap; gap: 4px 14px; font: 12.5px var(--mono); color: var(--brume); margin: -4px 0 10px; }
 .pr-plancher { display: flex; justify-content: space-between; align-items: center; gap: 10px; padding: 8px 12px; margin-bottom: 10px; background: #2A230F; border: 1px solid var(--jaune); }
 .pr-chiffres { display: grid; grid-template-columns: repeat(auto-fit, minmax(104px, 1fr)); gap: 8px; margin-bottom: 12px; }
-.pr-chiffre { border: 1px solid var(--acier); padding: 8px 10px; display: grid; gap: 2px; }
+.pr-chiffre { border: 1px solid var(--acier); padding: 8px 10px; display: grid; gap: 2px; align-content: start; }
 .pr-chiffre b { font: 700 clamp(18px, 1.7vw, 26px)/1.1 var(--mono); white-space: nowrap; }
 .pr-chiffre span { font-size: 12.5px; color: var(--brume); }
 .pr-chiffre.alerte b { color: var(--rouge); } .pr-chiffre.attention b { color: var(--jaune); } .pr-chiffre.bien b { color: var(--vert); } .pr-chiffre.calme b { color: var(--brume); }
@@ -1126,8 +1126,9 @@ body.en-presentation { overflow: hidden; }
 @media (max-width: 900px) {
   .presentation { padding: 12px; overflow: auto; }
   .pr-grille { display: flex; flex-direction: column; overflow: visible; }
-  .pr-tuile { flex: none; }
-  .pr-corps { overflow: visible; }
+  .pr-col { display: contents; }
+  .pr-tuile, .pr-col > .pr-tuile:last-child { flex: none; }
+  .pr-vedette { order: 1; } .pr-journee { order: 2; } .pr-alertes { order: 3; } .pr-chiffres-jour { order: 4; }
 }
 /* Mode présentation : grande horloge, date, compte à rebours, minuterie */
 .pr-barre-haut { align-items: flex-start; }
@@ -1181,7 +1182,27 @@ body.en-presentation { overflow: hidden; }
 .grille .compteur-cafe { grid-column: 1 / -1; }
 @media (max-width: 760px) { .cafe-boutons .btn { min-height: 44px; padding: 8px 14px; } }
 /* Mode présentation : chiffre de la tuile « Chiffres du jour », boutons dessous. */
-.pr-cafe .cafe-boutons { margin-top: 6px; }
+.pr-cafe .cafe-boutons { margin-top: 6px; flex-wrap: nowrap; gap: 4px; }
+.pr-cafe .cafe-boutons .btn { min-height: 30px; padding: 3px 8px; font-size: 12.5px; }
+/* Mode présentation trop chargé pour l'écran : resserré (cran 1), puis très resserré (cran 2). */
+.presentation.pr-compact { gap: 10px; padding-top: 12px; padding-bottom: 12px; }
+.pr-compact .pr-grille, .pr-compact .pr-col { gap: 10px; }
+.pr-compact .pr-tuile > header { padding: 7px 14px; }
+.pr-compact .pr-corps { padding: 8px 14px 10px; }
+.pr-compact .pr-heure-grande { font-size: clamp(40px, 4.6vw, 70px); }
+.pr-compact .pr-titre-tache { font-size: clamp(20px, 2vw, 30px); }
+.pr-compact .pr-chrono { font-size: clamp(44px, 5vw, 76px); margin: 8px 0 6px; }
+.pr-compact .pr-sous { margin: 10px 0 2px; }
+.pr-compact .pr-chiffres { margin-bottom: 8px; }
+.pr-compact .pr-evt { padding: 7px 10px; margin-bottom: 7px; }
+.pr-compact .pr-evt b { font-size: 17px; }
+.pr-tres-compact .pr-heure-grande { font-size: clamp(34px, 3.6vw, 54px); }
+.pr-tres-compact .pr-titre-tache { font-size: clamp(18px, 1.6vw, 24px); }
+.pr-tres-compact .pr-chrono { font-size: clamp(36px, 3.8vw, 56px); margin: 4px 0; }
+.pr-tres-compact .pr-geste { margin-top: 6px; font-size: 15px; }
+.pr-tres-compact .ligne { padding-top: 5px; padding-bottom: 5px; }
+.pr-tres-compact .pr-chiffre { padding: 5px 8px; }
+.pr-tres-compact .pr-chiffre b { font-size: clamp(16px, 1.4vw, 21px); }
 
 /* ---------- Lot 14 : tâche en pleine page ---------- */
 /* Bouton « ⤢ Pleine page » à côté du ✕ dans l’en-tête de l’aperçu. */
