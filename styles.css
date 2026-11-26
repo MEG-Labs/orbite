@@ -1182,3 +1182,29 @@ body.en-presentation { overflow: hidden; }
 @media (max-width: 760px) { .cafe-boutons .btn { min-height: 44px; padding: 8px 14px; } }
 /* Mode présentation : chiffre de la tuile « Chiffres du jour », boutons dessous. */
 .pr-cafe .cafe-boutons { margin-top: 6px; }
+
+/* ---------- Lot 14 : tâche en pleine page ---------- */
+/* Bouton « ⤢ Pleine page » à côté du ✕ dans l’en-tête de l’aperçu. */
+.boutons-tete-d { display: flex; gap: 4px; align-items: center; flex-shrink: 0; }
+#pleinePage { font: 12.5px var(--mono); white-space: nowrap; }
+/* Page : documentation à gauche (≈ 2/3), propriétés à droite (≈ 1/3); empilées sous 1100 px. */
+.page-tache { max-width: 1480px; }
+.page-tache .ref-tache { font: 12.5px var(--mono); color: var(--brume); margin-top: 2px; }
+.page-tache .titre-note { margin-bottom: 14px; }
+.page-tache .avert-bac { margin: -6px 0 12px; }
+.colonnes-tache { display: grid; grid-template-columns: minmax(0, 1.75fr) minmax(340px, 1fr); gap: 26px; align-items: start; }
+.etiquette-doc { margin: 0 0 8px; font: 700 13px var(--mono); color: var(--brume); text-transform: none; letter-spacing: 0; }
+.etiquette-doc .aide { font-weight: 400; opacity: .75; }
+.doc-tache .editeur-note { min-height: 60vh; }
+.champs-tache { display: grid; grid-template-columns: 1fr 1fr; gap: 12px 14px; align-content: start; padding-left: 22px; border-left: 1px solid var(--acier); }
+.champs-tache > details > div { grid-template-columns: 1fr 1fr; }
+.champs-tache .notes-liees .bloc { margin: 0; }
+@media (max-width: 1100px) {
+  .colonnes-tache { grid-template-columns: 1fr; gap: 18px; }
+  .champs-tache { padding-left: 0; border-left: 0; border-top: 1px solid var(--acier); padding-top: 14px; }
+  .doc-tache .editeur-note { min-height: 40vh; }
+}
+@media (max-width: 760px) {
+  .champs-tache { grid-template-columns: 1fr; }
+  #pleinePage { padding-inline: 6px; }
+}

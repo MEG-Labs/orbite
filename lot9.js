@@ -19,7 +19,7 @@ export function installerLot9(c) {
   /* =====================================================================
      1. ONGLETS
      ===================================================================== */
-  // Un onglet = { id, vue, filtres, projetId, noteId, defil }. Gardés sur l’appareil (localStorage « orbite-onglets »).
+  // Un onglet = { id, vue, filtres, projetId, noteId, actionId, defil }. actionId : tâche en pleine page (lot 14). Gardés sur l’appareil (localStorage « orbite-onglets »).
   const CLE_ONG = 'orbite-onglets';
   const ALIAS = { reperes: 'parties', organigramme: 'parties' }; // anciens modules regroupés
   let O = { liste: [], actif: null };
@@ -31,27 +31,29 @@ export function installerLot9(c) {
     sauver.t = setTimeout(() => { try { localStorage.setItem(CLE_ONG, JSON.stringify({ actif: O.actif, liste: O.liste.map(t => ({ ...t, filtres: propre(t.filtres) })) })); } catch { } }, 150);
   }
   function appliquer(t) {
-    S.vue = ALIAS[t.vue] || t.vue || 'accueil'; S.filtres = t.filtres || {}; S.projetId = t.projetId || null; S.noteId = t.noteId || null; S.reorg = false;
+    S.vue = ALIAS[t.vue] || t.vue || 'accueil'; S.filtres = t.filtres || {}; S.projetId = t.projetId || null; S.noteId = t.noteId || null; S.actionId = t.actionId || null; S.reorg = false;
     if (t.vue === 'organigramme') S.filtres.sous = 'organigramme';
   }
   /* Onglets épinglés (t.epingle) : toujours à gauche, compacts (icône seule), sans ×.
      L’épingle verrouille la PAGE (module, projet, note, page d’une compagnie) : y naviguer vers une autre page ouvre
      un nouvel onglet et l’onglet épinglé reste où il est. Filtres et sous-onglets de la page restent modifiables sur place.
      Les fiches (tâche, personne, poste…) s’ouvrent en fenêtre par-dessus, sans changer d’onglet.
+     Exception (lot 14) : une tâche ouverte en pleine page a son propre onglet (vue « tache », t.actionId).
      Épingler / désépingler : clic droit sur l’onglet (appui long sur écran tactile). */
-  const clePage = (vue, projetId, noteId, f) => [vue, projetId || '', noteId || '', vue === 'parties' && f?.sous !== 'personnes' && f?.sous !== 'organigramme' ? f?.compagnieId || '' : ''].join('|');
+  const clePage = (vue, projetId, noteId, f, actionId) => [vue, projetId || '', noteId || '', actionId || '', vue === 'parties' && f?.sous !== 'personnes' && f?.sous !== 'organigramme' ? f?.compagnieId || '' : ''].join('|');
   const nbEpingles = () => O.liste.filter(t => t.epingle).length;
   // Appelé au début de chaque rendu : l’état affiché devient celui de l’onglet actif.
   function synchro() {
     if (ALIAS[S.vue]) { if (S.vue === 'organigramme') S.filtres = { ...S.filtres, sous: 'organigramme' }; S.vue = ALIAS[S.vue]; }
     if (S.vue !== 'note') S.noteId = null;
+    if (S.vue !== 'tache') S.actionId = null;
     const t = actif(); if (!t) return;
     if (t.epingle) {
-      const avant = clePage(t.vue, t.projetId, t.noteId, t.filtresSauves || t.filtres);
-      if (avant !== clePage(S.vue, S.projetId, S.noteId, S.filtres)) {
+      const avant = clePage(t.vue, t.projetId, t.noteId, t.filtresSauves || t.filtres, t.actionId);
+      if (avant !== clePage(S.vue, S.projetId, S.noteId, S.filtres, S.actionId)) {
         // Navigation depuis un onglet épinglé : la nouvelle page part dans un nouvel onglet (juste après les épinglés).
         t.filtres = propre(t.filtresSauves || {}); t.defil = synchro.defil ?? t.defil;
-        const n = { id: nouvelId(), vue: S.vue, filtres: S.filtres, projetId: S.projetId || null, noteId: S.noteId || null, defil: 0 };
+        const n = { id: nouvelId(), vue: S.vue, filtres: S.filtres, projetId: S.projetId || null, noteId: S.noteId || null, actionId: S.actionId || null, defil: 0 };
         const i = O.liste.indexOf(t);
         O.liste.splice(Math.max(i + 1, nbEpingles()), 0, n);
         O.actif = n.id;
@@ -60,7 +62,7 @@ export function installerLot9(c) {
       }
       t.filtresSauves = propre(S.filtres);
     }
-    Object.assign(t, { vue: S.vue, filtres: S.filtres, projetId: S.projetId || null, noteId: S.noteId || null });
+    Object.assign(t, { vue: S.vue, filtres: S.filtres, projetId: S.projetId || null, noteId: S.noteId || null, actionId: S.actionId || null });
     sauver();
   }
   // Position de défilement de l’onglet épinglé, mémorisée avant un clic qui pourrait naviguer.
@@ -94,7 +96,7 @@ export function installerLot9(c) {
     m.onclick = e => {
       const k = e.target.closest('[data-m]')?.dataset.m; if (!k) return; fin();
       if (k === 'epingle') epingler(id, !t.epingle);
-      else if (k === 'dupliquer') { if (t.id === O.actif) synchro(); ouvrir({ vue: t.vue, filtres: propre(t.epingle ? t.filtresSauves : t.filtres), projetId: t.projetId, noteId: t.noteId }); }
+      else if (k === 'dupliquer') { if (t.id === O.actif) synchro(); ouvrir({ vue: t.vue, filtres: propre(t.epingle ? t.filtresSauves : t.filtres), projetId: t.projetId, noteId: t.noteId, actionId: t.actionId }); }
       else if (k === 'fermer') fermer(id, { force: true });
       else if (k === 'autres') { O.liste.filter(o => !o.epingle && o.id !== id).map(o => o.id).forEach(o => fermer(o)); }
     };
@@ -112,11 +114,12 @@ export function installerLot9(c) {
   function titreOnglet(t) {
     if (t.vue === 'projet') return parId(S.projets, t.projetId)?.titre || 'Projet';
     if (t.vue === 'note') return (brouillons[t.noteId]?.titre || parId(S.notes, t.noteId)?.titre || '').trim() || 'Nouvelle note';
+    if (t.vue === 'tache') return c.titreTache?.(t.actionId) || parId(S.actions, t.actionId)?.titre || 'Tâche';
     if (t.vue === 'plus') return 'Plus';
     if (t.vue === 'parties' && t.filtres?.compagnieId && !['personnes', 'organigramme'].includes(t.filtres.sous)) return parId(S.unites, t.filtres.compagnieId)?.nom || 'Compagnie';
     return MODULES.find(m => m.k === (ALIAS[t.vue] || t.vue))?.l || 'Accueil';
   }
-  const icoOnglet = t => t.vue === 'note' ? ico('carnet') : t.vue === 'projet' ? ico('projets') : MODULES.some(m => m.k === t.vue) ? ico(t.vue) : ico('accueil');
+  const icoOnglet = t => t.vue === 'note' ? ico('carnet') : t.vue === 'tache' ? ico('actions') : t.vue === 'projet' ? ico('projets') : MODULES.some(m => m.k === t.vue) ? ico(t.vue) : ico('accueil');
   function barreOnglets() {
     return `<div class="barre-onglets" role="tablist" aria-label="Onglets ouverts">
       ${O.liste.map((t, i) => { const ti = titreOnglet(t), a = t.id === O.actif;
@@ -164,20 +167,21 @@ export function installerLot9(c) {
   }
   function ouvrir(etat, { arrierePlan = false } = {}) {
     synchro();
-    const t = { id: nouvelId(), vue: 'accueil', filtres: {}, projetId: null, noteId: null, ...etat };
+    const t = { id: nouvelId(), vue: 'accueil', filtres: {}, projetId: null, noteId: null, actionId: null, ...etat };
     const i = O.liste.findIndex(x => x.id === O.actif);
     O.liste.splice(Math.max(i + 1, nbEpingles()), 0, t); // jamais au milieu des onglets épinglés
     if (arrierePlan) { sauver(); majBarre(); toast(`« ${titreOnglet(t)} » ouvert dans un nouvel onglet`); } else activer(t.id);
     return t;
   }
-  function fermer(id, { force = false } = {}) {
+  // vers : onglet à afficher ensuite (ex. celui d’où la tâche en pleine page a été ouverte), s’il existe encore.
+  function fermer(id, { force = false, vers = null } = {}) {
     const t = O.liste.find(x => x.id === id); if (!t) return;
     // Un onglet épinglé ne se ferme que par son menu (clic droit › Fermer), pas par le clic du milieu ni Suppr.
     if (t.epingle && !force) { toast('Onglet épinglé : clic droit › Désépingler ou Fermer'); return; }
     if (id === O.actif) avantRendre();
-    if (O.liste.length === 1) { Object.assign(t, { vue: 'accueil', filtres: {}, projetId: null, noteId: null, defil: 0, epingle: false }); delete t.filtresSauves; appliquer(t); history.replaceState(null, '', location.pathname); rendre(); sauver(); return; }
+    if (O.liste.length === 1) { Object.assign(t, { vue: 'accueil', filtres: {}, projetId: null, noteId: null, actionId: null, defil: 0, epingle: false }); delete t.filtresSauves; appliquer(t); history.replaceState(null, '', location.pathname); rendre(); sauver(); return; }
     const i = O.liste.indexOf(t); O.liste.splice(i, 1);
-    if (id === O.actif) { O.actif = null; const s = O.liste[Math.min(i, O.liste.length - 1)]; O.actif = s.id; appliquer(s); history.replaceState(null, '', S.vue === 'accueil' ? location.pathname : '#' + S.vue); rendre(); requestAnimationFrame(() => window.scrollTo(0, s.defil || 0)); }
+    if (id === O.actif) { O.actif = null; const s = O.liste.find(x => x.id === vers) || O.liste[Math.min(i, O.liste.length - 1)]; O.actif = s.id; appliquer(s); history.replaceState(null, '', S.vue === 'accueil' ? location.pathname : '#' + S.vue); rendre(); requestAnimationFrame(() => window.scrollTo(0, s.defil || 0)); }
     else majBarre();
     sauver();
   }
@@ -186,7 +190,8 @@ export function installerLot9(c) {
   window.addEventListener('resize', hauteurTete);
   // Ctrl+clic, Cmd+clic ou clic du milieu sur un lien interne : ouvert dans un nouvel onglet, en arrière-plan.
   function cibleLien(el) {
-    const v = el.closest('[data-vue], [data-projet], [data-note], [data-aller]'); if (!v || v.closest('.barre-onglets')) return null;
+    const v = el.closest('[data-vue], [data-projet], [data-note], [data-aller], .ligne[data-id]'); if (!v || v.closest('.barre-onglets')) return null;
+    if (v.matches('.ligne[data-id]')) return parId(S.actions, v.dataset.id) && c.ouvrirTache ? { tache: v.dataset.id } : null; // lot 14
     if (v.dataset.projet) return { vue: 'projet', projetId: v.dataset.projet };
     if (v.dataset.note) return { note: v.dataset.note };
     const k = v.dataset.vue || v.dataset.aller;
@@ -196,7 +201,8 @@ export function installerLot9(c) {
     if (!S.session || !(e.ctrlKey || e.metaKey || e.button === 1)) return;
     const cible = cibleLien(e.target); if (!cible) return;
     e.preventDefault(); e.stopImmediatePropagation();
-    if (cible.note) ouvrirNote(parId(S.notes, cible.note), { arrierePlan: true }); else ouvrir(cible, { arrierePlan: true });
+    if (cible.tache) c.ouvrirTache(cible.tache, { arrierePlan: true });
+    else if (cible.note) ouvrirNote(parId(S.notes, cible.note), { arrierePlan: true }); else ouvrir(cible, { arrierePlan: true });
   }
   document.addEventListener('click', interception, true);
   document.addEventListener('auxclick', interception, true);
@@ -379,8 +385,7 @@ export function installerLot9(c) {
           <div class="champ large"><span>Mots-clés</span><div class="types-rapides">${MOTS.map(m => `<label><input type="checkbox" name="mots_cles" value="${m}" ${(n.mots_cles || []).includes(m) ? 'checked' : ''}><span>${m}</span></label>`).join('')}
             <label><input type="checkbox" name="archivee" ${n.archivee ? 'checked' : ''}><span>Archivée</span></label></div></div>
         </div></details>
-      <div class="outils-edition" role="toolbar" aria-label="Mise en forme">${OUTILS.map(([k, l, t]) => k === '|' ? '<span class="sep-outils" aria-hidden="true"></span>' : `<button type="button" data-cmd="${k}" title="${esc(t)}" aria-label="${esc(t)}">${l}</button>`).join('')}</div>
-      <div class="editeur-note" contenteditable="true" spellcheck="true" lang="fr-CA" role="textbox" aria-multiline="true" aria-label="Contenu de la note">${mdVersHtml(n.contenu)}</div>
+      ${barreEtEditeur(n.contenu)}
     </article>`;
     brancherNote(v);
   }
@@ -439,7 +444,7 @@ export function installerLot9(c) {
   function avantRendre() { if (page?.timer) lancer(); }
   document.addEventListener('visibilitychange', () => { if (document.hidden) avantRendre(); });
   window.addEventListener('pagehide', avantRendre);
-  const editionEnCours = () => S.vue === 'note' && !!document.activeElement?.closest?.('.page-note');
+  const editionEnCours = () => (S.vue === 'note' || S.vue === 'tache') && !!document.activeElement?.closest?.('.page-note, .page-tache');
 
   function blocCourant(ed) {
     const sel = getSelection(); if (!sel.rangeCount) return null;
@@ -497,32 +502,35 @@ export function installerLot9(c) {
       S.vue = 'carnet'; S.noteId = null; rendre();
     };
   }
-  function brancherNote(v) {
-    const ed = v.querySelector('.editeur-note');
+  /* Éditeur visuel réutilisable (notes, et champ Notes d’une tâche en pleine page · lot 14).
+     barreEtEditeur(md, libelle) = barre d’outils + zone d’écriture; brancherEditeur(racine, ed, modif) = comportements
+     (barre, raccourcis d’écriture, cases, coller); modif() est appelée à chaque changement du contenu. */
+  const barreEtEditeur = (md, libelle = 'Contenu de la note') =>
+    `<div class="outils-edition" role="toolbar" aria-label="Mise en forme">${OUTILS.map(([k, l, t]) => k === '|' ? '<span class="sep-outils" aria-hidden="true"></span>' : `<button type="button" data-cmd="${k}" title="${esc(t)}" aria-label="${esc(t)}">${l}</button>`).join('')}</div>
+      <div class="editeur-note" contenteditable="true" spellcheck="true" lang="fr-CA" role="textbox" aria-multiline="true" aria-label="${esc(libelle)}">${mdVersHtml(md)}</div>`;
+  function brancherEditeur(racine, ed, modif) {
     try { document.execCommand('defaultParagraphSeparator', false, 'p'); } catch { }
-    v.querySelector('[data-retour-carnet]').onclick = () => { avantRendre(); S.vue = 'carnet'; S.noteId = null; rendre(); window.scrollTo(0, 0); };
-    v.querySelectorAll('input, select').forEach(x => { x.addEventListener('input', () => modifie(v)); x.addEventListener('change', () => modifie(v)); });
     ed.addEventListener('input', () => {
       // Une nouvelle case créée par Entrée hérite de « cochée » : on la remet vide.
       ed.querySelectorAll('li[data-case="x"], li[data-case="→"]').forEach(li => { if (!li.textContent.trim()) li.dataset.case = ' '; });
-      modifie(v);
+      modif();
     });
     // Barre d’outils : le toucher ne retire pas la sélection du texte.
-    v.querySelectorAll('.outils-edition [data-cmd]').forEach(b => {
+    racine.querySelectorAll('.outils-edition [data-cmd]').forEach(b => {
       b.addEventListener('pointerdown', e => e.preventDefault());
-      b.onclick = () => { commande(ed, b.dataset.cmd); modifie(v); };
+      b.onclick = () => { commande(ed, b.dataset.cmd); modif(); };
     });
     document.addEventListener('selectionchange', function f() { if (!ed.isConnected) return document.removeEventListener('selectionchange', f); if (ed.contains(getSelection().anchorNode)) majOutils(ed); });
     // Cocher une case : toucher le carré à gauche.
     ed.addEventListener('click', e => {
       const li = e.target.closest?.('li[data-case]');
-      if (li && e.target === li && e.offsetX < 26) { e.preventDefault(); li.dataset.case = li.dataset.case === ' ' ? 'x' : ' '; modifie(v); }
+      if (li && e.target === li && e.offsetX < 26) { e.preventDefault(); li.dataset.case = li.dataset.case === ' ' ? 'x' : ' '; modif(); }
       const a = e.target.closest?.('a[href]'); if (a && (e.ctrlKey || e.metaKey)) window.open(a.href, '_blank', 'noopener');
     });
     // Raccourcis d’écriture : « - » ou « * » + espace = puces, « 1. » = numéros, « [] » = case, « # » = titre, « > » = citation,
     // « --- » + Entrée = séparateur; Tab / Maj+Tab dans une liste = niveau.
     ed.addEventListener('keydown', e => {
-      if (e.key === 'Tab' && blocCourant(ed)?.closest('li')) { e.preventDefault(); document.execCommand(e.shiftKey ? 'outdent' : 'indent'); modifie(v); return; }
+      if (e.key === 'Tab' && blocCourant(ed)?.closest('li')) { e.preventDefault(); document.execCommand(e.shiftKey ? 'outdent' : 'indent'); modif(); return; }
       if (e.key !== ' ' && e.key !== 'Enter') return;
       const sel = getSelection(); if (!sel.isCollapsed) return;
       const b = blocCourant(ed); if (!b || b.closest('li')) return;
@@ -530,13 +538,13 @@ export function installerLot9(c) {
       if (e.key === 'Enter') {
         if (/^\s*(-{3,}|\*{3,}|_{3,})\s*$/.test(b.textContent) && avant.trim() === b.textContent.trim()) {
           e.preventDefault(); const p = document.createElement('p'); p.innerHTML = '<br>'; const hr = document.createElement('hr');
-          b.replaceWith(hr); hr.after(p); const r = document.createRange(); r.setStart(p, 0); r.collapse(true); sel.removeAllRanges(); sel.addRange(r); modifie(v);
+          b.replaceWith(hr); hr.after(p); const r = document.createRange(); r.setStart(p, 0); r.collapse(true); sel.removeAllRanges(); sel.addRange(r); modif();
         }
         return;
       }
       const regles = [[/^[-*•]$/, 'insertUnorderedList'], [/^1[.)]$/, 'insertOrderedList'], [/^\[ ?\]$/, 'cases'], [/^#$/, 'h2'], [/^##$/, 'h3'], [/^>$/, 'blockquote']];
       const r = regles.find(([re]) => re.test(avant)); if (!r) return;
-      e.preventDefault(); viderDebut(b, avant.length); commande(ed, r[1]); modifie(v);
+      e.preventDefault(); viderDebut(b, avant.length); commande(ed, r[1]); modif();
     });
     // Coller : on garde la structure (titres, listes, gras) et on retire le reste (polices, couleurs…).
     ed.addEventListener('paste', e => {
@@ -547,8 +555,14 @@ export function installerLot9(c) {
       const frag = mdVersHtml(md);
       if (!md.includes('\n') && !/^\s*([-*•]|\d+[.)]|#|>)\s/.test(md)) document.execCommand('insertText', false, txt || md);
       else document.execCommand('insertHTML', false, frag);
-      modifie(v);
+      modif();
     });
+  }
+  function brancherNote(v) {
+    const ed = v.querySelector('.editeur-note');
+    v.querySelector('[data-retour-carnet]').onclick = () => { avantRendre(); S.vue = 'carnet'; S.noteId = null; rendre(); window.scrollTo(0, 0); };
+    v.querySelectorAll('input, select').forEach(x => { x.addEventListener('input', () => modifie(v)); x.addEventListener('change', () => modifie(v)); });
+    brancherEditeur(v, ed, () => modifie(v));
     v.querySelector('[data-creer-taches]').onclick = async e => {
       const b = e.currentTarget; b.disabled = true;
       try {
@@ -741,5 +755,5 @@ export function installerLot9(c) {
   }
 
   return { vues: { parties: vueParties, note: vueNote }, synchro, restaurer, barreOnglets, brancherOnglets, ouvrir, ouvrirNote, avantRendre, editionEnCours,
-    mdVersHtml, htmlVersMd, texteBrut, ficheCompagnie, compagnies, compagnieDe, sousUnites, complementReglages, ALIAS };
+    mdVersHtml, htmlVersMd, texteBrut, editeur: { barreEtEditeur, brancherEditeur, htmlVersMd, mdVersHtml }, activer, fermer, onglets: () => O.liste, ongletActif: () => O.actif, majBarre, ficheCompagnie, compagnies, compagnieDe, sousUnites, complementReglages, ALIAS };
 }

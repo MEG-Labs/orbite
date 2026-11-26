@@ -11,6 +11,7 @@ import { installerLot10 } from './lot10.js';
 import { installerLot11 } from './lot11.js';
 import { installerLot12 } from './lot12.js';
 import { installerLot13 } from './lot13.js';
+import { installerLot14 } from './lot14.js';
 
 const sb = createClient(SUPABASE_URL, SUPABASE_KEY, { auth: { persistSession: true, autoRefreshToken: true } });
 
@@ -26,7 +27,7 @@ const CONTEXTES = ['Maison', 'Bureau', 'Téléphone', 'Ordinateur', 'Courses', '
 const S = { session: null, actions: [], projets: [], domaines: [], personnes: [], vue: 'accueil', filtres: {}, agendaPasses: false,
   vehicules: [], entretiens: [], interventions: [], intEnt: [], livres: [], achats: [], abonnements: [], trajets: [], routines: [], notes: [], budget: [], regles: [],
   unites: [], postes: [], titulaires: [], participations: [], reglages: [], journal: [], cahiers: [], push: [], file: [], horsLigne: null };
-let M, X, L, L6, L7, L8, L9, L10, L11, L12, L13; // modules, installés après la définition des fonctions communes
+let M, X, L, L6, L7, L8, L9, L10, L11, L12, L13, L14; // modules, installés après la définition des fonctions communes
 
 const MODULES = [
   { k: 'accueil', l: 'Accueil', g: 'Pilotage', principal: true },
@@ -199,8 +200,8 @@ function rendre() {
   const app = $('#app');
   if (!S.session) return rendreConnexion(app);
   // Onglets : on enregistre la note en cours, puis l’état affiché devient celui de l’onglet actif.
-  L9.avantRendre(); L9.synchro();
-  const courant = S.vue === 'projet' ? 'projets' : S.vue === 'note' ? 'carnet' : S.vue;
+  L9.avantRendre(); L14.avantRendre(); L9.synchro();
+  const courant = S.vue === 'projet' ? 'projets' : S.vue === 'note' ? 'carnet' : S.vue === 'tache' ? 'actions' : S.vue;
   const estPrincipal = MODULES.find(m => m.k === courant)?.principal;
   let groupe = '';
   const navHtml = MODULES.map(m => {
@@ -232,7 +233,7 @@ function rendre() {
   $('#deco').onclick = async () => { await sb.auth.signOut(); };
   horloge();
   const v = document.createElement('div'); $('#vue').appendChild(v);
-  ({ accueil: vueAccueil, agenda: vueAgenda, projets: vueProjets, projet: vueProjet, actions: vueActions, reperes: vueReperes, ...M.vues, ...X.vues, ...L7.vues, ...L9.vues, ...L11.vues,
+  ({ accueil: vueAccueil, agenda: vueAgenda, projets: vueProjets, projet: vueProjet, actions: vueActions, reperes: vueReperes, ...M.vues, ...X.vues, ...L7.vues, ...L9.vues, ...L11.vues, ...L14.vues,
     reglages: async v => { await X.vues.reglages(v); L.complementReglages(v); L9.complementReglages(v); L10.complementReglages(v); } }[S.vue] || vueAccueil)(v);
   brancherLignes(v);
   L11.brancherPlancher(app);
@@ -1401,19 +1402,17 @@ function brancherRecurrence(d, a) {
 }
 
 /* ---------- Fiche action ---------- */
-function ouvrirAction(a) {
-  const nouveau = !a.id;
-  // Date et heures séparées : l’heure est facultative.
+// La fiche existe en deux formes qui partagent les mêmes champs : l’aperçu centré (fenêtre, ouvrirAction) et la page
+// pleine (onglet, lot 14). champsAction = les champs sans titre ni notes liées; en page, le champ Notes est remplacé par
+// l’éditeur visuel. lireLigneAction = la ligne à écrire dans `actions` (ou { erreur }). brancherChampsAction = les
+// comportements des champs (répétition, domaine hérité, délégué, heures).
+function champsAction(a, { page = false } = {}) {
   const jourP = a.planifie_debut ? cleJour(a.planifie_debut) : '';
   const hDebut = a.planifie_debut && !a.journee_entiere ? versLocal(a.planifie_debut).slice(11, 16) : '';
   const jourFin = a.planifie_fin && !a.journee_entiere ? cleJour(a.planifie_fin) : '';
   const hFin = a.planifie_fin && !a.journee_entiere ? versLocal(a.planifie_fin).slice(11, 16) : '';
   const m = manquants(a);
-  const d = dialogueAvert(`<form>
-    <div class="tete-d"><h2>${nouveau ? 'Nouvelle action' : 'Action #' + a.ref}</h2><button type="button" class="btn discret" data-fermer aria-label="Fermer">✕</button></div>
-    <div class="corps">
-      <label class="champ large"><span>Titre</span><input name="titre" class="titre-saisie" required value="${esc(a.titre)}" ${nouveau ? 'autofocus' : ''}></label>
-      ${m.length ? `<p class="champ large erreur" style="margin:0">À compléter : ${esc(m.join(', '))}</p>` : ''}
+  return `${m.length ? `<p class="champ large erreur" style="margin:0">À compléter : ${esc(m.join(', '))}</p>` : ''}
       <label class="champ"><span>Statut</span><select name="statut">${optsTexte(STATUTS, a.statut || 'À faire')}</select></label>
       <label class="champ"><span>Type</span><select name="type">${optsTexte([...TYPES, 'Routine'], a.type || 'Tâche')}</select></label>
       <label class="champ large"><span>Prochain geste</span><input name="prochain_geste" value="${esc(a.prochain_geste)}" placeholder="Une action concrète qui commence par un verbe"></label>
@@ -1449,7 +1448,7 @@ function ouvrirAction(a) {
         <label class="champ"><span>Lieu ou lien</span><input name="lieu" value="${esc(a.lieu)}"></label>
         <label class="champ"><span>Référence externe</span><input name="reference_externe" value="${esc(a.reference_externe)}" placeholder="PROJ-123, billet…"></label>
         ${a.lieu && /^https?:\/\//.test(a.lieu) ? `<p class="champ large" style="margin:0"><a href="${esc(a.lieu)}" target="_blank" rel="noopener">Ouvrir le lien</a></p>` : ''}
-        <label class="champ large"><span>Notes</span><textarea name="notes">${esc(a.notes)}</textarea></label>
+        ${page ? '' : `<label class="champ large"><span>Notes</span><textarea name="notes">${esc(a.notes)}</textarea></label>`}
       </fieldset>
 
       <details class="champ large" ${a.probleme_signale || a.emplacement ? 'open' : ''}><summary style="cursor:pointer;color:var(--brume);font:13px var(--mono)">Demande de maintenance</summary>
@@ -1460,58 +1459,41 @@ function ouvrirAction(a) {
           <label class="champ"><span>Compagnie responsable</span><input name="compagnie" value="${esc(a.compagnie)}"></label>
           <label class="champ large"><span>Problème signalé</span><textarea name="probleme_signale">${esc(a.probleme_signale)}</textarea></label>
           <label class="champ large"><span>Travaux réalisés</span><textarea name="travaux_realises">${esc(a.travaux_realises)}</textarea></label>
-        </div></details>
-      ${nouveau ? '' : `<div class="champ large notes-liees">${M.blocNotesLiees({ action_id: a.id })}</div>`}
-    </div>
-    <div class="pied">
-      ${nouveau ? '' : '<button type="button" class="btn danger gauche" id="suppr">Supprimer</button>'}
-      ${!nouveau && a.type === 'Événement' ? `<button type="button" class="btn" id="cr" title="Note de rencontre : préparation en haut, compte rendu en bas">${esc(L.libRencontre(a))}</button>` : ''}
-      ${a.note_id && parId(S.notes, a.note_id) ? '<button type="button" class="btn discret" id="voirNote">Note d’origine</button>' : ''}
-      ${!nouveau && a.recurrence && ouvert(a) ? '<button type="button" class="btn" id="sauter" title="Passer à l’occurrence suivante sans marquer celle-ci comme faite">Sauter cette fois</button>' : ''}
-      <button type="button" class="btn" data-fermer>Annuler</button><button type="submit" class="btn primaire">Enregistrer</button>
-    </div></form>`, async fd => {
-    const vide = k => (fd.get(k) || '').trim() || null;
-    const p = planif(fd.get('jour'), fd.get('heure_debut'), fd.get('heure_fin'), fd.get('jour_fin'));
-    const ligne = {
-      titre: fd.get('titre').trim(), statut: fd.get('statut'), type: fd.get('type'), prochain_geste: vide('prochain_geste'),
-      ...p,
-      echeance: vide('echeance'), relance: vide('relance'), priorite: fd.get('priorite') ? +fd.get('priorite') : null,
-      duree_min: fd.get('duree_min') ? +fd.get('duree_min') : null,
-      duree_reelle_min: fd.get('duree_reelle_min') ? +fd.get('duree_reelle_min') : null,
-      projet_id: vide('projet_id'), domaine_id: domaineProjet(vide('projet_id')) || vide('domaine_id'), hors_projet: fd.get('hors_projet') === 'on',
-      dans_perimetre: fd.get('dans_perimetre') === '' ? null : fd.get('dans_perimetre') === 'true',
-      delegue_a_id: fd.get('dans_perimetre') === 'false' ? vide('delegue_a_id') : null, en_attente_de_id: vide('en_attente_de_id'), motif_blocage: vide('motif_blocage'),
-      contexte: fd.getAll('contexte'), lieu: vide('lieu'), reference_externe: vide('reference_externe'), notes: vide('notes'),
-      demande_recue_le: vide('demande_recue_le'), emplacement: vide('emplacement'), departement: vide('departement'),
-      compagnie: vide('compagnie'), probleme_signale: vide('probleme_signale'), travaux_realises: vide('travaux_realises'),
-    };
-    // Promis à : colonne créée par la migration des engagements.
-    if (L7.colonnePromis()) ligne.promis_a_id = vide('promis_a_id');
-    else if (vide('promis_a_id')) { toast('Promis à indisponible : exécute d’abord la migration SQL des engagements'); return false; }
-    if (ligne.statut !== 'Terminé') ligne.realisee_le = null;
-    else if (a.statut !== 'Terminé') ligne.realisee_le = a.realisee_le || new Date().toISOString();
-    // Répétition : la règle voyage avec chaque occurrence (colonne recurrence, créée par la migration SQL).
-    if (!a.uid_externe) {
-      const rec = lireRecurrence(fd, a.recurrence);
-      if (rec && rec.type === 'semaine' && rec.base === 'calendrier' && !rec.jours.length) { toast('Répétition : coche au moins un jour'); return false; }
-      if (colonneRecurrence()) ligne.recurrence = rec;
-      else if (rec) { toast('Répétition indisponible : exécute d’abord la migration SQL des tâches récurrentes'); return false; }
-      if (rec && !ligne.echeance && !ligne.planifie_debut) ligne.echeance = premiereOccurrence(rec);
-    }
-    const { data: enr, error } = nouveau ? await sb.from('actions').insert(ligne).select('id').single() : await sb.from('actions').update(ligne).eq('id', a.id).select('id').single();
-    if (error) { toast('Échec : ' + error.message); return false; }
-    await rafraichir();
-    if (ligne.recurrence && ligne.statut === 'Terminé' && a.statut !== 'Terminé') annoncerSuivante(enr.id, 'Terminé');
-    else toast(nouveau ? 'Action ajoutée' : 'Enregistré');
-  });
-  brancherRecurrence(d, a);
-  const sa = d.querySelector('#sauter');
-  if (sa) sa.onclick = async () => {
-    sa.disabled = true;
-    const { error } = await sb.rpc('sauter_occurrence', { p_id: a.id });
-    if (error) { sa.disabled = false; return toast('Échec : ' + error.message); }
-    d.close(); await rafraichir(); annoncerSuivante(a.id, 'Sautée');
+        </div></details>`;
+}
+function lireLigneAction(fd, a) {
+  const vide = k => (fd.get(k) || '').trim() || null;
+  const p = planif(fd.get('jour'), fd.get('heure_debut'), fd.get('heure_fin'), fd.get('jour_fin'));
+  const ligne = {
+    titre: fd.get('titre').trim(), statut: fd.get('statut'), type: fd.get('type'), prochain_geste: vide('prochain_geste'),
+    ...p,
+    echeance: vide('echeance'), relance: vide('relance'), priorite: fd.get('priorite') ? +fd.get('priorite') : null,
+    duree_min: fd.get('duree_min') ? +fd.get('duree_min') : null,
+    duree_reelle_min: fd.get('duree_reelle_min') ? +fd.get('duree_reelle_min') : null,
+    projet_id: vide('projet_id'), domaine_id: domaineProjet(vide('projet_id')) || vide('domaine_id'), hors_projet: fd.get('hors_projet') === 'on',
+    dans_perimetre: fd.get('dans_perimetre') === '' ? null : fd.get('dans_perimetre') === 'true',
+    delegue_a_id: fd.get('dans_perimetre') === 'false' ? vide('delegue_a_id') : null, en_attente_de_id: vide('en_attente_de_id'), motif_blocage: vide('motif_blocage'),
+    contexte: fd.getAll('contexte'), lieu: vide('lieu'), reference_externe: vide('reference_externe'), notes: vide('notes'),
+    demande_recue_le: vide('demande_recue_le'), emplacement: vide('emplacement'), departement: vide('departement'),
+    compagnie: vide('compagnie'), probleme_signale: vide('probleme_signale'), travaux_realises: vide('travaux_realises'),
   };
+  // Promis à : colonne créée par la migration des engagements.
+  if (L7.colonnePromis()) ligne.promis_a_id = vide('promis_a_id');
+  else if (vide('promis_a_id')) return { erreur: 'Promis à indisponible : exécute d’abord la migration SQL des engagements' };
+  if (ligne.statut !== 'Terminé') ligne.realisee_le = null;
+  else if (a.statut !== 'Terminé') ligne.realisee_le = a.realisee_le || new Date().toISOString();
+  // Répétition : la règle voyage avec chaque occurrence (colonne recurrence, créée par la migration SQL).
+  if (!a.uid_externe) {
+    const rec = lireRecurrence(fd, a.recurrence);
+    if (rec && rec.type === 'semaine' && rec.base === 'calendrier' && !rec.jours.length) return { erreur: 'Répétition : coche au moins un jour' };
+    if (colonneRecurrence()) ligne.recurrence = rec;
+    else if (rec) return { erreur: 'Répétition indisponible : exécute d’abord la migration SQL des tâches récurrentes' };
+    if (rec && !ligne.echeance && !ligne.planifie_debut) ligne.echeance = premiereOccurrence(rec);
+  }
+  return { ligne };
+}
+function brancherChampsAction(d, a) {
+  brancherRecurrence(d, a);
   // Avec un projet, le domaine vient du projet : le champ est masqué et remplacé par une mention.
   const selP = d.querySelector('[name=projet_id]'), champD = d.querySelector('.domaine-tache'), mention = d.querySelector('.domaine-herite');
   const majDomaine = () => {
@@ -1528,6 +1510,50 @@ function ouvrirAction(a) {
   const jIn = d.querySelector('[name=jour]'), hIns = d.querySelectorAll('[name=heure_debut], [name=heure_fin]');
   const majHeures = () => hIns.forEach(h => { h.disabled = !jIn.value; });
   jIn.addEventListener('input', majHeures); majHeures();
+}
+
+function ouvrirAction(a) {
+  const nouveau = !a.id;
+  let modifie = false;
+  const d = dialogueAvert(`<form>
+    <div class="tete-d"><h2>${nouveau ? 'Nouvelle action' : 'Action #' + a.ref}</h2><div class="boutons-tete-d"><button type="button" class="btn discret" id="pleinePage" title="Ouvrir en pleine page, dans son onglet, pour documenter (${nouveau ? 'enregistre d’abord' : 'enregistre d’abord si tu as modifié quelque chose'})" aria-label="Ouvrir en pleine page">⤢ Pleine page</button><button type="button" class="btn discret" data-fermer aria-label="Fermer">✕</button></div></div>
+    <div class="corps">
+      <label class="champ large"><span>Titre</span><input name="titre" class="titre-saisie" required value="${esc(a.titre)}" ${nouveau ? 'autofocus' : ''}></label>
+      ${champsAction(a)}
+      ${nouveau ? '' : `<div class="champ large notes-liees">${M.blocNotesLiees({ action_id: a.id })}</div>`}
+    </div>
+    <div class="pied">
+      ${nouveau ? '' : '<button type="button" class="btn danger gauche" id="suppr">Supprimer</button>'}
+      ${!nouveau && a.type === 'Événement' ? `<button type="button" class="btn" id="cr" title="Note de rencontre : préparation en haut, compte rendu en bas">${esc(L.libRencontre(a))}</button>` : ''}
+      ${a.note_id && parId(S.notes, a.note_id) ? '<button type="button" class="btn discret" id="voirNote">Note d’origine</button>' : ''}
+      ${!nouveau && a.recurrence && ouvert(a) ? '<button type="button" class="btn" id="sauter" title="Passer à l’occurrence suivante sans marquer celle-ci comme faite">Sauter cette fois</button>' : ''}
+      <button type="button" class="btn" data-fermer>Annuler</button><button type="submit" class="btn primaire">Enregistrer</button>
+    </div></form>`, async fd => {
+    const r = lireLigneAction(fd, a);
+    if (r.erreur) { toast(r.erreur); return false; }
+    const { ligne } = r;
+    const { data: enr, error } = nouveau ? await sb.from('actions').insert(ligne).select('id').single() : await sb.from('actions').update(ligne).eq('id', a.id).select('id').single();
+    if (error) { toast('Échec : ' + error.message); return false; }
+    await rafraichir();
+    if (ligne.recurrence && ligne.statut === 'Terminé' && a.statut !== 'Terminé') annoncerSuivante(enr.id, 'Terminé');
+    else toast(nouveau ? 'Action ajoutée' : 'Enregistré');
+    if (d.dataset.pleine) setTimeout(() => L14.ouvrir(enr.id));
+  });
+  const sa = d.querySelector('#sauter');
+  if (sa) sa.onclick = async () => {
+    sa.disabled = true;
+    const { error } = await sb.rpc('sauter_occurrence', { p_id: a.id });
+    if (error) { sa.disabled = false; return toast('Échec : ' + error.message); }
+    d.close(); await rafraichir(); annoncerSuivante(a.id, 'Sautée');
+  };
+  brancherChampsAction(d, a);
+  // ⤢ Pleine page : si rien n’a changé, on ouvre l’onglet tout de suite; sinon on enregistre d’abord (même validation).
+  const f = d.querySelector('form');
+  f.addEventListener('input', () => { modifie = true; }); f.addEventListener('change', () => { modifie = true; });
+  d.querySelector('#pleinePage').onclick = () => {
+    if (!nouveau && !modifie) { d.close(); return L14.ouvrir(a.id); }
+    d.dataset.pleine = '1'; f.requestSubmit();
+  };
   const cr = d.querySelector('#cr'); if (cr) cr.onclick = () => { d.close(); L.compteRendu(a); };
   const vn = d.querySelector('#voirNote'); if (vn) vn.onclick = () => { d.close(); M.ficheNote(parId(S.notes, a.note_id)); };
   const nl = d.querySelector('.notes-liees'); if (nl) M.brancherNotesLiees(nl, { action_id: a.id, projet_id: a.projet_id || null, domaine_id: a.domaine_id || null, titre: a.titre, avant: () => d.close() });
@@ -1760,7 +1786,7 @@ L7 = installerLot7({ sb, S, esc, toast, parId, aujourdhui, plusJours, jourDate, 
 
 L9 = installerLot9({ sb, S, esc, toast, parId, aujourdhui, jourDate, cleJour, fmtHeure, rafraichir, rendre: () => rendre(), liste, ouvert, ico, MODULES, dialogue, opts,
   ouvrirPersonne, ouvrirDomaine, ouvrirAction, ficheUnite: u => M.ficheUnite(u), vueOrganigramme: v => M.vues.organigramme(v),
-  creerActionsDepuisNote: (n, t) => L.creerActionsDepuisNote(n, t), rechargerActions: () => charger() });
+  creerActionsDepuisNote: (n, t) => L.creerActionsDepuisNote(n, t), rechargerActions: () => charger(), ouvrirTache: (id, o) => L14.ouvrir(id, o), titreTache: id => L14.titre(id) });
 
 L10 = installerLot10({ sb, S, esc, toast, parId, dialogue, rendre: () => rendre(), noterSeance: (...x) => L11.noterSeance(...x) });
 L11 = installerLot11({ sb, S, esc, toast, parId, dialogue, rendre: () => rendre(), rafraichir, aujourdhui, plusJours, cleJour, jourDate, jourLong, fmtHeure, ouvrirAction, depuisLocal, versLocal });
@@ -1768,6 +1794,9 @@ L12 = installerLot12({ S, esc, toast, parId, aujourdhui, plusJours, cleJour, jou
   visible: a => L6.visible(a), blocCharge: () => L.blocCharge(), plancher: () => L11.plancher(), brancherPlancher: r => L11.brancherPlancher(r),
   resumeJour: j => L11.resumeJour(j), ouvrirSurLeFly, ouvrirCapture, chiffreCafe: () => L13.chiffre(), brancherCafe: r => L13.brancher(r) });
 L13 = installerLot13({ sb, S, esc, toast, aujourdhui, cleJour, fmtHeure });
+L14 = installerLot14({ sb, S, esc, toast, parId, fmtHeure, rafraichir, rendre: () => rendre(), ouvert, champsAction, lireLigneAction, brancherChampsAction,
+  annoncerSuivante, onglets: () => L9, editeur: () => L9.editeur, notesLiees: () => M, compteRendu: a => L.compteRendu(a), libRencontre: a => L.libRencontre(a),
+  ouvrirNote: n => L9.ouvrirNote(n), avertBac: d => { try { L11.brancherAvert(d); } catch { } } });
 L8 = installerLot8({ sb, S, esc, toast, parId, aujourdhui, plusJours, rafraichir, rendre: () => rendre(), carteProjet, sante, STATUTS_PROJET, PRIOS });
 window.addEventListener('hashchange', () => {
   if (!S.session) return;
